@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Offerte aanvragen · HC Tilburg</title>
+<meta name="description" content="Vraag vrijblijvend een offerte aan voor je feest, borrel of bijeenkomst bij HC Tilburg.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231b7d88'/%3E%3Ctext x='16' y='22' font-size='16' text-anchor='middle' fill='white' font-family='Arial' font-weight='700'%3EHC%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap">
+<style>
+:root {
+  --petrol: #1b7d88; --petrol-d: #146570; --petrol-soft: #e6f2f3; --oranje: #e5621c; --bg: #f5f5f5; --kaart: #ffffff; --tekst: #2b2f33; --mute: #6b7378; --lijn: #e2e5e7;
+  --bad: #c0392b; --bad-soft: #fbe7e5; --ok: #1f8a4c; --ok-soft: #e3f4ea;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--tekst); font: 15px/1.5 "Open Sans", system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-text-size-adjust: 100%; }
+header { background: var(--petrol); color: #fff; padding: 14px 16px; }
+header .wm { font-family: Georgia, "Times New Roman", serif; letter-spacing: .28em; font-size: 1.05rem; }
+header h1 { margin: 2px 0 0; font-size: 1.05rem; font-weight: 600; }
+main { max-width: 720px; margin: 0 auto; padding: 16px 16px 40px; display: grid; gap: 14px; }
+.kaart { background: var(--kaart); border: 1px solid var(--lijn); border-radius: 4px; padding: 16px; display: grid; gap: 12px; min-width: 0; }
+h2 { margin: 0; font-size: 1.05rem; color: var(--oranje); font-weight: 700; }
+h3 { margin: 4px 0 0; font-size: .95rem; }
+.sub { margin: -6px 0 0; color: var(--mute); font-size: .88rem; }
+p { margin: 0; }
+label.f { display: grid; gap: 4px; font-weight: 600; font-size: .9rem; align-content: start; }
+label.f small { font-weight: 400; color: var(--mute); }
+input, select, textarea { font: inherit; font-size: 16px; width: 100%; padding: 9px 10px; border: 1px solid #c9cfd2; border-radius: 3px; background: #fff; color: var(--tekst); min-width: 0; }
+input:focus, select:focus, textarea:focus, .tegel:focus-visible, .chips button:focus-visible, button:focus-visible { outline: 2px solid var(--petrol); outline-offset: 1px; }
+.rij { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.rij3 { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 10px; }
+.tegels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.opties { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.tegel { font: inherit; text-align: left; border: 1px solid var(--lijn); border-radius: 4px; padding: 10px 12px; display: grid; gap: 2px; align-content: start; background: #fff; color: var(--tekst); cursor: pointer; }
+.tegel b { font-size: .92rem; } .tegel span { font-size: .8rem; color: var(--mute); line-height: 1.35; }
+.tegel .ic { font-size: 1.25rem; line-height: 1; color: inherit; }
+.tegel[aria-pressed="true"] { border-color: var(--petrol); box-shadow: inset 0 0 0 1px var(--petrol); background: var(--petrol-soft); }
+.tegel[aria-pressed="true"] span { color: #21545a; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips button { font: inherit; border: 1px solid #c9cfd2; border-radius: 16px; padding: 5px 12px; font-size: .88rem; background: #fff; color: var(--tekst); cursor: pointer; }
+.chips button[aria-pressed="true"] { background: var(--petrol); border-color: var(--petrol); color: #fff; font-weight: 600; }
+.toggle { display: inline-flex; justify-self: start; border: 1px solid var(--petrol); border-radius: 3px; overflow: hidden; }
+.toggle button { font: inherit; border: 0; background: #fff; color: var(--petrol); padding: 6px 14px; font-size: .9rem; cursor: pointer; }
+.toggle button[aria-pressed="true"] { background: var(--petrol); color: #fff; font-weight: 600; }
+.vink { display: flex; gap: 8px; align-items: flex-start; font-size: .92rem; }
+.vink input { width: auto; margin-top: 4px; accent-color: var(--petrol); }
+.knoppen { display: flex; gap: 10px; }
+.knop { font: inherit; font-weight: 600; border: 0; border-radius: 3px; background: var(--oranje); color: #fff; font-size: 1rem; padding: 12px 18px; cursor: pointer; flex: 1; }
+.knop.terug { background: #fff; color: var(--petrol); border: 1px solid var(--petrol); flex: 0 0 auto; }
+.knop:disabled { opacity: .6; cursor: default; }
+.mute { color: var(--mute); } .klein { font-size: .85rem; }
+.fout { background: var(--bad-soft); color: var(--bad); border-radius: 3px; padding: 10px 12px; font-size: .92rem; }
+.stappen { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.stap { font-size: .8rem; color: var(--mute); display: grid; gap: 5px; }
+.stap i { display: block; height: 5px; border-radius: 3px; background: var(--lijn); }
+.stap.klaar i, .stap.nu i { background: var(--petrol); }
+.stap.nu { color: var(--tekst); font-weight: 700; }
+hr { border: 0; border-top: 1px solid var(--lijn); margin: 2px 0; width: 100%; }
+/* Fotostrook van de ruimtes (geen beschikbaarheid) */
+.strook { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(220px, 1fr); gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px; }
+.ruimte { scroll-snap-align: start; border: 1px solid var(--lijn); border-radius: 4px; overflow: hidden; background: #fff; display: grid; grid-template-rows: auto 1fr; }
+.ruimte .foto { position: relative; aspect-ratio: 4 / 3; background: linear-gradient(135deg, var(--petrol), #2b9aa6); color: #fff; display: grid; place-items: center; font-weight: 700; letter-spacing: .04em; }
+.ruimte .foto img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.ruimte .foto .nav { position: absolute; bottom: 6px; right: 6px; display: flex; gap: 4px; }
+.ruimte .foto .nav button { font: inherit; border: 0; border-radius: 3px; background: rgba(0,0,0,.55); color: #fff; width: 30px; height: 30px; cursor: pointer; }
+.ruimte .foto .tel { position: absolute; bottom: 8px; left: 8px; background: rgba(0,0,0,.55); border-radius: 3px; padding: 1px 7px; font-size: .75rem; font-weight: 600; }
+.ruimte .info { padding: 10px 12px; display: grid; gap: 2px; align-content: start; }
+.ruimte .info b { font-size: .95rem; } .ruimte .info span { font-size: .82rem; color: var(--mute); line-height: 1.4; }
+.bedankt { text-align: center; padding: 28px 16px; }
+.bedankt .ic { font-size: 2.4rem; }
+.overzicht { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: .92rem; text-align: left; }
+.overzicht dt { color: var(--mute); } .overzicht dd { margin: 0; }
+a { color: var(--petrol); }
+.hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+[hidden] { display: none !important; }
+@media (max-width: 560px) {
+  .tegels { grid-template-columns: 1fr 1fr; } .opties { grid-template-columns: 1fr; }
+  .rij3 { grid-template-columns: 1fr 1fr; } .rij3 > :first-child { grid-column: 1 / -1; }
+  .strook { grid-auto-columns: 78%; }
+}
+</style>
+</head>
+<body>
+<header><div class="wm">HC TILBURG</div><h1>Offerte aanvragen voor je feest of bijeenkomst</h1></header>
+<main id="app"><div class="kaart"><p class="mute">Laden…</p></div></main>
+<script>
+(() => {
+  const FN = "https://kstkkevpgflhsjdnagrv.supabase.co/functions/v1/offerte-aanvraag";
+  const KEY = "sb_publishable_LlRQd3XDGW6YKqAEmNrz4g_xEwWdAsp";
+  const DAGEN = ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"];
+  const MAANDEN = ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december"];
+  const app = document.getElementById("app");
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const langeDatum = d => { const x = new Date(d + "T12:00:00"); return `${DAGEN[x.getDay()]} ${x.getDate()} ${MAANDEN[x.getMonth()]} ${x.getFullYear()}`; };
+  const geopend = Date.now();
+  let C = null, stap = 1, fout = "", bezig = false;
+  // Wat de gast invult. Blijft bewaard bij terug/verder.
+  const A = { gelegenheid: "", gelegenheidAnders: "", datum: "", van: "", tot: "", gasten: "", kinderen: "", flexibel: false, flexTekst: "",
+    eten: [], drinken: "", budget: "", soort: "particulier", naam: "", bedrijf: "", email: "", telefoon: "", lid: "", contact: "", bron: "", mailing: false };
+
+  async function vraag(body) {
+    const res = await fetch(FN, { method: "POST", headers: { "Content-Type": "application/json", apikey: KEY, Authorization: "Bearer " + KEY }, body: JSON.stringify(body) });
+    let data = {}; try { data = await res.json(); } catch (e) {}
+    if (!res.ok || data.fout) throw new Error(data.fout || "Er ging iets mis, probeer het opnieuw");
+    return data;
+  }
+  const gel = () => C.gelegenheden.find(g => g.id === A.gelegenheid);
+
+  /* ---------- Fotostrook ---------- */
+  function strook() {
+    const rs = (C.ruimtes || []).filter(r => r.naam);
+    if (!rs.length) return "";
+    return `<div class="kaart"><h2>Onze ruimtes</h2><p class="sub">Een eerste indruk. Wij kiezen samen met jou de ruimte die het beste past.</p>
+      <div class="strook">${rs.map((r, i) => `<div class="ruimte"><div class="foto" data-r="${i}" data-f="0">${r.fotos.length ? `<img src="${esc(r.fotos[0].url)}" alt="${esc(r.fotos[0].alt)}" loading="lazy" onerror="this.remove()">` : esc(r.naam)}
+        ${r.fotos.length > 1 ? `<span class="tel">1 / ${r.fotos.length}</span><span class="nav"><button type="button" data-fv="-1" aria-label="Vorige foto">‹</button><button type="button" data-fv="1" aria-label="Volgende foto">›</button></span>` : ""}</div>
+        <div class="info"><b>${esc(r.naam)}</b>${r.capaciteit ? `<span>Tot ${esc(r.capaciteit)} personen</span>` : ""}${r.tekst ? `<span>${esc(r.tekst)}</span>` : ""}</div></div>`).join("")}</div></div>`;
+  }
+  function strookWire() {
+    app.querySelectorAll("[data-fv]").forEach(b => b.onclick = () => {
+      const box = b.closest(".foto"), r = C.ruimtes.filter(x => x.naam)[+box.dataset.r], n = r.fotos.length;
+      const f = (+box.dataset.f + +b.dataset.fv + n) % n; box.dataset.f = f;
+      const img = box.querySelector("img"); img.src = r.fotos[f].url; img.alt = r.fotos[f].alt;
+      box.querySelector(".tel").textContent = `${f + 1} / ${n}`;
+    });
+  }
+
+  /* ---------- Stappen ---------- */
+  const STAPPEN = ["Je feest", "Eten en drinken", "Je gegevens"];
+  const balk = () => `<div class="stappen" aria-label="Stap ${stap} van 3">${STAPPEN.map((s, i) => `<div class="stap ${i + 1 < stap ? "klaar" : i + 1 === stap ? "nu" : ""}"><i></i>${i + 1}. ${esc(s)}</div>`).join("")}</div>`;
+  const knoppen = (verder) => `${fout ? `<div class="fout" role="alert">${esc(fout)}</div>` : ""}<div class="knoppen">${stap > 1 ? `<button type="button" class="knop terug" id="terug">Terug</button>` : ""}<button type="button" class="knop" id="verder" ${bezig ? "disabled" : ""}>${esc(verder)}</button></div>`;
+
+  function stap1() {
+    return `<div class="kaart">${balk()}
+      <h2>Wat wil je organiseren?</h2>
+      <div class="tegels">${C.gelegenheden.map(g => `<button type="button" class="tegel" data-gel="${esc(g.id)}" aria-pressed="${A.gelegenheid === g.id}"><span class="ic">${g.icoon}</span><b>${esc(g.naam)}</b><span>${esc(g.uitleg)}</span></button>`).join("")}</div>
+      ${A.gelegenheid === "anders" ? `<label class="f">Wat wil je organiseren?<input id="i-gelegenheidAnders" maxlength="80" value="${esc(A.gelegenheidAnders)}" placeholder="bijvoorbeeld een reünie"></label>` : ""}
+    </div>
+    <div class="kaart">
+      <h2>Wanneer en met hoeveel?</h2>
+      <div class="rij3">
+        <label class="f">Datum<input id="i-datum" type="date" min="${esc(C.vandaag)}" value="${esc(A.datum)}"></label>
+        <label class="f">Van<input id="i-van" type="time" step="900" value="${esc(A.van)}"></label>
+        <label class="f">Tot ongeveer<input id="i-tot" type="time" step="900" value="${esc(A.tot)}"></label>
+      </div>
+      <div class="rij">
+        <label class="f">Aantal gasten <small>een schatting is prima</small><input id="i-gasten" type="number" min="1" inputmode="numeric" value="${esc(A.gasten)}"></label>
+        <label class="f">Waarvan kinderen <small>tot 12 jaar</small><input id="i-kinderen" type="number" min="0" inputmode="numeric" value="${esc(A.kinderen)}" placeholder="0"></label>
+      </div>
+      <label class="vink"><input type="checkbox" id="i-flexibel" ${A.flexibel ? "checked" : ""}>De datum is flexibel</label>
+      ${A.flexibel ? `<label class="f">Welke andere data of dagen kunnen ook? <small>optioneel</small><input id="i-flexTekst" maxlength="160" value="${esc(A.flexTekst)}" placeholder="bijvoorbeeld een andere vrijdag in november"></label>` : ""}
+      ${knoppen("Verder")}
+    </div>`;
+  }
+  function stap2() {
+    const g = gel();
+    return `<div class="kaart">${balk()}
+      <h2>Hoe stel je het je voor?</h2>
+      <p class="sub">Ideeën die passen bij ${esc(g.id === "anders" ? "je bijeenkomst" : g.naam.toLowerCase())}. Je kunt meerdere dingen kiezen bij eten.</p>
+      <h3>Eten</h3>
+      <div class="opties">${g.eten.map(k => `<button type="button" class="tegel" data-eten="${esc(k)}" aria-pressed="${A.eten.includes(k)}"><b>${esc(C.eten[k][0])}</b><span>${esc(C.eten[k][1])}</span></button>`).join("")}</div>
+      <h3>Drinken</h3>
+      <div class="opties">${g.drinken.map(k => `<button type="button" class="tegel" data-drinken="${esc(k)}" aria-pressed="${A.drinken === k}"><b>${esc(C.drinken[k][0])}</b><span>${esc(C.drinken[k][1])}</span></button>`).join("")}</div>
+      <h3>Budget per persoon</h3>
+      <div class="chips">${Object.entries(C.budget).map(([k, v]) => `<button type="button" data-budget="${esc(k)}" aria-pressed="${A.budget === k}">${esc(v)}</button>`).join("")}</div>
+      <p class="sub" style="margin:0">Inclusief eten en drinken. Zo maken we een voorstel dat bij je past.</p>
+      ${knoppen("Verder")}
+    </div>`;
+  }
+  function stap3() {
+    const opt = (obj, cur, leeg) => `<option value="">${esc(leeg)}</option>` + Object.entries(obj).map(([k, v]) => `<option value="${esc(k)}" ${cur === k ? "selected" : ""}>${esc(v)}</option>`).join("");
+    return `<div class="kaart">${balk()}
+      <h2>Jouw gegevens</h2>
+      <div class="toggle" role="group" aria-label="Particulier of zakelijk"><button type="button" data-soort="particulier" aria-pressed="${A.soort === "particulier"}">Particulier</button><button type="button" data-soort="zakelijk" aria-pressed="${A.soort === "zakelijk"}">Zakelijk</button></div>
+      <div class="rij">
+        <label class="f">Naam<input id="i-naam" autocomplete="name" maxlength="80" value="${esc(A.naam)}"></label>
+        ${A.soort === "zakelijk" ? `<label class="f">Bedrijf<input id="i-bedrijf" autocomplete="organization" maxlength="100" value="${esc(A.bedrijf)}"></label>` : "<span></span>"}
+      </div>
+      <div class="rij">
+        <label class="f">E-mail<input id="i-email" type="email" autocomplete="email" maxlength="120" value="${esc(A.email)}"></label>
+        <label class="f">Telefoon<input id="i-telefoon" type="tel" autocomplete="tel" maxlength="30" value="${esc(A.telefoon)}"></label>
+      </div>
+      <hr>
+      <div class="rij">
+        <label class="f">Ben je lid van HC Tilburg?<select id="i-lid">${opt(C.lid, A.lid, "Maak een keuze")}</select></label>
+        <label class="f">Hoe wil je contact?<select id="i-contact">${opt(C.contact, A.contact, "Maak een keuze")}</select></label>
+      </div>
+      <label class="f">Hoe ken je ons? <small>optioneel</small><select id="i-bron"><option value="">Maak een keuze</option>${C.bron.map(b => `<option ${A.bron === b ? "selected" : ""}>${esc(b)}</option>`).join("")}</select></label>
+      <label class="vink"><input type="checkbox" id="i-mailing" ${A.mailing ? "checked" : ""}>Houd me op de hoogte van arrangementen en evenementen bij HC Tilburg (af en toe een mail).</label>
+      <div class="hp" aria-hidden="true"><label>Website<input id="i-website" tabindex="-1" autocomplete="off"></label></div>
+      ${knoppen(bezig ? "Versturen…" : "Offerte aanvragen")}
+      <p class="klein mute">Je krijgt direct een bevestiging per mail en binnen twee werkdagen een offerte. De aanvraag is vrijblijvend.</p>
+    </div>`;
+  }
+  function bedankt(mail) {
+    const g = gel();
+    return `<div class="kaart bedankt"><div class="ic">🎉</div><h2>Bedankt, ${esc(A.naam.split(" ")[0])}!</h2>
+      <p>We hebben je aanvraag ontvangen en sturen je binnen twee werkdagen een offerte${A.contact === "bellen" ? ". We bellen je even om alles door te nemen" : ""}.</p>
+      ${mail === "verstuurd" ? `<p class="mute klein">Er is een bevestiging gestuurd naar ${esc(A.email)}.</p>` : ""}
+      <dl class="overzicht">
+        <dt>Gelegenheid</dt><dd>${esc(A.gelegenheid === "anders" ? A.gelegenheidAnders : g.naam)}</dd>
+        <dt>Datum</dt><dd>${esc(langeDatum(A.datum))}, ${esc(A.van)} tot ${esc(A.tot)}</dd>
+        <dt>Gasten</dt><dd>${esc(A.gasten)}${+A.kinderen ? `, waarvan ${esc(A.kinderen)} kinderen` : ""}</dd>
+      </dl>
+      ${C.telefoon || C.email ? `<p class="klein mute">Vragen? ${C.telefoon ? `Bel ${esc(C.telefoon)}` : ""}${C.telefoon && C.email ? " of mail " : C.email ? "Mail " : ""}${C.email ? `<a href="mailto:${esc(C.email)}">${esc(C.email)}</a>` : ""}.</p>` : ""}
+    </div>`;
+  }
+
+  /* ---------- Lezen en controleren ---------- */
+  const v = id => { const el = document.getElementById("i-" + id); return el ? el.value.trim() : undefined; };
+  function lees() {
+    ["gelegenheidAnders", "datum", "van", "tot", "gasten", "kinderen", "flexTekst", "naam", "bedrijf", "email", "telefoon", "lid", "contact", "bron"].forEach(k => { const x = v(k); if (x !== undefined) A[k] = x; });
+    ["flexibel", "mailing"].forEach(k => { const el = document.getElementById("i-" + k); if (el) A[k] = el.checked; });
+  }
+  function controleer() {
+    if (stap === 1) {
+      if (!A.gelegenheid) return "Kies wat je wilt organiseren";
+      if (A.gelegenheid === "anders" && A.gelegenheidAnders.length < 3) return "Omschrijf kort wat je wilt organiseren";
+      if (!A.datum) return "Kies een datum";
+      if (A.datum < C.vandaag) return "Kies een datum vanaf vandaag";
+      if (!A.van || !A.tot) return "Vul een begin- en eindtijd in";
+      if (!(+A.gasten >= 1)) return "Vul het aantal gasten in";
+      if (+A.kinderen > +A.gasten) return "Het aantal kinderen is groter dan het aantal gasten";
+    }
+    if (stap === 2) {
+      if (!A.eten.length) return "Kies wat je wilt eten, of kies Adviseer mij";
+      if (!A.drinken) return "Kies hoe je het drinken wilt regelen";
+      if (!A.budget) return "Kies een budget, of Weet ik nog niet";
+    }
+    if (stap === 3) {
+      if (A.naam.length < 2) return "Vul je naam in";
+      if (A.soort === "zakelijk" && A.bedrijf.length < 2) return "Vul de naam van het bedrijf in";
+      if (!/^[a-z0-9._+'-]+@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/i.test(A.email)) return "Vul een geldig e-mailadres in";
+      if (!/^[+0-9 ()-]{8,}$/.test(A.telefoon)) return "Vul een telefoonnummer in";
+      if (!A.lid) return "Geef aan of je lid bent van HC Tilburg";
+      if (!A.contact) return "Geef aan hoe we contact met je opnemen";
+    }
+    return "";
+  }
+
+  async function verder() {
+    lees(); fout = controleer();
+    if (fout) return teken();
+    if (stap < 3) { stap++; teken(); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+    bezig = true; teken();
+    try {
+      const r = await vraag({ actie: "verstuur", ...A, gasten: +A.gasten, kinderen: +A.kinderen || 0, website: v("website") || "", duur: Date.now() - geopend });
+      app.innerHTML = bedankt(r.mail); window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (e) { bezig = false; fout = e.message; teken(); }
+  }
+
+  function teken() {
+    app.innerHTML = (stap === 1 ? `<div class="kaart"><p>Vertel ons wat je wilt organiseren. Wij zoeken de passende ruimte en sturen je binnen twee werkdagen een offerte op maat. <span class="mute">Een aanvraag is vrijblijvend.</span></p></div>` + strook() : "") +
+      (stap === 1 ? stap1() : stap === 2 ? stap2() : stap3());
+    if (stap === 1) strookWire();
+    app.querySelectorAll("[data-gel]").forEach(b => b.onclick = () => {
+      lees(); if (A.gelegenheid !== b.dataset.gel) { A.gelegenheid = b.dataset.gel; const g = gel(); A.eten = A.eten.filter(k => g.eten.includes(k)); if (!g.drinken.includes(A.drinken)) A.drinken = ""; }
+      fout = ""; teken(); if (A.gelegenheid === "anders") document.getElementById("i-gelegenheidAnders")?.focus();
+    });
+    app.querySelectorAll("[data-eten]").forEach(b => b.onclick = () => {
+      const k = b.dataset.eten;
+      A.eten = A.eten.includes(k) ? A.eten.filter(x => x !== k) : k === "advies" ? ["advies"] : [...A.eten.filter(x => x !== "advies"), k];
+      fout = ""; teken();
+    });
+    app.querySelectorAll("[data-drinken]").forEach(b => b.onclick = () => { A.drinken = b.dataset.drinken; fout = ""; teken(); });
+    app.querySelectorAll("[data-budget]").forEach(b => b.onclick = () => { A.budget = b.dataset.budget; fout = ""; teken(); });
+    app.querySelectorAll("[data-soort]").forEach(b => b.onclick = () => { lees(); A.soort = b.dataset.soort; teken(); });
+    const fl = document.getElementById("i-flexibel"); if (fl) fl.onchange = () => { lees(); teken(); };
+    const vd = document.getElementById("verder"); if (vd) vd.onclick = verder;
+    const tr = document.getElementById("terug"); if (tr) tr.onclick = () => { lees(); fout = ""; stap--; teken(); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  }
+
+  vraag({ actie: "start" }).then(c => { C = c; teken(); })
+    .catch(e => { app.innerHTML = `<div class="kaart"><div class="fout">${esc(e.message)}</div><p class="mute">Lukt het niet? Neem dan contact op met de horeca van HC Tilburg.</p></div>`; });
+})();
+</script>
+</body>
+</html>
