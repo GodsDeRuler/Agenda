@@ -6356,7 +6356,7 @@ function rqEnsure(d) {
   for (const p of d.program) { if (!Array.isArray(p.rooms)) p.rooms = [p.roomId || ""]; if (!p.rooms.length) p.rooms.push(""); }
   const t = rqType(d);
   if (t) {
-    for (const tp of t.parts || []) if (!d.program.some(p => p.name === tp.name)) d.program.push(rqNewPart(tp.name));
+    for (const tp of t.parts || []) if (!d.program.some(p => p.name === tp.name)) d.program.push(rqNewPart(tp.name, tp.diner ? { diner: true } : {}));
     const names = (t.parts || []).map(p => p.name), ix = n => { const i = names.indexOf(n); return i < 0 ? 99 : i; };
     d.program.sort((a, b) => ix(a.name) - ix(b.name));
   }
@@ -6599,7 +6599,7 @@ function rqProgHtml(d, ro, o = {}) {
     return `<div class="rq-pr" data-pi="${i}">${nm}${sw}
       <span class="rq-time"><input type="time" data-pk="start" value="${esc(p.start)}" aria-label="${esc(p.name)} van" ${ro}><span class="rq-arrow">→</span><input type="time" data-pk="end" value="${esc(p.end)}" aria-label="${esc(p.name)} tot" ${ro}></span>
       <span class="rq-n"><span class="rq-ic" title="Volwassenen">${rqIcon("adults")}</span><input type="number" min="0" data-pk="adults" value="${rqVal(p.adults)}" aria-label="${esc(p.name)} volwassenen" ${ro}><span class="rq-ic" title="Kinderen">${rqIcon("kids")}</span><input type="number" min="0" data-pk="kids" value="${rqVal(p.kids)}" aria-label="${esc(p.name)} kinderen" ${ro}></span>
-      <span class="rq-rooms">${p.rooms.map((rid, j) => `<span class="rq-room"><select data-proom="${j}" aria-label="${esc(p.name)} zaal ${j + 1}" ${ro}><option value="">Zaal kiezen…</option>${rooms.map(x => `<option value="${esc(x.id)}" ${x.id === rid ? "selected" : ""}>${esc(x.name)}${excl.includes(x.id) ? " (niet bij dit arrangement)" : ""}</option>`).join("")}</select>${j ? `<button type="button" class="rq-x" data-proomdel="${j}" aria-label="Zaal weghalen" ${ro}>✕</button>` : ""}</span>`).join("")}</span>
+      <span class="rq-rooms">${p.rooms.map((rid, j) => `<span class="rq-room"><select data-proom="${j}" aria-label="${esc(p.name)} zaal ${j + 1}" ${ro}><option value="">Zaal kiezen…</option>${rooms.map(x => `<option value="${esc(x.id)}" ${x.id === rid ? "selected" : ""}>${esc(x.name)}${excl.includes(x.id) ? " (niet bij dit arrangement)" : ""}${typeof rqRoomOff === "function" && rqRoomOff(x.id, d.eventType, p.name) ? " (niet ingesteld voor " + esc(p.name) + ")" : ""}</option>`).join("")}</select>${j ? `<button type="button" class="rq-x" data-proomdel="${j}" aria-label="Zaal weghalen" ${ro}>✕</button>` : ""}</span>`).join("")}</span>
       <select class="rq-ops" data-pk="opstelling" aria-label="${esc(p.name)} opstelling" ${ro}><option value="">Opstelling…</option>${ops.map(x => `<option ${x === p.opstelling ? "selected" : ""}>${esc(x)}</option>`).join("")}</select>
       <span class="rq-cap ${cap ? (n > cap ? "bad" : "ok") : ""}" data-cap title="Capaciteit van de zaal bij deze opstelling">${cap ? cap + (n > cap ? " ✕" : " ✓") : ""}</span>
       <button type="button" class="rq-plus" data-proomadd title="Extra zaal toevoegen" aria-label="Extra zaal toevoegen" ${ro}>+</button>${p.custom ? del(i) : ""}</div>`;
@@ -7003,7 +7003,6 @@ function rqConfirmArr(a, onYes, onNo) {
       if (!(await write("quotes/" + q.id, body))) return;
       const r = q.reservationId && S.reservations.get(q.reservationId), patch = r && rqResPatch(q);
       if (patch) { await write("reservations/" + r.id, { ...patch, updatedAt: new Date().toISOString() }, "update"); }
-      if (r) await rqWishTasks(q, r);
       await logQuoteStatus(q, before); toast("Offerte opgeslagen"); await syncProductTasks(q);
     };
     const rl = $("#q-res"); if (rl) rl.onclick = e => { e.preventDefault(); openRes(S.reservations.get(q.reservationId)); };
@@ -7164,16 +7163,6 @@ function rqReapproveHtml(q, noBtn) {
     return `<div class="warnbox warn rq-reapp"><span>Offerte is als laatst bevestigd op ${esc(when)} met een bedrag van <b>${eur(q.confirmedTotal)}</b>. Het bedrag is nu <b>${eur(T)}</b>.</span>${noBtn ? "" : ` <button type="button" class="btn small orange" id="rq-reapp" ${S.readOnly ? "disabled" : ""}>Opnieuw laten goedkeuren</button>`}</div>`;
   if (q.status === "verstuurd" && q.reapproval) return `<div class="warnbox rq-reapp">Wacht op nieuwe goedkeuring van de klant. Offerte is als laatst bevestigd op ${esc(when)} met een bedrag van <b>${eur(q.confirmedTotal)}</b>.</div>`;
   return "";
-}
-// Speciale wensen met "Ja, voeg toe aan mijn to-do lijst" komen als to-do bij het event.
-async function rqWishTasks(q, r) {
-  const tasks = structuredClone(r.tasks || []); let n = 0;
-  for (const dd of rqDays(q)) for (const it of dd.items || []) {
-    if (!it.wens || !it.wens.todo || tasks.some(t => t.wishId === it.id)) continue;
-    const ds = dd.eventDate || q.eventDate || r.date;
-    tasks.push({ text: `Speciale wens: ${it.desc}${it.wens.leverancier ? " (" + it.wens.leverancier.split("\n")[0] + ")" : ""}`, due: ds ? addDays(ds, -rqNum(it.wens.todoDagen)) : "", done: false, wishId: it.id }); n++;
-  }
-  if (n && await write("reservations/" + r.id, { tasks }, "update")) r.tasks = tasks;
 }
 
 /* ---------- Instellingen › Arrangementen (lijst en "Arrangement opmaken") ---------- */
@@ -7577,6 +7566,235 @@ document.head.insertAdjacentHTML("beforeend", `<style id="rq6-style">
 .rq-it.wish .rq-wname { flex: 1 1 260px; min-width: 0; }
 .rq-wl td { vertical-align: top; } .rqv-day td { padding-top: 16px; border-bottom: 1px solid #e5621c; }
 @media (max-width: 760px) { .rq-days [data-rqday] { min-width: 0; flex: 1 1 40%; } }
+</style>`);
+/* ---------- Instellingen per soort feest (Restau: Bruiloft · Verjaardag · … met Algemeen · Programma · Betaalopties · E-mail teksten · Vragen maken · Interne To-Do lijst) ---------- */
+let sfDraft = null;
+const SF_TABS = [["algemeen", "Algemeen"], ["programma", "Programma"], ["betaal", "Betaalopties"], ["mail", "E-mail teksten"], ["vragen", "Vragen maken"], ["todo", "Interne To-Do lijst"]];
+const SF_TEXTS = [["draaiboekIntro", "Draaiboek: introductietekst"], ["voorwaarden", "Algemene voorwaarden, betalings- en annuleringsvoorwaarden"], ["gasteninfo", "Gasteninformatie"], ["draaiboekInfo", "Draaiboek: algemene informatie"], ["welkomOfferte", "Welkomsttekst offerte"], ["inOptie", "Tekst “offerte is in optie”"]];
+const sfCur = () => { const ts = eventTypes(); return ts.find(t => t.id === S.sfType) || ts[0]; };
+function sfEnsure() {
+  const t = sfCur(); if (!t) return null;
+  if (!sfDraft || sfDraft.id !== t.id) {
+    const c = structuredClone(t); c.parts = Array.isArray(c.parts) ? c.parts : []; c.teksten = c.teksten || {}; c.betaal = c.betaal || {}; c.todos = Array.isArray(c.todos) ? c.todos : []; c.fotos = Array.isArray(c.fotos) ? c.fotos : [];
+    sfDraft = { id: t.id, t: c, voorwaarden: (S.settings.voorwaardenPerType || {})[t.id] || "", vragen: structuredClone(typeof vrList === "function" ? vrList() : S.settings.vragen || []) };
+  }
+  return sfDraft;
+}
+const sfSw = (id, on, ro, label) => `<label class="sf-sw"><span class="rq-sw"><input type="checkbox" id="${id}" ${on ? "checked" : ""} ${ro} aria-label="${esc(label)}"><span></span></span> ${esc(label)}</label>`;
+function sfAlgemeen(d, ro) {
+  const t = d.t;
+  return `<div class="fields">
+      <label class="f"><span>Naam</span><input data-sf="name" value="${esc(t.name || "")}" ${ro}></label>
+      <label class="f"><span>Optietermijn (dagen)</span><input type="number" min="0" data-sf="optieDagen" value="${esc(t.optieDagen ?? 14)}" ${ro}></label>
+      <label class="f"><span>E-mailadres</span><input type="email" data-sf="email" value="${esc(t.email || "")}" placeholder="${esc(S.settings.locatie?.email || "")}" ${ro}></label>
+      <label class="f"><span>E-mail voor kopie-factuur</span><input type="email" data-sf="emailKopie" value="${esc(t.emailKopie || "")}" ${ro}></label>
+    </div>
+    <div class="row">${sfSw("sf-review", t.review, ro, "Review-functie aan")}${sfSw("sf-ubl", t.ubl, ro, "UBL-bestand meesturen bij factuurmails")}</div>
+    <h3>Teksten op klantenkant</h3>
+    <div class="sf-texts">${SF_TEXTS.map(([k, l]) => `<label class="f"><span>${esc(l)}</span><textarea rows="${k === "voorwaarden" ? 6 : 4}" data-sftx="${k}" ${ro}>${esc(k === "voorwaarden" ? d.voorwaarden : t.teksten[k] || "")}</textarea></label>`).join("")}</div>
+    <p class="small muted" style="margin:0">De welkomsttekst en de optietekst staan boven de offerte die de klant krijgt. De voorwaarden zijn dezelfde als bij Vragen en voorwaarden.</p>`;
+}
+function sfProgramma(d, ro) {
+  const t = d.t, fotos = [0, 1, 2, 3, 4, 5].map(i => rqPhotoBox("sff-" + i, t.fotos[i] || "", ro, "Sfeerfoto"));
+  return `<h3>Sfeerfoto's</h3><div class="sf-fotos">${fotos.join("")}</div>
+    <h3>Gelegenheden en standaard programma &amp; tijden</h3>
+    <p class="small muted" style="margin:0">Aan = deze gelegenheid staat in het standaard programma (knop Standaard tijden invullen in de offerte). Diner = hier staat de diner-module aan.</p>
+    <div class="sf-parts">${t.parts.map((p, i) => `<div class="sf-part" data-sfp="${i}">
+      <div class="sf-pmove"><button type="button" class="btn ghost small" data-sfup="${i}" aria-label="Omhoog" ${i ? "" : "disabled"} ${ro}>▲</button><button type="button" class="btn ghost small" data-sfdown="${i}" aria-label="Omlaag" ${i < t.parts.length - 1 ? "" : "disabled"} ${ro}>▼</button></div>
+      <div class="sf-pmain">
+        <div class="sf-prow"><input data-pk="name" value="${esc(p.name || "")}" aria-label="Gelegenheid" placeholder="Naam gelegenheid" ${ro}>
+          <span class="rq-time"><input type="time" data-pk="start" value="${esc(p.start || "")}" aria-label="Van" ${ro}><span class="rq-arrow">→</span><input type="time" data-pk="end" value="${esc(p.end || "")}" aria-label="Tot" ${ro}></span>
+          <label class="check small"><input type="checkbox" data-pk="on" ${p.on !== false ? "checked" : ""} ${ro}> Aan</label><label class="check small"><input type="checkbox" data-pk="diner" ${p.diner ? "checked" : ""} ${ro}> Diner</label>
+          <button type="button" class="rq-x red" data-sfpdel="${i}" aria-label="Gelegenheid verwijderen" ${ro}>✕</button></div>
+        <div class="sf-pdesc"><label class="f"><span>Omschrijving voor de klant</span><textarea rows="2" data-pk="klantOms" ${ro}>${esc(p.klantOms || "")}</textarea></label><label class="f"><span>Interne omschrijving</span><textarea rows="2" data-pk="internOms" ${ro}>${esc(p.internOms || "")}</textarea></label>${rqPhotoBox("sfp-" + i, p.foto || "", ro, "Foto")}</div>
+      </div></div>`).join("")}</div>
+    <div><button type="button" class="btn" id="sf-padd" ${ro}>+ Gelegenheid</button></div>`;
+}
+function sfBetaal(d, ro) {
+  const b = d.t.betaal, cfg = typeof finCfg === "function" ? finCfg() : {};
+  const f = (k, l, ph, hint) => `<label class="f"><span>${l}</span><input type="number" min="0" step="any" data-sfb="${k}" value="${esc(b[k] ?? "")}" placeholder="${esc(ph ?? "")}" ${ro}>${hint ? `<span class="small muted">${hint}</span>` : ""}</label>`;
+  return `<p class="small muted" style="margin:0">Leeg = de standaard van Financiën. Een vaste aanbetaling of betaaltermijn bij de klant of het bedrijf gaat voor.</p>
+    <div class="fields">${f("aanbetalingPct", "Percentage aanbetaling", 30)}${f("tweedePct", "Percentage 2e betaling", cfg.secondPct ?? 0)}${f("tweedeWeken", "Uiterste moment 2e betaling (weken voor het event)", cfg.secondWeeks ?? 4)}${f("termijnDagen", "Betaaltermijn (dagen)", cfg.termijnDagen ?? 14)}</div>`;
+}
+function sfVragen(d, ro) {
+  const t = d.t, rows = d.vragen.map((v, i) => ({ v, i })).filter(x => !x.v.types || x.v.types === t.id);
+  const kinds = typeof VR_KINDS === "object" ? VR_KINDS : { janee: "Ja of nee", open: "Open antwoord" };
+  return `<p class="small muted" style="margin:0">Deze vragen verschijnen bij elk event van dit soort (in het reserveringsformulier, het dossier en de partysheet).</p>
+    <div class="tbl-wrap"><table class="lines sf-vr"><thead><tr><th>Vraag</th><th>Toelichting</th><th>Antwoord</th><th>Gelegenheid</th><th>Verplicht</th><th>Geldt voor</th><th></th></tr></thead><tbody>
+    ${rows.map(({ v, i }) => `<tr data-sfv="${i}"><td><input data-vk="text" value="${esc(v.text || "")}" aria-label="Vraag" ${ro}></td><td><input data-vk="help" value="${esc(v.help || "")}" aria-label="Toelichting" ${ro}></td>
+      <td><select data-vk="kind" aria-label="Soort antwoord" ${ro}>${Object.entries(kinds).map(([k, l]) => `<option value="${k}" ${k === v.kind ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></td>
+      <td><select data-vk="part" aria-label="Gelegenheid" ${ro}><option value="">Algemeen</option>${t.parts.map(p => `<option ${p.name === v.part ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></td>
+      <td><input type="checkbox" data-vk="required" ${v.required ? "checked" : ""} aria-label="Verplicht" ${ro}></td>
+      <td><select data-vk="types" aria-label="Geldt voor" ${ro}><option value="${esc(t.id)}" ${v.types ? "selected" : ""}>Alleen ${esc(t.name)}</option><option value="" ${v.types ? "" : "selected"}>Alle soorten</option></select></td>
+      <td><button type="button" class="rq-x red" data-sfvdel="${i}" aria-label="Vraag verwijderen" ${ro}>✕</button></td></tr>`).join("")}
+    </tbody></table></div><div><button type="button" class="btn" id="sf-vadd" ${ro}>+ Vraag maken</button></div>`;
+}
+function sfTodo(d, ro) {
+  const t = d.t, mgrs = S.settings.locatie?.managers || [];
+  return `<p class="small muted" style="margin:0">Deze to-do's komen automatisch bij elk event van dit soort, met de uiterste datum het aantal dagen voor het event.</p>
+    <div class="tbl-wrap"><table class="lines"><thead><tr><th>To-do</th><th class="r">Dagen vooraf</th><th>Manager</th><th></th></tr></thead><tbody>
+    ${t.todos.map((x, i) => `<tr data-sftd="${i}"><td><input data-tk="text" value="${esc(x.text || "")}" aria-label="To-do" ${ro}></td><td style="width:110px"><input type="number" min="0" data-tk="dagen" value="${esc(x.dagen ?? "")}" aria-label="Dagen vooraf" ${ro}></td>
+      <td><select data-tk="manager" aria-label="Manager" ${ro}><option value="">Manager van het event</option>${mgrs.map(m => `<option ${m === x.manager ? "selected" : ""}>${esc(m)}</option>`).join("")}</select></td><td style="width:40px"><button type="button" class="rq-x red" data-sftddel="${i}" aria-label="To-do verwijderen" ${ro}>✕</button></td></tr>`).join("")}
+    </tbody></table></div><div><button type="button" class="btn" id="sf-tdadd" ${ro}>+ To-do</button></div>`;
+}
+VIEWS.soortfeest = () => {
+  const d = sfEnsure(), ro = S.readOnly ? "disabled" : ""; if (!d) return `<p class="empty panel">Nog geen soorten feest.</p>`;
+  const tab = SF_TABS.some(([k]) => k === S.sfTab) ? S.sfTab : "algemeen";
+  if (tab === "mail") S.mailType = d.id;
+  const body = tab === "algemeen" ? sfAlgemeen(d, ro) : tab === "programma" ? sfProgramma(d, ro) : tab === "betaal" ? sfBetaal(d, ro) : tab === "vragen" ? sfVragen(d, ro) : tab === "todo" ? sfTodo(d, ro) : (typeof VIEWS.mailteksten === "function" ? VIEWS.mailteksten() : `<p class="empty">E-mailteksten zijn niet beschikbaar.</p>`);
+  return `<section class="stack sf" id="sf">
+    <div class="row spread"><h2>Instellingen per soort feest</h2>${tab === "mail" ? "" : `<button class="btn primary" id="sf-save" ${ro}>Opslaan</button>`}</div>
+    <div class="sf-types" role="tablist" aria-label="Soort feest">${eventTypes().map(t => `<button type="button" data-sft="${esc(t.id)}" aria-selected="${t.id === d.id}"><span class="sf-ti">${typeIcon(t.id)}</span>${esc(t.name || "(zonder naam)")}</button>`).join("")}</div>
+    <div class="sf-tabs" role="tablist" aria-label="Onderdeel">${SF_TABS.map(([k, l]) => `<button type="button" data-sftab="${k}" aria-selected="${k === tab}">${esc(l)}</button>`).join("")}</div>
+    <div class="${tab === "mail" ? "sf-mail" : "panel stack"}">${body}</div>
+  </section>`;
+};
+after.soortfeest = () => {
+  const d = sfDraft, root = $("#sf"); if (!d || !root) return;
+  const tab = SF_TABS.some(([k]) => k === S.sfTab) ? S.sfTab : "algemeen", t = d.t;
+  const sync = () => {
+    root.querySelectorAll("[data-sf]").forEach(el => t[el.dataset.sf] = el.dataset.sf === "optieDagen" ? +el.value || 0 : el.value);
+    root.querySelectorAll("[data-sftx]").forEach(el => { if (el.dataset.sftx === "voorwaarden") d.voorwaarden = el.value; else t.teksten[el.dataset.sftx] = el.value; });
+    const rv = $("#sf-review"); if (rv) t.review = rv.checked; const ub = $("#sf-ubl"); if (ub) t.ubl = ub.checked;
+    root.querySelectorAll("[data-sfp]").forEach(box => { const p = t.parts[+box.dataset.sfp]; box.querySelectorAll("[data-pk]").forEach(el => p[el.dataset.pk] = el.type === "checkbox" ? el.checked : el.value); });
+    root.querySelectorAll("[data-sfb]").forEach(el => t.betaal[el.dataset.sfb] = el.value === "" ? "" : +el.value);
+    root.querySelectorAll("tr[data-sfv]").forEach(tr => { const v = d.vragen[+tr.dataset.sfv]; tr.querySelectorAll("[data-vk]").forEach(el => v[el.dataset.vk] = el.type === "checkbox" ? el.checked : el.value); });
+    root.querySelectorAll("tr[data-sftd]").forEach(tr => { const x = t.todos[+tr.dataset.sftd]; tr.querySelectorAll("[data-tk]").forEach(el => x[el.dataset.tk] = el.dataset.tk === "dagen" ? (el.value === "" ? "" : +el.value) : el.value); });
+  };
+  const again = () => { sync(); render(); };
+  root.querySelectorAll("[data-sft]").forEach(b => b.onclick = () => { sync(); S.sfType = b.dataset.sft; sfDraft = null; render(); });
+  root.querySelectorAll("[data-sftab]").forEach(b => b.onclick = () => { if (tab !== "mail") sync(); S.sfTab = b.dataset.sftab; render(); });
+  if (tab === "mail") { if (typeof after.mailteksten === "function") after.mailteksten(); return; }
+  rqPhotoWire(root, k => k.startsWith("sff-") ? t.fotos[+k.slice(4)] : t.parts[+k.slice(4)]?.foto, (k, v) => { sync(); if (k.startsWith("sff-")) { t.fotos[+k.slice(4)] = v; t.fotos = t.fotos.map(x => x || ""); } else { const p = t.parts[+k.slice(4)]; if (p) p.foto = v; } });
+  root.addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.id === "sf-padd") { sync(); const last = t.parts[t.parts.length - 1]; t.parts.push({ name: "", start: last?.end || "", end: "", on: true }); render(); }
+    else if (b.dataset.sfpdel != null) { sync(); t.parts.splice(+b.dataset.sfpdel, 1); render(); }
+    else if (b.dataset.sfup != null || b.dataset.sfdown != null) { sync(); const i = +(b.dataset.sfup ?? b.dataset.sfdown), j = b.dataset.sfup != null ? i - 1 : i + 1; if (j < 0 || j >= t.parts.length) return; [t.parts[i], t.parts[j]] = [t.parts[j], t.parts[i]]; render(); }
+    else if (b.id === "sf-vadd") { sync(); d.vragen.push({ id: "vr-" + uid(), text: "", kind: "janee", help: "", types: t.id, required: false, part: "" }); render(); }
+    else if (b.dataset.sfvdel != null) { sync(); d.vragen.splice(+b.dataset.sfvdel, 1); render(); }
+    else if (b.id === "sf-tdadd") { sync(); t.todos.push({ id: uid(), text: "", dagen: 7, manager: "" }); render(); }
+    else if (b.dataset.sftddel != null) { sync(); t.todos.splice(+b.dataset.sftddel, 1); render(); }
+  });
+  const sv = $("#sf-save"); if (sv) sv.onclick = async () => {
+    sync();
+    if (!t.name.trim()) { toast("Geef de soort feest een naam"); return; }
+    t.parts = t.parts.filter(p => p.name.trim()); t.todos = t.todos.filter(x => x.text.trim()); t.fotos = t.fotos.filter(Boolean);
+    const types = structuredClone(eventTypes()).map(x => x.id === t.id ? structuredClone(t) : x);
+    const vw = { ...(S.settings.voorwaardenPerType || {}) }; if (d.voorwaarden.trim()) vw[t.id] = d.voorwaarden; else delete vw[t.id];
+    if (await rqSaveSettings({ eventTypes: types, voorwaardenPerType: vw, vragen: d.vragen.filter(v => v.text.trim()) }, `${t.name} opgeslagen`)) { sfDraft = null; render(); }
+  };
+};
+delete SOON.soortfeest;
+{ const sv = setView; setView = function (v) { if (v !== "soortfeest") sfDraft = null; sv(v); }; }
+
+// To-do's per soort feest en speciale wensen met "voeg toe aan mijn to-do lijst" lopen mee met de producttaken.
+{
+  const base = productTaskWanted;
+  productTaskWanted = function (q, r) {
+    const out = base(q, r);
+    if (!r || !r.date || r.status === "geannuleerd" || (q && q.status === "afgewezen")) return out;
+    const t = eventType(r.eventType);
+    for (const x of (t && t.todos) || []) if (x && x.text) out.push({ text: x.text, due: addDays(r.date, -rqNum(x.dagen)), done: false, source: PRODUCT_TASK + "type:" + x.id, ...(x.manager ? { manager: x.manager } : {}) });
+    if (q && q.rq) for (const dd of rqDays(q)) for (const it of dd.items || []) {
+      if (!it.wens || !it.wens.todo) continue;
+      const ds = dd.eventDate || r.date;
+      out.push({ text: `Speciale wens: ${it.desc}${it.wens.leverancier ? " (" + it.wens.leverancier.split("\n")[0] + ")" : ""}`, due: addDays(ds, -rqNum(it.wens.todoDagen)), done: false, source: PRODUCT_TASK + "wens:" + it.id });
+    }
+    return out;
+  };
+}
+// Betaalopties per soort feest: bij een nieuwe offerte de aanbetaling en 2e betaling, en de betaaltermijn bij de termijnen.
+const sfBetaalOf = q => { const r = q && q.reservationId && S.reservations.get(q.reservationId), t = eventType(q && (q.eventType || r?.eventType)); return (t && t.betaal) || {}; };
+{
+  const base = newQuoteFromRes;
+  newQuoteFromRes = function (r) {
+    const q = base(r), b = sfBetaalOf({ eventType: q.eventType || r.eventType }), c = q.customerId && S.customers.get(q.customerId);
+    const own = c && c.depositPct !== "" && c.depositPct != null;
+    if (b.aanbetalingPct !== "" && b.aanbetalingPct != null && !own) q.depositPct = +b.aanbetalingPct;
+    if (b.tweedePct !== "" && b.tweedePct != null) q.secondPct = +b.tweedePct;
+    if (b.tweedeWeken !== "" && b.tweedeWeken != null) q.secondWeeks = +b.tweedeWeken;
+    return q;
+  };
+}
+if (typeof finTerms === "function") {
+  const base = finTerms;
+  finTerms = function (q) {
+    const out = base(q), b = sfBetaalOf(q), c = q.customerId && S.customers.get(q.customerId);
+    if (b.termijnDagen === "" || b.termijnDagen == null || (c && c.payTerm !== "" && c.payTerm != null)) return out;
+    const ev = finEventDate(q), acc = q.acceptedOn || q.date || todayISO, n = +b.termijnDagen;
+    for (const t of out) { if (t.inv) continue; if (t.key === "1e") t.due = addDays(acc, n); else if (t.key === "eind" && ev) t.due = addDays(ev, n); t.late = !t.paid && !!t.due && t.due < todayISO; }
+    return out;
+  };
+}
+// Welkomsttekst en optietekst van de soort feest boven de offerte voor de klant.
+{
+  const base = rqQuoteBody;
+  rqQuoteBody = function (q) {
+    const t = eventType(q.eventType), tx = (t && t.teksten) || {}, r = q.reservationId && S.reservations.get(q.reservationId);
+    const p = s => s && s.trim() ? `<p>${esc(s.trim()).replace(/\n/g, "<br>")}</p>` : "";
+    return p(tx.welkomOfferte) + (r && r.status === "optie" ? p((tx.inOptie || "").replace(/\{optie_tot\}/g, r.optieTot ? longDate(r.optieTot) : "")) : "") + base(q);
+  };
+}
+
+/* Zalen › manage (Restau): per zaal en soort feest bij welke gelegenheden de zaal te kiezen is. */
+let zmDraft = null;
+const rqRoomOff = (roomId, typeId, part) => { const rm = room(roomId), m = rm && rm.manage && rm.manage[typeId]; return !!(m && Array.isArray(m) && part && !m.includes(part)); };
+VIEWS.zalenmanage = () => {
+  if (!zmDraft) zmDraft = structuredClone(S.settings.rooms || []);
+  const ro = S.readOnly ? "disabled" : "", types = eventTypes(), tid = types.some(t => t.id === S.zmType) ? S.zmType : types[0]?.id, t = eventType(tid);
+  const parts = ((t && t.parts) || []).map(p => p.name).filter(Boolean);
+  return `<section class="stack" id="zm"><div class="row spread"><h2>Zalen › manage</h2><button class="btn primary" id="zm-save" ${ro}>Opslaan</button></div>
+    <div class="sf-types" role="tablist" aria-label="Soort feest">${types.map(x => `<button type="button" data-zmt="${esc(x.id)}" aria-selected="${x.id === tid}"><span class="sf-ti">${typeIcon(x.id)}</span>${esc(x.name)}</button>`).join("")}</div>
+    <div class="panel stack"><p class="small muted" style="margin:0">Vink aan bij welke gelegenheden een zaal te kiezen is bij ${esc(t?.name || "")}. Een zaal die niet is aangevinkt krijgt in de offerte de melding “niet ingesteld voor deze gelegenheid”.</p>
+    ${parts.length ? `<div class="tbl-wrap"><table class="lines zm-tbl"><thead><tr><th>Zaal</th>${parts.map(p => `<th class="c">${esc(p)}</th>`).join("")}</tr></thead><tbody>
+      ${zmDraft.map((rm, ri) => { const m = rm.manage && rm.manage[tid]; return `<tr><td>${esc(rm.name)}</td>${parts.map(p => `<td class="c"><input type="checkbox" data-zm="${ri}" data-zp="${esc(p)}" ${!Array.isArray(m) || m.includes(p) ? "checked" : ""} aria-label="${esc(rm.name + " bij " + p)}" ${ro}></td>`).join("")}</tr>`; }).join("")}
+    </tbody></table></div>` : `<p class="empty">Deze soort feest heeft nog geen gelegenheden.</p>`}</div></section>`;
+};
+after.zalenmanage = () => {
+  const types = eventTypes(), tid = types.some(t => t.id === S.zmType) ? S.zmType : types[0]?.id, parts = ((eventType(tid) || {}).parts || []).map(p => p.name).filter(Boolean);
+  document.querySelectorAll("[data-zmt]").forEach(b => b.onclick = () => { S.zmType = b.dataset.zmt; render(); });
+  document.querySelectorAll("[data-zm]").forEach(cb => cb.onchange = () => {
+    const rm = zmDraft[+cb.dataset.zm]; rm.manage = rm.manage || {};
+    const cur = Array.isArray(rm.manage[tid]) ? rm.manage[tid] : parts.slice(), p = cb.dataset.zp;
+    rm.manage[tid] = cb.checked ? [...new Set([...cur, p])] : cur.filter(x => x !== p);
+    if (parts.every(x => rm.manage[tid].includes(x))) delete rm.manage[tid];
+  });
+  const sv = $("#zm-save"); if (sv) sv.onclick = async () => { if (await rqSaveSettings({ rooms: zmDraft }, "Zalen opgeslagen")) { zmDraft = null; render(); } };
+};
+delete SOON.zalenmanage;
+{ const sv = setView; setView = function (v) { if (v !== "zalenmanage") zmDraft = null; sv(v); }; }
+// Menu Instellingen: "Instellingen per soort feest" en "Zalen › manage"
+(() => {
+  const inst = MENU.find(m => m.id === "inst"), desc = inst && Object.getOwnPropertyDescriptor(inst, "items");
+  const add = its => {
+    const i = its.findIndex(it => it.v === "inst" && it.set && it.set.instTab === "feesten"); its.splice(i < 0 ? its.length : i, 0, { l: "Instellingen per soort feest", v: "soortfeest" });
+    const j = its.findIndex(it => it.v === "inst" && it.set && it.set.instTab === "zalen"); its.splice(j < 0 ? its.length : j + 1, 0, { l: "Zalen › manage", v: "zalenmanage" });
+    return its;
+  };
+  if (desc && desc.get) Object.defineProperty(inst, "items", { configurable: true, get: () => add(desc.get()) });
+  else if (inst) add(inst.items);
+})();
+document.head.insertAdjacentHTML("beforeend", `<style id="rq7-style">
+.sf-types, .sf-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.sf-types button { display: flex; align-items: center; gap: 6px; padding: 7px 12px; border: 1px solid var(--line, #ddd); border-radius: 6px; background: var(--panel, #fff); color: inherit; font: inherit; cursor: pointer; }
+.sf-types button[aria-selected="true"] { background: var(--teal); border-color: var(--teal); color: #fff; }
+.sf-ti svg { width: 18px; height: 18px; }
+.sf-tabs { border-bottom: 2px solid var(--line, #ddd); gap: 0; }
+.sf-tabs button { padding: 8px 14px; border: 0; border-bottom: 3px solid transparent; margin-bottom: -2px; background: none; color: var(--teal); font: inherit; cursor: pointer; }
+.sf-tabs button[aria-selected="true"] { border-bottom-color: var(--orange); color: inherit; font-weight: 600; }
+.sf-sw { display: inline-flex; align-items: center; gap: 8px; margin-right: 18px; }
+.sf-texts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.sf-fotos { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.sf-fotos .rq-photo img, .sf-pdesc .rq-photo img { max-width: 100%; max-height: 110px; object-fit: cover; }
+.sf-part { display: flex; gap: 8px; border-top: 1px solid var(--line, #ddd); padding-top: 10px; }
+.sf-pmove { display: flex; flex-direction: column; gap: 2px; } .sf-pmain { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.sf-prow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; } .sf-prow > input[data-pk="name"] { flex: 1 1 200px; min-width: 0; }
+.sf-pdesc { display: grid; grid-template-columns: 1fr 1fr 160px; gap: 8px; align-items: start; }
+.sf-vr input[data-vk="text"] { min-width: 220px; } .sf-mail #mt-type { display: none; }
+.zm-tbl th.c, .zm-tbl td.c { text-align: center; }
+#sf, #zm { min-width: 0; }
+@media (max-width: 760px) { .sf-texts, .sf-pdesc { grid-template-columns: 1fr; } .sf-fotos { grid-template-columns: repeat(3, minmax(0, 1fr)); } .sf-tabs button { padding: 8px 9px; } }
 </style>`);
 /* ---------- einde offerte zoals Restau ---------- */
 
