@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Ruimte reserveren voor teams · HC Tilburg</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231b7d88'/%3E%3Ctext x='16' y='22' font-size='16' text-anchor='middle' fill='white' font-family='Arial' font-weight='700'%3EHC%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap">
+<style>
+:root {
+  --petrol: #1b7d88; --petrol-d: #146570; --oranje: #e5621c; --bg: #f5f5f5; --kaart: #ffffff; --tekst: #2b2f33; --mute: #6b7378; --lijn: #e2e5e7;
+  --ok: #1f8a4c; --ok-soft: #e3f4ea; --bad: #c0392b; --bad-soft: #fbe7e5; --warn-soft: #fff3e8;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--tekst); font: 15px/1.5 "Open Sans", system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-text-size-adjust: 100%; }
+header { background: var(--petrol); color: #fff; padding: 14px 16px; }
+header .wm { font-family: Georgia, "Times New Roman", serif; letter-spacing: .28em; font-size: 1.05rem; }
+header h1 { margin: 2px 0 0; font-size: 1.05rem; font-weight: 600; }
+main { max-width: 640px; margin: 0 auto; padding: 16px; display: grid; gap: 14px; }
+.kaart { background: var(--kaart); border: 1px solid var(--lijn); border-radius: 4px; padding: 16px; display: grid; gap: 12px; }
+h2 { margin: 0; font-size: 1.05rem; color: var(--oranje); font-weight: 700; }
+label.f { display: grid; gap: 4px; font-weight: 600; font-size: .9rem; }
+input, select, textarea { font: inherit; font-size: 16px; width: 100%; padding: 9px 10px; border: 1px solid #c9cfd2; border-radius: 3px; background: #fff; color: var(--tekst); }
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--petrol); outline-offset: 0; border-color: var(--petrol); }
+.rij { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.rij3 { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 10px; }
+@media (max-width: 420px) { .rij3 { grid-template-columns: 1fr 1fr; } .rij3 > :first-child { grid-column: 1 / -1; } }
+button { font: inherit; cursor: pointer; border-radius: 3px; border: 1px solid transparent; padding: 10px 16px; font-weight: 600; }
+.knop { background: var(--oranje); color: #fff; width: 100%; font-size: 1rem; }
+.knop:disabled { opacity: .55; cursor: default; }
+.link { background: none; border: none; color: var(--petrol); padding: 0; font-weight: 600; text-decoration: underline; }
+.klein { font-size: .85rem; } .mute { color: var(--mute); }
+.ruimtes { display: grid; gap: 8px; }
+.ruimte { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 10px; align-items: center; border: 1px solid var(--lijn); border-radius: 4px; padding: 10px 12px; cursor: pointer; }
+.ruimte input { width: auto; margin: 0; accent-color: var(--petrol); }
+.ruimte.kies { border-color: var(--petrol); box-shadow: inset 0 0 0 1px var(--petrol); }
+.ruimte.uit { opacity: .55; cursor: default; }
+.ruimte .dag { grid-column: 2 / -1; font-size: .8rem; color: var(--mute); }
+.chip { font-size: .78rem; font-weight: 700; padding: 1px 8px; border-radius: 2px; white-space: nowrap; }
+.chip.vrij { background: var(--ok-soft); color: var(--ok); } .chip.bezet { background: var(--bad-soft); color: var(--bad); } .chip.mute { background: #eef0f1; color: var(--mute); }
+.melding { border-radius: 3px; padding: 10px 12px; font-size: .92rem; }
+.melding.fout { background: var(--bad-soft); color: var(--bad); } .melding.ok { background: var(--ok-soft); color: var(--ok); }
+.lijst { display: grid; gap: 6px; }
+.item { display: flex; justify-content: space-between; gap: 10px; align-items: center; border-top: 1px solid var(--lijn); padding-top: 8px; }
+.item button { background: #fff; border-color: #c9cfd2; color: var(--bad); padding: 6px 10px; font-size: .85rem; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header><div class="wm">HC TILBURG</div><h1>Ruimte reserveren voor teamoverleg</h1></header>
+<main id="app"><div class="kaart"><p class="mute" style="margin:0">Laden…</p></div></main>
+<script>
+(() => {
+  const FN = "https://kstkkevpgflhsjdnagrv.supabase.co/functions/v1/team-reservering";
+  const KEY = "sb_publishable_LlRQd3XDGW6YKqAEmNrz4g_xEwWdAsp";
+  const DAGEN = ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"];
+  const MAANDEN = ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december"];
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const mem = { get(k) { try { return localStorage.getItem("hct-team-" + k) || ""; } catch (e) { return ""; } }, set(k, v) { try { localStorage.setItem("hct-team-" + k, v); } catch (e) {} } };
+  const toMin = t => { const m = /^(\d{1,2}):(\d{2})/.exec(t || ""); return m ? +m[1] * 60 + +m[2] : null; };
+  const fromMin = m => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  const langeDatum = d => { const x = new Date(d + "T12:00:00"); return `${DAGEN[x.getDay()]} ${x.getDate()} ${MAANDEN[x.getMonth()]}`; };
+  const plus = (d, n) => { const x = new Date(d + "T12:00:00"); x.setDate(x.getDate() + n); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`; };
+
+  async function vraag(body) {
+    let r;
+    try { r = await fetch(FN, { method: "POST", headers: { "Content-Type": "application/json", apikey: KEY }, body: JSON.stringify({ code: st.code, ...body }) }); }
+    catch (e) { return { fout: "Geen verbinding. Probeer het opnieuw." }; }
+    let d = {}; try { d = await r.json(); } catch (e) {}
+    if (!r.ok && !d.fout) d.fout = "Er ging iets mis, probeer het opnieuw.";
+    return d;
+  }
+
+  const st = { code: mem.get("code"), info: null, bezet: [], kies: "", melding: null, mijn: [] };
+
+  function codeScherm(fout) {
+    $("#app").innerHTML = `<form class="kaart" id="codeform">
+      <h2>Welkom</h2>
+      <p style="margin:0">Trainers en teammanagers van HC Tilburg kunnen hier een ruimte reserveren voor teamoverleg of een kleine vergadering. Vul de clubcode in die je van de horeca hebt gekregen.</p>
+      <label class="f">Clubcode<input id="code" autocomplete="off" autocapitalize="off" required value="${esc(st.code)}"></label>
+      ${fout ? `<div class="melding fout" role="alert">${esc(fout)}</div>` : ""}
+      <button class="knop" type="submit">Verder</button></form>`;
+    $("#codeform").onsubmit = async e => { e.preventDefault(); st.code = $("#code").value.trim(); await start(); };
+    $("#code").focus();
+  }
+
+  async function start() {
+    const d = await vraag({ actie: "start" });
+    if (d.fout) { mem.set("code", ""); return codeScherm(st.code ? d.fout : ""); }
+    mem.set("code", st.code); st.info = d;
+    hoofdScherm();
+  }
+
+  function teamOpties(sel) {
+    const groepen = [...new Set(st.info.teams.map(t => t.groep))];
+    return groepen.map(g => `<optgroup label="${esc(g)}">${st.info.teams.filter(t => t.groep === g).map(t => `<option value="${esc(t.kort)}" ${t.kort === sel ? "selected" : ""}>${esc(t.naam)}</option>`).join("")}</optgroup>`).join("");
+  }
+
+  function hoofdScherm() {
+    const i = st.info, team = i.teams.some(t => t.kort === mem.get("team")) ? mem.get("team") : "";
+    $("#app").innerHTML = `
+    <form class="kaart" id="form" novalidate>
+      <h2>Reserveren</h2>
+      <label class="f">Team<select id="team" required><option value="">Kies je team…</option>${teamOpties(team)}</select></label>
+      <div class="rij3">
+        <label class="f">Datum<input type="date" id="datum" required min="${i.vandaag}" max="${plus(i.vandaag, i.maxDagenVooruit)}" value="${i.vandaag}"></label>
+        <label class="f">Van<input type="time" id="van" required step="900" value="20:00"></label>
+        <label class="f">Tot<input type="time" id="tot" required step="900" value="21:00"></label>
+      </div>
+      <label class="f">Aantal personen<input type="number" id="personen" min="1" inputmode="numeric" required placeholder="bijv. 12"></label>
+      <div style="display:grid;gap:6px"><b class="klein">Ruimte</b><div class="ruimtes" id="ruimtes"></div></div>
+      <div class="rij">
+        <label class="f">Je naam<input id="naam" autocomplete="name" required value="${esc(mem.get("naam"))}"></label>
+        <label class="f">Telefoon<input id="telefoon" type="tel" autocomplete="tel" required value="${esc(mem.get("telefoon"))}"></label>
+      </div>
+      <label class="f">Onderwerp of opmerking <span class="mute" style="font-weight:400">(niet verplicht)</span><textarea id="opmerking" rows="2" maxlength="500" placeholder="bijv. seizoensevaluatie, koffie graag klaarzetten"></textarea></label>
+      <div id="melding" aria-live="polite"></div>
+      <button class="knop" type="submit" id="verstuur">Reserveer</button>
+      <p class="klein mute" style="margin:0">Je ziet alleen of een ruimte vrij is. Een reservering duurt maximaal ${i.maxMinuten / 60} uur en kan tot ${i.maxDagenVooruit} dagen vooruit.</p>
+    </form>
+    <section class="kaart" id="mijnkaart" hidden><h2 id="mijnkop">Reserveringen van je team</h2><div class="lijst" id="mijn"></div></section>
+    <p class="klein mute" style="text-align:center;margin:0">${esc(i.club)} · <button class="link klein" id="anders" type="button">andere clubcode</button></p>`;
+    $("#anders").onclick = () => { mem.set("code", ""); st.code = ""; codeScherm(); };
+    let duur = 60;
+    $("#van").addEventListener("change", () => { const s = toMin($("#van").value); if (s != null) $("#tot").value = fromMin(Math.min(s + duur, 23 * 60 + 45)); tekenRuimtes(); });
+    $("#tot").addEventListener("change", () => { const s = toMin($("#van").value), e = toMin($("#tot").value); if (s != null && e > s) duur = e - s; tekenRuimtes(); });
+    $("#personen").addEventListener("input", tekenRuimtes);
+    $("#datum").addEventListener("change", laadDag);
+    $("#team").addEventListener("change", () => { mem.set("team", $("#team").value); laadMijn(); });
+    $("#form").onsubmit = verstuur;
+    laadDag(); laadMijn();
+  }
+
+  async function laadDag() {
+    const datum = $("#datum").value; st.bezet = null; tekenRuimtes();
+    if (!datum) return;
+    const d = await vraag({ actie: "dag", datum });
+    if ($("#datum").value !== datum) return;
+    st.bezet = d.fout ? [] : d.bezet; if (d.fout) toon("fout", esc(d.fout));
+    tekenRuimtes();
+  }
+
+  function status(r) {
+    const s = toMin($("#van").value), e = toMin($("#tot").value), p = +$("#personen").value || 0;
+    const items = (st.bezet || []).filter(b => b.ruimte === r.id);
+    if (st.bezet === null) return { cls: "mute", txt: "laden…", uit: true, items };
+    if (s == null || e == null || e <= s) return { cls: "mute", txt: "kies een tijd", uit: true, items };
+    const botst = items.filter(b => { const bs = toMin(b.van), be0 = toMin(b.tot), be = be0 <= bs ? be0 + 1440 : be0; return s < be && bs < e; });
+    if (botst.length) return { cls: "bezet", txt: "bezet", uit: true, items };
+    if (r.capaciteit && p > r.capaciteit) return { cls: "bezet", txt: "te klein", uit: true, items };
+    return { cls: "vrij", txt: "vrij", uit: false, items };
+  }
+
+  function tekenRuimtes() {
+    const box = $("#ruimtes"); if (!box) return;
+    const rs = st.info.ruimtes.slice().sort((a, b) => (a.capaciteit || 9999) - (b.capaciteit || 9999));
+    const stats = rs.map(r => [r, status(r)]);
+    if (!st.kies || stats.find(([r]) => r.id === st.kies)?.[1].uit) st.kies = (stats.find(([, x]) => !x.uit)?.[0] || {}).id || "";
+    box.innerHTML = stats.map(([r, x]) => `<label class="ruimte ${x.uit ? "uit" : ""} ${r.id === st.kies ? "kies" : ""}">
+        <input type="radio" name="ruimte" value="${esc(r.id)}" ${r.id === st.kies ? "checked" : ""} ${x.uit ? "disabled" : ""}>
+        <span><b>${esc(r.naam)}</b>${r.capaciteit ? ` <span class="mute klein">max ${r.capaciteit}</span>` : ""}</span>
+        <span class="chip ${x.cls}">${esc(x.txt)}</span>
+        <span class="dag">${x.items.length ? "Deze dag bezet: " + x.items.map(b => `${b.van}–${b.tot}`).join(", ") : st.bezet ? "Deze dag nog helemaal vrij" : ""}</span>
+      </label>`).join("") || `<p class="mute klein" style="margin:0">Er zijn geen ruimtes voor teams ingesteld.</p>`;
+    box.querySelectorAll("[name=ruimte]").forEach(el => el.onchange = () => { st.kies = el.value; tekenRuimtes(); });
+    $("#verstuur").disabled = !st.kies;
+  }
+
+  function toon(soort, tekst) { const m = $("#melding"); if (m) m.innerHTML = tekst ? `<div class="melding ${soort}" role="${soort === "fout" ? "alert" : "status"}">${tekst}</div>` : ""; }
+
+  async function verstuur(e) {
+    e.preventDefault();
+    const v = id => $("#" + id).value.trim();
+    if (!v("team")) return toon("fout", "Kies je team.");
+    if (!(+v("personen") > 0)) return toon("fout", "Vul het aantal personen in.");
+    if (!st.kies) return toon("fout", "Er is op dit tijdstip geen ruimte vrij. Kies een andere tijd of dag.");
+    if (v("naam").length < 2 || v("telefoon").length < 8) return toon("fout", "Vul je naam en telefoonnummer in, zodat de horeca je kan bereiken.");
+    $("#verstuur").disabled = true; toon("", "");
+    const d = await vraag({ actie: "reserveer", team: v("team"), datum: v("datum"), van: v("van"), tot: v("tot"), ruimte: st.kies, personen: +v("personen"), naam: v("naam"), telefoon: v("telefoon"), opmerking: v("opmerking") });
+    $("#verstuur").disabled = false;
+    if (d.fout) { if (d.bezet) { st.bezet = d.bezet; tekenRuimtes(); } return toon("fout", esc(d.fout)); }
+    mem.set("naam", v("naam")); mem.set("telefoon", v("telefoon"));
+    toon("ok", `<b>Gereserveerd.</b> ${esc(d.ruimte)} op ${esc(langeDatum(d.datum))} van ${esc(d.van)} tot ${esc(d.tot)} voor ${esc(d.team)}. De horeca ziet het direct in de agenda.`);
+    $("#opmerking").value = "";
+    laadDag(); laadMijn();
+  }
+
+  async function laadMijn() {
+    const team = $("#team").value, kaart = $("#mijnkaart");
+    if (!team) { kaart.hidden = true; return; }
+    const d = await vraag({ actie: "mijn", team });
+    if ($("#team").value !== team) return;
+    st.mijn = d.reserveringen || [];
+    const naam = st.info.teams.find(t => t.kort === team)?.naam || team;
+    $("#mijnkop").textContent = "Komende reserveringen van " + naam;
+    kaart.hidden = false;
+    $("#mijn").innerHTML = st.mijn.length ? st.mijn.map(r => `<div class="item"><span><b>${esc(langeDatum(r.datum))}</b> ${esc(r.van)}–${esc(r.tot)}<br><span class="klein mute">${esc(r.ruimte)}${r.personen ? " · " + esc(r.personen) + " pers." : ""}${r.contact ? " · " + esc(r.contact) : ""}</span></span><button type="button" data-af="${esc(r.id)}">Afzeggen</button></div>`).join("")
+      : `<p class="mute klein" style="margin:0">Nog niets gereserveerd.</p>`;
+    $("#mijn").querySelectorAll("[data-af]").forEach(b => b.onclick = async () => {
+      if (b.dataset.zeker !== "1") { b.dataset.zeker = "1"; b.textContent = "Zeker afzeggen?"; return; }
+      b.disabled = true;
+      const x = await vraag({ actie: "afzeggen", team, id: b.dataset.af });
+      if (x.fout) { b.disabled = false; return toon("fout", esc(x.fout)); }
+      toon("ok", "Afgezegd. De ruimte is weer vrij.");
+      laadDag(); laadMijn();
+    });
+  }
+
+  if (st.code) start(); else codeScherm();
+})();
+</script>
+</body>
+</html>
