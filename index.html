@@ -13,90 +13,139 @@
 <title>Horeca-agenda HC Tilburg</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&family=Cinzel:wght@500&display=swap">
 <style>
-/* Layout: sticky scoreboard-style header with tabs; one working view at a time; month grid → day timeline per room */
+/* Layout naar voorbeeld van Restau: petrolblauwe balk met iconen, witte subbalk met sectienaam en tabbladen,
+   inhoud in een lichtgrijs vlak met witte kaarten, oranje koppen en actieknoppen, petrol opslaanknoppen. */
 :root {
-  --bg: #f3f5f4;
+  --page: #ffffff;
+  --bg: #f5f5f5;           /* grijs werkvlak */
   --surface: #ffffff;
-  --sunk: #e8ecea;
-  --line: #d3dad7;
-  --fg: #16211d;
-  --muted: #5b6863;
-  --pitch: #0f6b4f;        /* kunstgras: wedstrijden / accent */
-  --pitch-soft: #d9efe6;
-  --bar: #b86a12;          /* tap: horeca-reserveringen */
-  --bar-soft: #f6e6cf;
+  --sunk: #f3f3f3;
+  --field: #fafafa;
+  --line: #e3e3e3;
+  --fg: #3b3b3b;
+  --muted: #8a8a8a;
+  --teal: #1b7d88; --teal-d: #0b6f78; --teal-soft: #d2e8e6;
+  --orange: #e5621c; --orange-soft: #fde0d3;
+  --pitch: #1b7d88;        /* wedstrijden / accent */
+  --pitch-soft: #d2e8e6;
+  --bar: #e5621c;          /* horeca-reserveringen */
+  --bar-soft: #fde0d3;
   --club: #3d5a9e;         /* clubagenda (Outlook) */
   --club-soft: #dde5f5;
-  --ok: #2f7d4b; --warn: #b7791f; --bad: #b3352b;
+  --ok: #2f8a4b; --warn: #b7791f; --bad: #c0392b;
   --ok-soft: #dcefe2; --warn-soft: #f7ebd2; --bad-soft: #f6dcd9;
-  --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
-  --body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --head: #16211d; --head-fg: #eef3f0;
-  --r: 6px;
+  --display: "Open Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --body: "Open Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --head: #1b7d88; --head-fg: #ffffff;
+  --r: 3px;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #101614; --surface: #17201d; --sunk: #1f2a26; --line: #2e3b36; --fg: #e6ece9; --muted: #98a6a0;
-  --pitch: #4cc496; --pitch-soft: #173a2e; --bar: #eba550; --bar-soft: #3b2a14; --club: #8fa9e6; --club-soft: #1f2a45;
-  --ok: #6fcf8f; --warn: #e6b45c; --bad: #ef8378; --ok-soft: #173424; --warn-soft: #3a2e14; --bad-soft: #3d1c19; --head: #0a0f0d; --head-fg: #e6ece9;
+  --page: #121a1b; --bg: #182224; --surface: #1e2a2c; --sunk: #243235; --field: #1a2527; --line: #33454a; --fg: #e4ebec; --muted: #9aabae;
+  --teal: #3aa6b2; --teal-d: #1b7d88; --teal-soft: #173a3e; --orange: #f08045; --orange-soft: #43271a;
+  --pitch: #3aa6b2; --pitch-soft: #173a3e; --bar: #f08045; --bar-soft: #43271a; --club: #8fa9e6; --club-soft: #1f2a45;
+  --ok: #6fcf8f; --warn: #e6b45c; --bad: #ef8378; --ok-soft: #173424; --warn-soft: #3a2e14; --bad-soft: #3d1c19; --head: #145f68; --head-fg: #ffffff;
   color-scheme: dark } }
 :root[data-theme="dark"] {
-  --bg: #101614; --surface: #17201d; --sunk: #1f2a26; --line: #2e3b36; --fg: #e6ece9; --muted: #98a6a0;
-  --pitch: #4cc496; --pitch-soft: #173a2e; --bar: #eba550; --bar-soft: #3b2a14; --club: #8fa9e6; --club-soft: #1f2a45;
-  --ok: #6fcf8f; --warn: #e6b45c; --bad: #ef8378; --ok-soft: #173424; --warn-soft: #3a2e14; --bad-soft: #3d1c19; --head: #0a0f0d; --head-fg: #e6ece9;
+  --page: #121a1b; --bg: #182224; --surface: #1e2a2c; --sunk: #243235; --field: #1a2527; --line: #33454a; --fg: #e4ebec; --muted: #9aabae;
+  --teal: #3aa6b2; --teal-d: #1b7d88; --teal-soft: #173a3e; --orange: #f08045; --orange-soft: #43271a;
+  --pitch: #3aa6b2; --pitch-soft: #173a3e; --bar: #f08045; --bar-soft: #43271a; --club: #8fa9e6; --club-soft: #1f2a45;
+  --ok: #6fcf8f; --warn: #e6b45c; --bad: #ef8378; --ok-soft: #173424; --warn-soft: #3a2e14; --bad-soft: #3d1c19; --head: #145f68; --head-fg: #ffffff;
   color-scheme: dark }
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.45; }
-h1, h2, h3 { font-family: var(--display); font-weight: 600; letter-spacing: .01em; text-wrap: balance; margin: 0; }
-h2 { font-size: 1.6rem; }
-h3 { font-size: 1.2rem; }
+html { background: var(--page); }
+body { margin: 0; background: var(--page); color: var(--fg); font-family: var(--body); font-size: 14px; line-height: 1.5; min-height: 100vh; display: flex; flex-direction: column; }
+h1, h2, h3 { font-family: var(--display); font-weight: 600; text-wrap: balance; margin: 0; }
+h2 { font-size: 1.3rem; color: var(--orange); }
+h3 { font-size: 1.08rem; color: var(--teal); }
+h4 { margin: 0; }
+a { color: var(--teal); }
 button, input, select, textarea { font: inherit; color: inherit; }
 .num { font-variant-numeric: tabular-nums; }
 .muted { color: var(--muted); }
 .small { font-size: .86rem; }
-.eyebrow { font-family: var(--display); text-transform: uppercase; letter-spacing: .08em; font-size: .8rem; color: var(--muted); font-weight: 600; }
+.eyebrow { font-size: .78rem; color: var(--muted); font-weight: 600; letter-spacing: .02em; }
 
-header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: var(--head); color: var(--head-fg); }
-.top-inner { max-width: 1180px; margin: 0 auto; padding: 10px 16px 0; display: flex; flex-wrap: wrap; align-items: end; gap: 6px 24px; }
-.brand { display: flex; align-items: baseline; gap: 10px; padding-bottom: 10px; }
-.brand h1 { font-size: 1.55rem; text-transform: uppercase; letter-spacing: .04em; }
-.brand span { font-size: .85rem; opacity: .7; }
-nav.tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; max-width: 100%; }
-nav.tabs button { background: none; border: 0; padding: 10px 12px 11px; font-family: var(--display); font-size: 1.02rem; letter-spacing: .03em; text-transform: uppercase; color: inherit; opacity: .72; cursor: pointer; border-bottom: 3px solid transparent; white-space: nowrap; }
-nav.tabs button[aria-selected="true"] { opacity: 1; border-bottom-color: var(--pitch); }
-nav.tabs button:focus-visible { outline: 2px solid var(--pitch); outline-offset: -2px; }
+/* Bovenbalk */
+header.top { position: sticky; top: 0; z-index: 20; }
+.topbar { background: var(--head); color: var(--head-fg); padding-top: env(safe-area-inset-top, 0px); }
+.top-inner { display: flex; align-items: stretch; gap: 10px; min-height: 48px; padding-left: 16px; }
+.brand { display: flex; align-items: center; gap: 12px; background: none; border: 0; color: inherit; cursor: pointer; padding: 0 4px 0 0; }
+.wordmark { font-family: Cinzel, Georgia, "Times New Roman", serif; font-size: 1.05rem; letter-spacing: .28em; white-space: nowrap; }
+.search { position: relative; display: flex; align-items: center; flex: 0 1 300px; min-width: 0; margin-left: 8px; }
+.search input { background: #fff; color: #3b3b3b; border: 0; border-radius: 2px; height: 30px; padding: 4px 10px; font-size: .86rem; }
+.search input::placeholder { color: #9a9a9a; }
+.sres { position: absolute; top: calc(100% + 4px); left: 0; right: 0; min-width: 280px; background: var(--surface); color: var(--fg); border: 1px solid var(--line); box-shadow: 0 6px 18px rgba(0,0,0,.18); z-index: 30; max-height: 60vh; overflow: auto; }
+.sres button { display: grid; grid-template-columns: 74px 1fr; gap: 8px; width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 8px 10px; cursor: pointer; }
+.sres button:hover, .sres button:focus-visible { background: var(--sunk); outline: none; }
+.sres .k { font-size: .74rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; padding-top: 2px; }
+.sres p { margin: 0; padding: 10px; color: var(--muted); }
+nav.tabs { display: flex; margin-left: auto; overflow-x: auto; scrollbar-width: none; }
+nav.tabs.lnav { margin-left: 0; overflow: visible; }
+nav.tabs button { background: none; border: 0; color: inherit; width: 48px; flex: none; display: grid; place-items: center; cursor: pointer; }
+nav.tabs button svg { width: 20px; height: 20px; }
+nav.tabs button:hover { background: rgba(255,255,255,.12); }
+nav.tabs button[aria-selected="true"] { background: var(--page); color: var(--orange); }
+nav.tabs button:focus-visible { outline: 2px solid #fff; outline-offset: -4px; }
+.who { display: flex; align-items: center; gap: 8px; padding: 0 14px 0 10px; font-size: .84rem; white-space: nowrap; border-left: 1px solid rgba(255,255,255,.18); }
+.who .logo { width: 30px; height: 30px; border-radius: 50%; background: #fff; color: var(--teal-d); display: grid; place-items: center; font-weight: 700; font-size: .62rem; letter-spacing: .02em; border: 2px solid rgba(255,255,255,.6); }
+.subnav { background: var(--page); border-bottom: 1px solid var(--line); box-shadow: 0 2px 4px rgba(0,0,0,.06); }
+.subnav-inner { max-width: 1180px; margin: 0 auto; padding: 0 16px; display: flex; align-items: stretch; gap: 4px; min-height: 30px; overflow-x: auto; scrollbar-width: none; }
+.subnav h1 { font-size: 1rem; font-weight: 600; color: var(--teal); align-self: center; margin-right: 16px; white-space: nowrap; }
+.subnav button { background: none; border: 0; padding: 4px 12px; font-size: .8rem; color: var(--orange); cursor: pointer; white-space: nowrap; }
+.subnav button[aria-current="page"] { background: var(--orange-soft); }
+.subnav button:hover { text-decoration: underline; }
+@media (max-width: 760px) {
+  .top-inner { flex-wrap: wrap; padding-left: 10px; gap: 0; }
+  .brand { padding-right: 2px; }
+  .wordmark { font-size: .8rem; letter-spacing: .12em; }
+  .who { display: none; }
+  .search { order: 3; flex: 1 1 100%; margin: 0 10px 8px 0; }
+  nav.tabs { min-height: 44px; }
+  nav.tabs button { width: 38px; }
+  nav.tabs button svg { width: 19px; height: 19px; }
+}
+@media (max-width: 359px) { .wordmark { letter-spacing: .06em; } nav.tabs button { width: 34px; } }
 
-main { max-width: 1180px; margin: 0 auto; padding-inline: 16px; padding-block: 18px 60px; display: grid; gap: 16px; }
+main { width: 100%; max-width: 1180px; margin: 18px auto 0; padding: 16px 16px 40px; display: grid; gap: 14px; background: var(--bg); border: 1px solid var(--line); flex: 1 0 auto; align-content: start; }
+@media (max-width: 760px) { main { margin-top: 0; border: 0; padding: 12px 12px 40px; } }
+footer.foot { background: var(--head); color: var(--head-fg); margin-top: 24px; padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px)); font-size: .82rem; }
+footer.foot div { max-width: 1180px; margin: 0 auto; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 20px; }
+footer.foot b { font-family: Cinzel, Georgia, serif; font-weight: 500; letter-spacing: .2em; margin-right: 10px; }
 .banner { padding: 10px 14px; border-radius: var(--r); background: var(--warn-soft); color: var(--fg); border: 1px solid var(--warn); }
 .row { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
 .spread { justify-content: space-between; }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; min-width: 0; }
 .stack { display: grid; gap: 12px; }
-.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
 
-.btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); padding: 7px 12px; border-radius: var(--r); cursor: pointer; font-weight: 500; }
-.btn:hover { border-color: var(--muted); }
-.btn.primary { background: var(--pitch); border-color: var(--pitch); color: var(--surface); }
-.btn.bar { background: var(--bar); border-color: var(--bar); color: var(--surface); }
+/* Knoppen: oranje = actie, petrol = opslaan/wijzig, wit = overig */
+.btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #cfd4d4; background: var(--surface); padding: 6px 12px; border-radius: var(--r); cursor: pointer; font-size: .86rem; line-height: 1.35; }
+.btn:hover { border-color: var(--teal); }
+.btn.primary, .btn.bar { background: var(--orange); border-color: var(--orange); color: #fff; }
+.btn.primary:hover, .btn.bar:hover { filter: brightness(1.06); }
+.btn.teal, .btn.primary[type="submit"], #q-save, #s-save, #k-save, .btn[data-arritems] { background: linear-gradient(var(--teal), var(--teal-d)); border-color: var(--teal-d); color: #fff; }
 .btn.danger { color: var(--bad); border-color: var(--bad); }
 .btn.ghost { border-color: transparent; background: transparent; }
-.btn:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--pitch); outline-offset: 1px; }
+.btn:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--teal); outline-offset: 1px; }
 .btn[disabled] { opacity: .5; cursor: default; }
-input, select, textarea { background: var(--bg); border: 1px solid var(--line); border-radius: var(--r); padding: 7px 9px; min-width: 0; width: 100%; }
+#m-prev, #m-next, #d-prev, #d-next { background: var(--teal); border-color: var(--teal); color: #fff; width: 28px; height: 28px; padding: 0; justify-content: center; font-size: 1.1rem; }
+input, select, textarea { background: var(--field); border: 1px solid var(--line); border-radius: 2px; padding: 6px 9px; min-width: 0; width: 100%; font-size: .9rem; }
+input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 textarea { min-height: 70px; resize: vertical; }
-label.f { display: grid; gap: 4px; font-size: .86rem; color: var(--muted); min-width: 0; }
-label.f > span { font-weight: 500; }
+label.f { display: grid; gap: 4px; font-size: .82rem; color: var(--fg); min-width: 0; }
+label.f > span { font-weight: 600; }
 .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px 12px; }
 .check { display: flex; gap: 8px; align-items: center; }
-.check input { width: auto; }
+.check input { width: auto; accent-color: var(--teal); }
 
-.chip { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: 999px; font-size: .78rem; font-weight: 600; white-space: nowrap; }
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: 2px; font-size: .76rem; font-weight: 600; white-space: nowrap; }
 .chip.c0 { background: var(--sunk); color: var(--muted); }
 .chip.c1 { background: var(--ok-soft); color: var(--ok); }
-.chip.c2 { background: var(--warn-soft); color: var(--warn); }
+.chip.c2 { background: var(--orange-soft); color: var(--orange); }
 .chip.c3 { background: var(--bad-soft); color: var(--bad); }
 .chip.pitch { background: var(--pitch-soft); color: var(--pitch); }
 .chip.barc { background: var(--bar-soft); color: var(--bar); }
@@ -105,13 +154,14 @@ label.f > span { font-weight: 500; }
 
 /* Maand */
 .cal-head { display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap: 4px; margin-bottom: 4px; }
-.cal-head div { font-family: var(--display); text-transform: uppercase; letter-spacing: .06em; font-size: .8rem; color: var(--muted); padding-left: 6px; }
+.cal-head div { font-size: .8rem; font-weight: 600; color: var(--teal); padding-left: 6px; }
 .cal { display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap: 4px; }
 .day { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); min-height: 104px; padding: 6px; display: flex; flex-direction: column; gap: 3px; cursor: pointer; text-align: left; min-width: 0; }
-.day:hover { border-color: var(--muted); }
+.day:hover { border-color: var(--teal); }
 .day.out { opacity: .45; }
-.day.today { border-color: var(--pitch); box-shadow: inset 0 0 0 1px var(--pitch); }
-.day .dn { font-family: var(--display); font-weight: 600; font-size: 1.15rem; display: flex; justify-content: space-between; align-items: center; gap: 4px; }
+.day.today { border-color: var(--orange); box-shadow: inset 0 0 0 1px var(--orange); }
+.day.today .dn { color: var(--orange); }
+.day .dn { font-weight: 600; font-size: 1rem; display: flex; justify-content: space-between; align-items: center; gap: 4px; }
 .day .ln { font-size: .76rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; gap: 4px; align-items: center; }
 .day .ln.m { color: var(--pitch); }
 .day .ln.c { color: var(--club); }
@@ -129,7 +179,7 @@ label.f > span { font-weight: 500; }
 /* Dag */
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
 .stat { border-left: 3px solid var(--line); padding: 2px 0 2px 12px; }
-.stat b { display: block; font-family: var(--display); font-size: 2rem; line-height: 1.05; font-weight: 600; }
+.stat b { display: block; font-size: 1.7rem; line-height: 1.1; font-weight: 600; color: var(--fg); }
 .stat.pitch { border-color: var(--pitch); } .stat.bar { border-color: var(--bar); } .stat.club { border-color: var(--club); }
 .tl-wrap { overflow-x: auto; }
 .tl { min-width: 680px; display: grid; grid-template-columns: 150px 1fr; row-gap: 6px; }
@@ -154,35 +204,38 @@ label.f > span { font-weight: 500; }
 /* Tabellen */
 .tbl-wrap { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; font-size: .9rem; }
-th { text-align: left; font-family: var(--display); text-transform: uppercase; letter-spacing: .05em; font-size: .78rem; color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { text-align: left; font-size: .8rem; color: var(--fg); font-weight: 600; padding: 7px 8px; border-bottom: 2px solid var(--line); white-space: nowrap; }
 td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
 tr.click { cursor: pointer; }
-tr.click:hover td { background: var(--sunk); }
+tr.click:hover td { background: var(--teal-soft); }
 td.r, th.r { text-align: right; font-variant-numeric: tabular-nums; }
 .lines td { padding: 4px; }
 .lines input { padding: 5px 7px; }
 .tot { display: grid; grid-template-columns: 1fr auto; gap: 4px 20px; max-width: 440px; margin-left: auto; font-variant-numeric: tabular-nums; }
-.tot .big { font-family: var(--display); font-size: 1.4rem; font-weight: 600; }
+.tot .big { font-size: 1.3rem; font-weight: 700; color: var(--fg); }
 
 /* Modal */
-.scrim { position: fixed; inset: 0; background: rgba(10, 16, 14, .5); z-index: 50; display: flex; justify-content: center; align-items: flex-start; overflow-y: auto; padding: calc(24px + env(safe-area-inset-top, 0px)) 16px 40px; }
-.modal { background: var(--surface); color: var(--fg); border-radius: 10px; width: 100%; max-width: 720px; padding: 20px; display: grid; gap: 14px; border: 1px solid var(--line); }
+.scrim { position: fixed; inset: 0; background: rgba(40, 40, 40, .72); z-index: 50; display: flex; justify-content: center; align-items: flex-start; overflow-y: auto; padding: calc(24px + env(safe-area-inset-top, 0px)) 16px 40px; }
+.modal { background: var(--surface); color: var(--fg); border-radius: 0; width: 100%; max-width: 720px; padding: 0 20px 20px; display: grid; gap: 14px; border: 0; box-shadow: 0 10px 40px rgba(0,0,0,.35); }
+.modal > div.row.spread:first-of-type { background: var(--teal); color: #fff; margin: 0 -20px; padding: 6px 8px 6px 16px; min-height: 38px; flex-wrap: nowrap; }
+.modal > div.row.spread:first-of-type h2 { font-size: 1rem; font-weight: 400; color: #fff; }
+.modal > div.row.spread:first-of-type .btn.ghost { color: #fff; font-size: 1.1rem; padding: 2px 8px; }
 .warnbox { border-radius: var(--r); padding: 8px 12px; font-size: .9rem; }
 .warnbox.bad { background: var(--bad-soft); border: 1px solid var(--bad); }
 .warnbox.warn { background: var(--warn-soft); border: 1px solid var(--warn); }
 .warnbox.ok { background: var(--ok-soft); border: 1px solid var(--ok); }
-.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); background: var(--fg); color: var(--bg); padding: 9px 16px; border-radius: var(--r); z-index: 80; font-weight: 500; max-width: calc(100% - 32px); }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); background: var(--teal-d); color: #fff; padding: 9px 16px; border-radius: var(--r); z-index: 80; font-weight: 500; max-width: calc(100% - 32px); }
 .steps { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
 .drop { border: 2px dashed var(--line); border-radius: var(--r); padding: 18px; text-align: center; }
 .drop.over { border-color: var(--pitch); background: var(--pitch-soft); }
 .swatch { width: 32px; height: 32px; padding: 2px; }
 .catbar { display: flex; flex-wrap: wrap; gap: 6px; }
-.catbar button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 12px; cursor: pointer; font-size: .88rem; }
-.catbar button[aria-pressed="true"] { background: var(--pitch); border-color: var(--pitch); color: var(--surface); }
+.catbar button { border: 1px solid var(--line); background: var(--surface); border-radius: 2px; padding: 4px 12px; cursor: pointer; font-size: .84rem; color: var(--fg); }
+.catbar button[aria-pressed="true"] { background: var(--orange-soft); border-color: var(--orange); color: var(--orange); }
 .catbar button .muted { color: inherit; opacity: .7; }
 .pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; max-height: 360px; overflow: auto; padding-right: 2px; }
 .pbtn { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: var(--r); padding: 8px 10px; display: grid; gap: 2px; cursor: pointer; min-width: 0; }
-.pbtn:hover { border-color: var(--pitch); }
+.pbtn:hover { border-color: var(--orange); }
 .pbtn b { font-weight: 600; }
 .pbtn span { font-size: .84rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .pcat-h { margin: 6px 0 0; }
@@ -194,7 +247,7 @@ td.r, th.r { text-align: right; font-variant-numeric: tabular-nums; }
 .stat-col { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; min-width: 0; }
 .stat-col:hover .stat-bar, .stat-col:focus-visible .stat-bar { opacity: .75; }
 .stat-col:focus-visible { outline: 2px solid var(--pitch); outline-offset: 2px; }
-.stat-bar { width: min(70%, 36px); background: var(--bar); border-radius: 4px 4px 0 0; }
+.stat-bar { width: min(70%, 36px); background: var(--teal); border-radius: 2px 2px 0 0; }
 .stat-val { font-size: .78rem; color: var(--muted); margin-bottom: 2px; white-space: nowrap; }
 .stat-axis { display: flex; gap: 2px; margin-top: 4px; }
 .stat-axis span { flex: 1; text-align: center; font-size: .74rem; color: var(--muted); min-width: 0; }
@@ -205,23 +258,26 @@ td.r, th.r { text-align: right; font-variant-numeric: tabular-nums; }
 </style>
 
 <header class="top">
-  <div class="top-inner">
-    <div class="brand"><h1>Horeca-agenda</h1><span>HC Tilburg · Bredaseweg 447</span></div>
-    <nav class="tabs" role="tablist" id="tabs">
-      <button role="tab" data-v="agenda" aria-selected="true">Agenda</button>
-      <button role="tab" data-v="dag">Dag</button>
-      <button role="tab" data-v="res">Reserveringen</button>
-      <button role="tab" data-v="off">Offertes</button>
-      <button role="tab" data-v="klant">Klanten</button>
-      <button role="tab" data-v="stat">Statistiek</button>
-      <button role="tab" data-v="import">Importeren</button>
-      <button role="tab" data-v="inst">Instellingen</button>
+  <div class="topbar"><div class="top-inner">
+    <button type="button" class="brand" data-v="agenda" aria-label="HC Tilburg horeca-agenda, naar de maandagenda"><span class="wordmark">HC TILBURG</span></button>
+    <nav class="tabs lnav" aria-label="Start"><button type="button" data-v="dag" data-today="1" title="Vandaag" aria-label="Vandaag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v10h5v-6h3v6h5V10"/></svg></button></nav>
+    <div class="search" role="search"><input type="search" id="g-search" placeholder="Zoek op naam" autocomplete="off" aria-label="Zoek op naam van klant, reservering of offerte"><div class="sres" id="g-sres" hidden></div></div>
+    <nav class="tabs" role="tablist" id="tabs" aria-label="Onderdelen">
+      <button type="button" role="tab" data-v="agenda" data-views="agenda dag" title="Agenda" aria-label="Agenda" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="1"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M7.5 14h2M11 14h2M14.5 14h2M7.5 17h2M11 17h2"/></svg></button>
+      <button type="button" role="tab" data-v="res" data-views="res" title="Reserveringen" aria-label="Reserveringen" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6.5h11M9 12h11M9 17.5h11"/><path d="M4 6.5h.5M4 12h.5M4 17.5h.5" stroke-width="3"/></svg></button>
+      <button type="button" role="tab" data-v="off" data-views="off" title="Offertes" aria-label="Offertes" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="4.5" width="14" height="16.5" rx="1"/><path d="M9 4.5V3h6v1.5M8.5 10h7M8.5 13.5h7M8.5 17h4"/></svg></button>
+      <button type="button" role="tab" data-v="klant" data-views="klant" title="Klanten" aria-label="Klanten" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.8"/><path d="M4.5 20.5c.6-4 3.7-6.3 7.5-6.3s6.9 2.3 7.5 6.3"/></svg></button>
+      <button type="button" role="tab" data-v="stat" data-views="stat" title="Statistieken" aria-label="Statistieken" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 20.5h18M6.5 20.5v-6M11 20.5V8M15.5 20.5v-9M20 20.5V4.5"/></svg></button>
+      <button type="button" role="tab" data-v="inst" data-views="inst import" title="Instellingen" aria-label="Instellingen" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.5 5.5l1.9 1.9M16.6 16.6l1.9 1.9M5.5 18.5l1.9-1.9M16.6 7.4l1.9-1.9"/><circle cx="12" cy="12" r="6.6"/></svg></button>
     </nav>
-  </div>
+    <div class="who"><span>Horeca</span><span class="logo" aria-hidden="true">HCT</span></div>
+  </div></div>
+  <div class="subnav"><div class="subnav-inner" id="subnav"></div></div>
 </header>
 <main id="app">
   <div class="panel"><p class="muted">Agenda laden…</p></div>
 </main>
+<footer class="foot"><div><span><b>HC TILBURG</b>Horeca-agenda</span><span>Bredaseweg 447, Tilburg · horeca@hctilburg.nl</span></div></footer>
 <div id="modal-root"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -252,9 +308,9 @@ td.r, th.r { text-align: right; font-variant-numeric: tabular-nums; }
 .sb-card label{display:block;font-size:13px;font-weight:600;margin:10px 0 4px}
 .sb-card input,.sb-card select{width:100%;font:inherit;padding:9px 10px;border:1px solid var(--line,#d3dad7);border-radius:var(--r,6px);background:var(--surface,#fff);color:inherit}
 .sb-card button{font:inherit;font-weight:600;padding:9px 14px;border-radius:var(--r,6px);border:1px solid var(--line,#d3dad7);background:var(--sunk,#e8ecea);color:inherit;cursor:pointer}
-.sb-card button.sb-hoofd{background:var(--pitch,#0f6b4f);border-color:var(--pitch,#0f6b4f);color:#fff;width:100%;margin-top:16px}
+.sb-card button.sb-hoofd{background:var(--teal,var(--pitch,#0f6b4f));border-color:var(--teal,var(--pitch,#0f6b4f));color:#fff;width:100%;margin-top:16px}
 .sb-card .sb-rij{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-.sb-card .sb-link{background:none;border:0;padding:4px 0;color:var(--pitch,#0f6b4f);font-weight:500;text-decoration:underline}
+.sb-card .sb-link{background:none;border:0;padding:4px 0;color:var(--teal,var(--pitch,#0f6b4f));font-weight:500;text-decoration:underline}
 .sb-msg{margin-top:12px;font-size:14px;padding:8px 10px;border-radius:var(--r,6px);background:var(--warn-soft,#f7ebd2)}
 .sb-msg.ok{background:var(--ok-soft,#dcefe2)}
 .sb-acc{position:fixed;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:40;font:600 13px var(--body,system-ui);padding:7px 11px;border-radius:999px;border:1px solid var(--line,#d3dad7);background:var(--surface,#fff);color:var(--fg,#16211d);cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.12)}
@@ -331,9 +387,23 @@ td.r, th.r { text-align: right; font-variant-numeric: tabular-nums; }
   async function uitloggen() { await sb.auth.signOut(); location.reload(); }
 
   function accountKnop() {
+    const naam = T.naam || T.user.email;
+    const who = document.querySelector("header .who");
+    if (who) {
+      const t = who.querySelector("span"); if (t) t.textContent = naam;
+      who.setAttribute("role", "button"); who.tabIndex = 0; who.title = "Account en toegang";
+      who.style.cursor = "pointer";
+      who.onclick = () => accountScherm();
+      who.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); accountScherm(); } };
+    }
+    // Losse knop rechtsonder als de kop geen (zichtbare) gebruikersplek heeft, zoals op een telefoon.
     let k = document.querySelector(".sb-acc");
-    if (!k) { k = document.createElement("button"); k.type = "button"; k.className = "sb-acc"; document.body.appendChild(k); k.onclick = accountScherm; }
-    k.textContent = T.naam || T.user.email;
+    if (!k) {
+      k = document.createElement("button"); k.type = "button"; k.className = "sb-acc"; document.body.appendChild(k); k.onclick = () => accountScherm();
+      const zet = () => { const w = document.querySelector("header .who"); k.hidden = !!(w && w.offsetParent !== null); };
+      addEventListener("resize", zet); zet();
+    }
+    k.textContent = naam;
   }
 
   async function ledenActie(invoer) {
@@ -742,10 +812,68 @@ function setView(v) {
   S.view = v; try { localStorage.setItem("hct-view", v); } catch (e) {}
   render(); window.scrollTo(0, 0);
 }
-$("#tabs").addEventListener("click", e => { const b = e.target.closest("button[data-v]"); if (b) setView(b.dataset.v); });
+document.querySelector("header.top").addEventListener("click", e => {
+  const b = e.target.closest("button[data-v]"); if (!b) return;
+  if (b.dataset.today) S.day = todayISO;
+  if (b.dataset.tab) S.instTab = b.dataset.tab;
+  setView(b.dataset.v);
+});
+const SECTIONS = {
+  agenda: ["Agenda", [["dag", "Dag-agenda"], ["agenda", "Maand-agenda"]]], dag: ["Agenda", [["dag", "Dag-agenda"], ["agenda", "Maand-agenda"]]],
+  res: ["Reserveringen", []], off: ["Offertes", []], klant: ["Klanten", []], stat: ["Statistieken", []],
+  inst: ["Instellingen", null], import: ["Instellingen", null],
+};
+function drawChrome() {
+  document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.views.split(" ").includes(S.view))));
+  const [title, subs0] = SECTIONS[S.view] || SECTIONS.agenda;
+  const it = INST_TABS.some(([k]) => k === S.instTab) ? S.instTab : "zalen";
+  const subs = subs0 || [...INST_TABS.map(([k, l]) => ["inst", l, k]), ["import", "Importeren"]];
+  $("#subnav").innerHTML = `<h1>${esc(title)}</h1>` + subs.map(([v, l, k]) => `<button type="button" data-v="${v}"${k ? ` data-tab="${k}"` : ""} ${v === S.view && (!k || k === it) ? 'aria-current="page"' : ""}>${esc(l)}</button>`).join("");
+}
+/* Zoeken op naam (bovenbalk): klanten, reserveringen en offertes */
+function gSearch(term) {
+  const t = term.trim().toLowerCase(); if (t.length < 2) return [];
+  const hit = (...xs) => xs.some(x => String(x || "").toLowerCase().includes(t));
+  const out = [];
+  for (const c of S.customers.values()) if (hit(c.name, c.email, c.phone, c.company)) out.push({ k: "Klant", id: c.id, t: c.name || "(zonder naam)", s: [c.email, c.phone].filter(Boolean).join(" · "), d: "" });
+  for (const r of S.reservations.values()) if (hit(r.customer, r.contact, r.email, r.notes)) out.push({ k: "Reservering", id: r.id, t: r.customer || "(zonder naam)", s: [r.date && shortDate(r.date), r.start, r.roomId && roomName(r.roomId)].filter(Boolean).join(" · "), d: r.date || "" });
+  for (const q of S.quotes.values()) if (hit(q.customer, q.number, q.contact)) out.push({ k: "Offerte", id: q.id, t: `${q.number || ""} ${q.customer || ""}`.trim(), s: q.eventDate ? shortDate(q.eventDate) : "", d: q.eventDate || "" });
+  return out.sort((a, b) => (b.d || "").localeCompare(a.d || "")).slice(0, 12);
+}
+(() => {
+  const inp = $("#g-search"), box = $("#g-sres");
+  const close = () => { box.hidden = true; };
+  const draw = () => {
+    const res = gSearch(inp.value);
+    if (inp.value.trim().length < 2) return close();
+    box.innerHTML = res.length ? res.map((x, i) => `<button type="button" data-si="${i}"><span class="k">${esc(x.k)}</span><span><b>${esc(x.t)}</b>${x.s ? `<br><span class="small muted">${esc(x.s)}</span>` : ""}</span></button>`).join("") : `<p>Niets gevonden voor "${esc(inp.value.trim())}".</p>`;
+    box.hidden = false;
+    box.querySelectorAll("[data-si]").forEach(b => b.onmousedown = e => { e.preventDefault(); const x = res[+b.dataset.si]; inp.value = ""; close(); openHit(x); });
+  };
+  inp.addEventListener("input", draw);
+  inp.addEventListener("focus", draw);
+  inp.addEventListener("blur", () => setTimeout(close, 120));
+  inp.addEventListener("keydown", e => {
+    if (e.key === "Escape") { inp.value = ""; close(); inp.blur(); }
+    if (e.key === "Enter") { const x = gSearch(inp.value)[0]; if (x) { inp.value = ""; close(); openHit(x); } }
+    if (e.key === "ArrowDown") { const f = box.querySelector("button"); if (f) { e.preventDefault(); f.focus(); } }
+  });
+  box.addEventListener("keydown", e => {
+    const bs = [...box.querySelectorAll("button")], i = bs.indexOf(document.activeElement);
+    if (e.key === "ArrowDown" && i < bs.length - 1) { e.preventDefault(); bs[i + 1].focus(); }
+    if (e.key === "ArrowUp") { e.preventDefault(); (i > 0 ? bs[i - 1] : inp).focus(); }
+    if (e.key === "Enter" && i >= 0) { e.preventDefault(); bs[i].dispatchEvent(new MouseEvent("mousedown")); }
+    if (e.key === "Escape") { close(); inp.focus(); }
+  });
+})();
+function openHit(x) {
+  if (x.k === "Klant") { setView("klant"); S.custOpen = x.id; render(); }
+  else if (x.k === "Offerte") { setView("off"); S.quoteOpen = x.id; render(); }
+  else { setView("res"); openRes(S.reservations.get(x.id)); }
+}
 
 function render() {
-  document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.v === S.view)));
+  drawChrome();
   const app = $("#app");
   let banner = "";
   if (S.dbState === "none") banner = `<div class="banner">De gedeelde opslag is in deze weergave niet beschikbaar. Je kunt rondkijken, maar wijzigingen worden niet bewaard. Log opnieuw in of herlaad de pagina.</div>`;
@@ -1102,7 +1230,7 @@ const arrPrice = a => a.items && a.items.length ? a.items.map(product).filter(p 
 // Gemengde btw (bijv. drankafkoop): btwHigh = deel van de prijs tegen 21%, de rest tegen 9%.
 const isMix = x => +x.btwHigh > 0 && +x.btwHigh < 100;
 const btwLabel = x => isMix(x) ? `${+x.btwHigh}% à 21, ${100 - x.btwHigh}% à 9` : `${+x.btw || 0}%`;
-const btwSelect = (x, attrs) => `<select ${attrs}>${[9, 21, 0].map(b => `<option value="${b}" ${!isMix(x) && +x.btw === b ? "selected" : ""}>${b}%</option>`).join("")}<option value="mix" ${isMix(x) ? "selected" : ""}>gemengd 21/9</option></select>`;
+const btwSelect = (x, attrs) => `<select ${attrs}>${[9, 21, 0].map(b => `<option value="${b}" ${!isMix(x) && +x.btw === b ? "selected" : ""}>${b}%</option>`).join("")}<option value="mix" ${isMix(x) ? "selected" : ""}>21/9</option></select>`;
 function catOrder(c) { const i = (S.settings.productCategories || []).indexOf(c); return i < 0 ? 999 : i; }
 
 const STATUSES = ["aanvraag", "optie", "bevestigd", "afgerond", "geannuleerd"];
@@ -1121,8 +1249,8 @@ function partySheet(r) {
   const q = r.quoteId && S.quotes.get(r.quoteId);
   const lines = q ? q.lines.filter(l => (l.desc || l.price) && !l.optional) : [];
   return `<!doctype html><html lang="nl"><head><meta charset="utf-8"><title>Partysheet ${esc(r.customer)} – ${esc(r.date)}</title>
-<style>body{font-family:Barlow,Arial,sans-serif;color:#16211d;max-width:760px;margin:32px auto;padding:0 24px;line-height:1.45}h1,h2{font-family:"Barlow Condensed","Arial Narrow",sans-serif;text-transform:uppercase;letter-spacing:.04em;margin:0 0 6px}h2{font-size:1.1rem;margin-top:22px;border-bottom:2px solid #0f6b4f;padding-bottom:3px}
-table{width:100%;border-collapse:collapse}td,th{padding:6px;border-bottom:1px solid #d3dad7;text-align:left;vertical-align:top}.k{width:170px;color:#5b6863}.big{font-size:1.6rem;font-weight:700}.box{border:2px solid #b3352b;padding:8px 12px;border-radius:6px}</style></head><body>
+<style>body{font-family:"Open Sans",Arial,sans-serif;font-size:14px;color:#3b3b3b;max-width:760px;margin:32px auto;padding:0 24px;line-height:1.5}h1,h2{font-weight:600;margin:0 0 6px}h1{color:#e5621c}h2{font-size:1.1rem;margin-top:22px;color:#1b7d88;border-bottom:2px solid #1b7d88;padding-bottom:3px}
+table{width:100%;border-collapse:collapse}td,th{padding:6px;border-bottom:1px solid #e3e3e3;text-align:left;vertical-align:top}.k{width:170px;color:#8a8a8a}.big{font-size:1.6rem;font-weight:700}.box{border:2px solid #b3352b;padding:8px 12px;border-radius:6px}</style></head><body>
 <h1>Partysheet</h1><div class="big">${esc(r.customer)} · ${esc(r.persons || "?")} personen</div>
 <p>${esc(longDate(r.date))}, ${esc(r.start)}–${esc(r.end)} · ${esc(roomName(r.roomId))} · status: ${esc(r.status)}</p>
 <table><tr><td class="k">Contactpersoon</td><td>${esc(r.contact || "")} ${esc(r.phone || "")}</td></tr><tr><td class="k">Arrangement</td><td>${esc(arr(r.arrangementId)?.name || "–")}</td></tr>${q ? `<tr><td class="k">Offerte</td><td>${esc(q.number)} (${esc(q.status)})</td></tr>` : ""}</table>
@@ -1342,9 +1470,9 @@ function quoteText(q) {
 function quoteHtml(q) {
   const t = totals(q.lines);
   return `<!doctype html><html lang="nl"><head><meta charset="utf-8"><title>Offerte ${esc(q.number)} – HC Tilburg Horeca</title>
-<style>body{font-family:Barlow,Arial,sans-serif;color:#16211d;max-width:760px;margin:40px auto;padding:0 24px;line-height:1.45}h1{font-family:"Barlow Condensed","Arial Narrow",sans-serif;text-transform:uppercase;letter-spacing:.04em;margin:0}
-.hd{display:flex;justify-content:space-between;gap:24px;border-bottom:3px solid #0f6b4f;padding-bottom:12px;margin-bottom:20px}table{width:100%;border-collapse:collapse;margin:20px 0}th,td{padding:7px 6px;border-bottom:1px solid #d3dad7;text-align:left}td.r,th.r{text-align:right}
-.tot{margin-left:auto;width:300px}.tot td{border:0;padding:3px 6px}.big td{font-weight:700;font-size:1.15em;border-top:2px solid #16211d}.muted{color:#5b6863}@media print{body{margin:0}}</style></head><body>
+<style>body{font-family:"Open Sans",Arial,sans-serif;font-size:14px;color:#3b3b3b;max-width:760px;margin:40px auto;padding:0 24px;line-height:1.5}h1{color:#e5621c;font-weight:600;margin:0}
+.hd{display:flex;justify-content:space-between;gap:24px;border-bottom:3px solid #1b7d88;padding-bottom:12px;margin-bottom:20px}table{width:100%;border-collapse:collapse;margin:20px 0}th,td{padding:7px 6px;border-bottom:1px solid #e3e3e3;text-align:left}th{color:#1b7d88}td.r,th.r{text-align:right}
+.tot{margin-left:auto;width:300px}.tot td{border:0;padding:3px 6px}.big td{font-weight:700;font-size:1.15em;border-top:2px solid #1b7d88}.muted{color:#8a8a8a}@media print{body{margin:0}}</style></head><body>
 <div class="hd"><div><h1>Offerte</h1><div class="muted">nr. ${esc(q.number)} · ${q.date ? esc(longDate(q.date)) : ""}</div></div><div style="text-align:right"><b>HC Tilburg Horeca</b><br>Bredaseweg 447<br>5036 NA Tilburg<br>horeca@hctilburg.nl</div></div>
 <p><b>${esc(q.customer)}</b>${q.contact ? "<br>t.a.v. " + esc(q.contact) : ""}${q.email ? "<br>" + esc(q.email) : ""}${q.phone ? "<br>" + esc(q.phone) : ""}</p>
 ${q.eventDate ? `<p>Betreft: ${esc(longDate(q.eventDate))} ${esc(q.eventTime || "")}${q.roomId ? " in " + esc(roomName(q.roomId)) : ""}${q.persons ? ", " + esc(q.persons) + " personen" : ""}.</p>` : ""}
@@ -1599,13 +1727,16 @@ after.import = () => {
 
 /* ---------- Instellingen ---------- */
 let setDraft = null;
+const INST_TABS = [["zalen", "Zalen"], ["arrangementen", "Arrangementen"], ["producten", "Producten"], ["feesten", "Soorten feest"], ["drukte", "Drukte en LISA"]];
 function vInst() {
   if (!setDraft) setDraft = structuredClone(S.settings);
   const s = setDraft, D = s.drukte, ro = S.readOnly ? "disabled" : "";
+  const tab = INST_TABS.some(([k]) => k === S.instTab) ? S.instTab : "zalen";
+  const sec = k => `data-sec="${k}" ${k === tab ? "" : "hidden"}`;
   return `
   <section class="stack">
-    <div class="row spread"><h2>Instellingen</h2><div class="row"><button class="btn ghost" id="s-reset">Wijzigingen ongedaan maken</button><button class="btn primary" id="s-save" ${ro}>Opslaan</button></div></div>
-    <div class="panel stack">
+    <div class="row spread"><h2>${esc(INST_TABS.find(([k]) => k === tab)[1])}</h2><div class="row"><button class="btn ghost" id="s-reset">Wijzigingen ongedaan maken</button><button class="btn primary" id="s-save" ${ro}>Opslaan</button></div></div>
+    <div class="panel stack" ${sec("zalen")}>
       <div class="row spread"><h3>Ruimtes</h3><button class="btn" id="s-addroom" ${ro}>+ Ruimte</button></div>
       <p class="small muted" style="margin:0">Zoekwoorden koppelen items uit de Outlook-clubagenda aan een ruimte, bijvoorbeeld de naam die in het veld Locatie staat. Zaalhuur komt automatisch op een offerte.</p>
       <div class="tbl-wrap"><table class="lines"><thead><tr><th style="width:50px">Kleur</th><th>Naam</th><th style="width:100px">Max. pers.</th><th style="width:120px">Zaalhuur (€)</th><th>Zoekwoorden Outlook</th><th style="width:40px"></th></tr></thead><tbody>
@@ -1613,7 +1744,7 @@ function vInst() {
       </tbody></table></div>
       ${s.rooms.length ? "" : `<p class="empty">Nog geen ruimtes. Voeg de ruimtes toe die jullie verhuren.</p>`}
     </div>
-    <div class="panel stack">
+    <div class="panel stack" ${sec("arrangementen")}>
       <div class="row spread"><h3>Arrangementen</h3><button class="btn" id="s-addarr" ${ro}>+ Arrangement</button></div>
       <div class="tbl-wrap"><table class="lines"><thead><tr><th>Naam</th><th>Omschrijving</th><th style="width:130px">Prijs p.p. incl. btw</th><th style="width:90px">Btw</th><th style="width:130px">Inhoud</th><th style="width:40px"></th></tr></thead><tbody>
       ${s.arrangementen.map((a, i) => `<tr data-arr="${i}"><td><input data-k="name" value="${esc(a.name)}" ${ro} aria-label="Naam"></td><td><input data-k="description" value="${esc(a.description)}" ${ro} aria-label="Omschrijving"></td><td>${a.items && a.items.length ? `<span class="small">${eur(arrPrice(a))} p.p.<br><span class="muted">som van ${a.items.length} producten</span></span>` : `<input data-k="price" type="number" step="0.01" value="${esc(a.price)}" ${ro} aria-label="Prijs">`}</td><td>${a.items && a.items.length ? "" : `<select data-k="btw" ${ro} aria-label="Btw">${[9, 21].map(b => `<option value="${b}" ${+a.btw === b ? "selected" : ""}>${b}%</option>`).join("")}</select>`}</td><td><button class="btn" data-arritems="${i}" ${ro}>Producten${a.items && a.items.length ? " (" + a.items.length + ")" : ""}</button></td><td><button class="btn ghost" data-delarr="${i}" aria-label="Verwijderen" ${ro}>✕</button></td></tr>`).join("")}
@@ -1621,8 +1752,8 @@ function vInst() {
       ${s.arrangementen.length ? "" : `<p class="empty">Nog geen arrangementen.</p>`}
       <p class="small muted" style="margin:0">Met <b>Producten</b> maak je van een arrangement een bundel, bijvoorbeeld drankjes en twee hapjes per persoon. In de offerte komen dan de losse producten met hun eigen prijs en btw.</p>
     </div>
-    ${prodInstHtml(s, ro)}
-    <div class="panel stack">
+    <div class="stack" ${sec("producten")}>${prodInstHtml(s, ro)}</div>
+    <div class="panel stack" ${sec("drukte")}>
       <h3>Drukte-inschatting</h3>
       <p class="small muted" style="margin:0">Per thuiswedstrijd tellen spelers, begeleiding en publiek mee. Pas de aantallen aan zodra jullie ervaring hebben met echte dagen.</p>
       <div class="fields">
@@ -1639,7 +1770,7 @@ function vInst() {
         <label class="f"><span>Zeer druk vanaf</span><input type="number" id="sd-grens3" value="${esc(D.grens3)}" ${ro}></label>
       </div>
     </div>
-    ${dagInstHtml(s)}
+    <div class="stack" ${sec("feesten")}>${dagInstHtml(s)}</div>
   </section>`;
 }
 after.inst = () => {
@@ -1653,7 +1784,7 @@ after.inst = () => {
   };
   document.querySelectorAll("#app input, #app select").forEach(el => el.addEventListener("input", sync));
   dagInstWire(s, sync);
-  const palette = ["#b86a12", "#0f6b4f", "#3d5a9e", "#8e3b6e", "#6b7d1f", "#a8432f"];
+  const palette = ["#e5621c", "#1b7d88", "#3d5a9e", "#8e3b6e", "#6b7d1f", "#a8432f"];
   $("#s-addroom").onclick = () => { sync(); s.rooms.push({ id: uid(), name: "", capacity: "", rent: "", keywords: "", color: palette[s.rooms.length % palette.length] }); render(); };
   $("#s-addarr").onclick = () => { sync(); s.arrangementen.push({ id: uid(), name: "", description: "", price: 0, btw: 9 }); render(); };
   document.querySelectorAll("[data-delroom]").forEach(b => b.onclick = () => { sync(); s.rooms.splice(+b.dataset.delroom, 1); render(); });
@@ -1662,6 +1793,7 @@ after.inst = () => {
   const ap = $("#s-addprod"); if (ap) ap.onclick = () => { sync(); openProduct(s, null); };
   document.querySelectorAll("[data-prod]").forEach(el => el.onclick = () => { sync(); openProduct(s, +el.dataset.prod); });
   const si = $("#s-showinactive"); if (si) si.onchange = e => { sync(); S.showInactive = e.target.checked; render(); };
+  document.querySelectorAll("[data-pic]").forEach(b => b.onclick = () => { sync(); S.pinstCat = b.dataset.pic; render(); });
   document.querySelectorAll("[data-arritems]").forEach(b => b.onclick = () => { sync(); openArrItems(s, +b.dataset.arritems); });
   $("#s-save").onclick = async () => {
     sync();
@@ -1673,11 +1805,15 @@ function prodInstHtml(s, ro) {
   const cats = s.productCategories || [];
   const nInactive = s.products.filter(p => p.active === false).length;
   const vis = s.products.map((p, i) => ({ p, i })).filter(x => S.showInactive || x.p.active !== false);
-  const groups = [...cats, ""].map(c => ({ c, items: vis.filter(x => c ? x.p.category === c : !cats.includes(x.p.category)).sort((a, b) => (a.p.sub || "").localeCompare(b.p.sub || "", "nl")) })).filter(g => g.items.length);
+  const allGroups = [...cats, ""].map(c => ({ c, items: vis.filter(x => c ? x.p.category === c : !cats.includes(x.p.category)).sort((a, b) => (a.p.sub || "").localeCompare(b.p.sub || "", "nl")) })).filter(g => g.items.length);
+  const curCat = allGroups.some(g => g.c === S.pinstCat) ? S.pinstCat : allGroups[0]?.c;
+  const groups = allGroups.filter(g => g.c === curCat);
+  const catbar = allGroups.length > 1 ? `<div class="catbar" role="group" aria-label="Categorie">${allGroups.map(g => `<button type="button" data-pic="${esc(g.c)}" aria-pressed="${g.c === curCat}">${esc(g.c || "Zonder categorie")} <span class="muted">${g.items.length}</span></button>`).join("")}</div>` : "";
   return `<div class="panel stack">
     <div class="row spread"><h3>Producten</h3><button class="btn" id="s-addprod" ${ro}>+ Product</button></div>
     <label class="f"><span>Categorieën, in deze volgorde (met komma's)</span><input id="s-pcats" value="${esc(cats.join(", "))}" ${ro}></label>
     ${nInactive ? `<label class="check small"><input type="checkbox" id="s-showinactive" ${S.showInactive ? "checked" : ""}> Toon ook de ${nInactive} niet-actieve producten</label>` : ""}
+    ${catbar}
     ${groups.length ? groups.map(g => `<h4 class="eyebrow pcat-h">${esc(g.c || "Zonder categorie")} · ${g.items.length}</h4>
       <div class="tbl-wrap"><table><thead><tr><th>Product</th><th>Subcategorie</th><th class="r">Prijs incl. btw</th><th>Eenheid</th><th class="r">Btw</th><th>To-do</th><th></th></tr></thead><tbody>
       ${g.items.map(({ p, i }) => `<tr class="click" data-prod="${i}"><td><b>${esc(p.name)}</b>${p.description ? `<br><span class="muted small">${esc(p.description.length > 140 ? p.description.slice(0, 140) + "…" : p.description)}</span>` : ""}</td><td class="small">${esc(p.sub || "")}</td><td class="r">${eur(p.price)}${p.priceChild != null && p.priceChild !== "" ? `<br><span class="muted small">kind ${eur(p.priceChild)}</span>` : ""}</td><td>${esc(UNITS[p.unit] || "")}</td><td class="r">${esc(btwLabel(p))}</td><td class="small">${p.todoText ? esc(p.todoText) + (p.todoDays !== "" && p.todoDays != null ? ` (${esc(p.todoDays)} dagen vooraf)` : "") : ""}</td><td>${p.active === false ? `<span class="chip c0">niet actief</span>` : ""}</td></tr>`).join("")}
@@ -1686,7 +1822,7 @@ function prodInstHtml(s, ro) {
 }
 function openProduct(s, idx) {
   const isNew = idx == null;
-  const p = isNew ? { id: uid(), name: "", category: S.pcat && s.productCategories.includes(S.pcat) ? S.pcat : (s.productCategories[0] || ""), description: "", kitchenNote: "", price: "", btw: 9, unit: "persoon", active: true, todoText: "", todoDays: "" } : { ...s.products[idx] };
+  const p = isNew ? { id: uid(), name: "", category: S.pinstCat && s.productCategories.includes(S.pinstCat) ? S.pinstCat : S.pcat && s.productCategories.includes(S.pcat) ? S.pcat : (s.productCategories[0] || ""), description: "", kitchenNote: "", price: "", btw: 9, unit: "persoon", active: true, todoText: "", todoDays: "" } : { ...s.products[idx] };
   $("#modal-root").innerHTML = `<div class="scrim" id="scrim"><form class="modal" id="prod-form" aria-label="Product">
     <div class="row spread"><h2>${isNew ? "Nieuw product" : "Product bewerken"}</h2><button type="button" class="btn ghost" id="pf-x" aria-label="Sluiten">✕</button></div>
     <div class="fields">
@@ -1722,7 +1858,7 @@ function openProduct(s, idx) {
     const np = { ...p, name: $("#pf-name").value.trim(), category: $("#pf-category").value, price: +$("#pf-price").value || 0, unit: $("#pf-unit").value, btw: $("#pf-btw").value === "mix" ? 21 : +$("#pf-btw").value, btwHigh: $("#pf-btw").value === "mix" ? Math.min(99, Math.max(1, +$("#pf-btwHigh").value || 75)) : null, sub: $("#pf-sub").value.trim(), priceChild: $("#pf-priceChild").value === "" ? null : +$("#pf-priceChild").value, description: $("#pf-description").value.trim(), kitchenNote: $("#pf-kitchenNote").value.trim(), todoText: $("#pf-todoText").value.trim(), todoDays: $("#pf-todoDays").value === "" ? "" : +$("#pf-todoDays").value, active: $("#pf-active").checked };
     if (!np.name) { toast("Geef het product een naam"); return; }
     if (isNew) s.products.push(np); else s.products[idx] = np;
-    S.pcat = np.category; persist();
+    S.pcat = S.pinstCat = np.category; persist();
   };
   const d1 = $("#pf-del"); if (d1) d1.onclick = () => { d1.hidden = true; $("#pf-delc").hidden = false; };
   const d2 = $("#pf-del2"); if (d2) d2.onclick = () => { s.products.splice(idx, 1); s.arrangementen.forEach(a => { if (a.items) a.items = a.items.filter(id => id !== p.id); }); persist(); };
