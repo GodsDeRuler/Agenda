@@ -5879,6 +5879,158 @@ ${(D.notities || "").trim() ? `<h2>Notities</h2><p>${esc(D.notities).replace(/\n
 @media (max-width: 640px) { .ss-row { flex-wrap: wrap; } .ss-row input[data-f="text"], .ss-row input[data-f="wat"] { flex: 1 1 100%; order: -1; } }
 </style>`);
 })();
+/* ---------- Agenda-overzicht op het dashboard (naar voorbeeld van Restau, ingericht voor de bar) ---------- */
+// Per dag alles wat de bar moet weten: feesten (bevestigd, optie, aanvraag), teamoverleg, afspraken, blokkades,
+// clubagenda, Super Sunday of extra drukte door een topteam thuis, verwachte bezoekers en open to-do's.
+const HA_KINDS = { ev: "Event", opt: "In optie", req: "Aanvraag", team: "Teamoverleg", appt: "Afspraak", block: "Geblokkeerd", club: "Clubagenda" };
+function haDay(ds) {
+  const items = [];
+  for (const r of resOn(ds)) {
+    const kind = r.soort === "team" ? "team" : r.status === "optie" ? "opt" : r.status === "aanvraag" ? "req" : "ev";
+    const who = r.customer || (kind === "team" ? "Team " + (r.teamNaam || r.team || "") : "Reservering");
+    items.push({ kind, t: r.start || "", l: who, sub: [roomName(r.roomId), r.persons ? r.persons + " p." : ""].filter(Boolean).join(" · "), attr: `data-hres="${esc(r.id)}"` });
+  }
+  if (typeof apptOn === "function") for (const k of apptOn(ds)) items.push({ kind: "appt", t: apptTime(k), l: apptLabel(k), sub: apptStatus(k) === "aangevraagd" ? "aangevraagd" : "", attr: `data-happt="${esc(k.id)}"` });
+  for (const b of blocksOn(ds)) {
+    if (b.superSunday) continue;
+    items.push({ kind: "block", t: b.allDay ? "" : b.start || "", l: (b.roomId ? roomName(b.roomId) : "Alle ruimtes") + (b.allDay ? " (hele dag)" : b.end ? " tot " + b.end : ""), sub: [b.reason, b.alleenExtern || /^weekend-/.test(b.id || "") ? "alleen externe verhuur" : ""].filter(Boolean).join(" · "), attr: b.id ? `data-hblock="${esc(b.id)}"` : "" });
+  }
+  for (const e of clubOn(ds)) items.push({ kind: "club", t: e.allDay ? "" : e.start || "", l: e.title || "Clubagenda", sub: e.location || "", attr: `data-hday="${esc(ds)}"` });
+  items.sort((a, b) => (a.t || "00:00").localeCompare(b.t || "00:00"));
+  const ss = typeof superSundayOn === "function" ? superSundayOn(ds) : null;
+  const top = !ss && typeof ssTopMatches === "function" ? ssTopMatches(ds) : [];
+  const todo = allTasks().filter(t => taskOpen(t) && t.due === ds).length;
+  return { ds, items, ss, top, c: crowd(ds), todo };
+}
+function haFlags(d, short) {
+  const f = [];
+  if (d.ss) f.push(`<button type="button" class="ha-flag ss" data-hss="${esc(d.ds)}" title="Super Sunday: ruimtes niet te reserveren">★<span class="ha-ft"> ${short ? "SS" : "Super Sunday"}</span></button>`);
+  if (d.top.length) f.push(`<button type="button" class="ha-flag top" data-hday="${esc(d.ds)}" title="Extra druk door een topteam thuis">▲<span class="ha-ft"> ${esc(d.top.map(x => x.tp.label).join(" + "))}${short ? "" : " thuis"}</span></button>`);
+  return f.join("");
+}
+const haItem = (it, short) => `<button type="button" class="ha-it k-${it.kind}" ${it.attr} title="${esc(HA_KINDS[it.kind] + ": " + [it.t, it.l, it.sub].filter(Boolean).join(" "))}"><span class="ha-t num">${esc(it.t)}</span><span class="ha-l"><span class="ha-n">${esc(it.l)}</span>${!short && it.sub ? `<small>${esc(it.sub)}</small>` : ""}</span></button>`;
+function haTwoWeeks() {
+  const start = addDays(todayISO, -((parseISO(todayISO).getDay() + 6) % 7)); // maandag van deze week
+  const days = Array.from({ length: 14 }, (_, i) => haDay(addDays(start, i)));
+  return `<div class="ha-head">${DAYS_SHORT.map(x => `<div>${x}</div>`).join("")}</div><div class="ha-grid">${days.map(d => {
+    const dt = parseISO(d.ds), past = d.ds < todayISO, more = d.items.length - 5;
+    return `<div class="ha-day${d.ds === todayISO ? " today" : ""}${past ? " past" : ""}${d.ss ? " is-ss" : ""}">
+      <button type="button" class="ha-dh" data-hday="${esc(d.ds)}" aria-label="${esc(longDate(d.ds))}, naar de dag-agenda"><span class="ha-dn"><span class="ha-wd">${DAYS_SHORT[(dt.getDay() + 6) % 7]}</span> <b class="num">${dt.getDate()}</b> <span class="ha-mn">${MONTHS[dt.getMonth()].slice(0, 3)}</span></span>${d.c.total ? `<span class="chip c${d.c.lvl}" title="Verwachte bezoekers (${esc(d.c.lvlName)})">${d.c.total}</span>` : ""}</button>
+      ${haFlags(d)}
+      ${d.c.count ? `<div class="ha-m small muted">${d.c.count} thuiswedstrijd${d.c.count === 1 ? "" : "en"}</div>` : ""}
+      ${d.items.slice(0, 5).map(it => haItem(it)).join("")}${more > 0 ? `<button type="button" class="ha-more" data-hday="${esc(d.ds)}">+${more} meer</button>` : ""}
+      ${!d.items.length && !d.ss && !d.top.length && !d.c.count ? `<div class="ha-free small muted">vrij</div>` : ""}
+      ${d.todo ? `<button type="button" class="ha-todo${d.ds <= todayISO ? " late" : ""}" data-htodo="${esc(d.ds)}">${d.todo} to-do${d.todo === 1 ? "" : "'s"}</button>` : ""}
+    </div>`;
+  }).join("")}</div>`;
+}
+function haMonth() {
+  const ym = S.homeMonth || todayISO.slice(0, 7), [y, m] = ym.split("-").map(Number), first = new Date(y, m - 1, 1);
+  const start = new Date(first); start.setDate(1 - ((first.getDay() + 6) % 7));
+  const cells = [];
+  for (let i = 0; i < 42; i++) { const d = new Date(start); d.setDate(start.getDate() + i); if (i >= 35 && d.getMonth() !== m - 1) break; cells.push(d); }
+  let ev = 0, opt = 0, ssN = 0;
+  const html = cells.map(dt => {
+    const ds = iso(dt), inM = dt.getMonth() === m - 1, d = haDay(ds);
+    if (inM) { ev += d.items.filter(x => x.kind === "ev").length; opt += d.items.filter(x => x.kind === "opt").length; if (d.ss) ssN++; }
+    const more = d.items.length - 3;
+    return `<div class="ha-mc${inM ? "" : " out"}${ds === todayISO ? " today" : ""}${d.ss ? " is-ss" : ""}">
+      <button type="button" class="ha-dh" data-hday="${esc(ds)}" aria-label="${esc(longDate(ds))}, naar de dag-agenda"><b class="num">${dt.getDate()}</b>${d.c.total ? `<span class="chip c${d.c.lvl}" title="Verwachte bezoekers">${d.c.total}</span>` : ""}</button>
+      ${haFlags(d, true)}${d.items.slice(0, 3).map(it => haItem(it, true)).join("")}${more > 0 ? `<button type="button" class="ha-more" data-hday="${esc(ds)}">+${more}</button>` : ""}${d.todo ? `<button type="button" class="ha-todo${ds <= todayISO ? " late" : ""}" data-htodo="${esc(ds)}">${d.todo} to-do</button>` : ""}
+    </div>`;
+  }).join("");
+  return `<div class="row spread ha-mnav"><div class="row"><button type="button" class="btn" id="ha-prev" aria-label="Vorige maand">‹</button><b style="min-width:11ch;text-align:center">${MONTHS[m - 1]} ${y}</b><button type="button" class="btn" id="ha-next" aria-label="Volgende maand">›</button>${ym !== todayISO.slice(0, 7) ? `<button type="button" class="btn ghost" id="ha-now">Deze maand</button>` : ""}</div>
+    <span class="small muted num">${ev} events · ${opt} in optie${ssN ? ` · ${ssN} Super Sunday` : ""}</span></div>
+    <div class="ha-head keep">${DAYS_SHORT.map(x => `<div>${x}</div>`).join("")}</div><div class="ha-grid ha-month">${html}</div>`;
+}
+function haPanel() {
+  const mode = S.homeAg === "maand" ? "maand" : "2w";
+  return `<div class="panel stack ha" id="ha">
+    <div class="row spread"><h3 style="margin:0">Agenda</h3>
+      <div class="row"><div class="seg" role="tablist" aria-label="Weergave agenda"><button type="button" role="tab" data-hmode="2w" aria-selected="${mode === "2w"}">Komende 2 weken</button><button type="button" role="tab" data-hmode="maand" aria-selected="${mode === "maand"}">Maand</button></div>
+      <button type="button" class="btn" data-go='{"v":"week"}'>Zaalagenda</button></div></div>
+    ${mode === "maand" ? haMonth() : haTwoWeeks()}
+    <div class="ha-legend small">${Object.entries(HA_KINDS).map(([k, l]) => `<span><i class="k-${k}"></i>${l}</span>`).join("")}<span><b class="ha-flag ss">★</b>Super Sunday</span><span><b class="ha-flag top">▲</b>Topteam thuis</span><span><span class="chip c2">450</span> verwachte bezoekers</span></div>
+  </div>`;
+}
+function haWire() {
+  const el = $("#ha"); if (!el) return;
+  el.querySelectorAll("[data-hmode]").forEach(b => b.onclick = () => { S.homeAg = b.dataset.hmode; render(); });
+  el.querySelectorAll("[data-hday]").forEach(b => b.onclick = () => { S.day = b.dataset.hday; setView("dag"); });
+  el.querySelectorAll("[data-hres]").forEach(b => b.onclick = () => { const r = S.reservations.get(b.dataset.hres); if (r) openRes(r); });
+  el.querySelectorAll("[data-happt]").forEach(b => b.onclick = () => { const k = S.contacts.get(b.dataset.happt); if (k && typeof apptOpen === "function") apptOpen(k); });
+  el.querySelectorAll("[data-hblock]").forEach(b => b.onclick = () => { const x = S.blocks.get(b.dataset.hblock); if (x) { S.day = x.date; openBlock(x); } });
+  el.querySelectorAll("[data-hss]").forEach(b => b.onclick = () => ssOpen(b.dataset.hss));
+  el.querySelectorAll("[data-htodo]").forEach(b => b.onclick = () => { S.todoFilter = "open"; setView("todo"); });
+  el.querySelectorAll("[data-go]").forEach(b => b.onclick = () => { const g = JSON.parse(b.dataset.go); const { v, ...rest } = g; Object.assign(S, rest); setView(v); });
+  const mv = n => { const [y, m] = (S.homeMonth || todayISO.slice(0, 7)).split("-").map(Number); const d = new Date(y, m - 1 + n, 1); S.homeMonth = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; render(); };
+  const p = $("#ha-prev"), n = $("#ha-next"), t = $("#ha-now");
+  if (p) p.onclick = () => mv(-1); if (n) n.onclick = () => mv(1); if (t) t.onclick = () => { S.homeMonth = null; render(); };
+}
+{ const f = VIEWS.home; VIEWS.home = () => { const h = f(), i = h.indexOf('<div class="grid2">'); return i < 0 ? h + haPanel() : h.slice(0, i) + haPanel() + h.slice(i); }; }
+{ const f = after.home; after.home = () => { if (f) f(); haWire(); }; }
+document.head.insertAdjacentHTML("beforeend", `<style id="ha-style">
+.ha .seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.ha .seg button { background: var(--surface); border: 0; padding: 5px 12px; font: inherit; font-size: .85rem; color: var(--teal); cursor: pointer; }
+.ha .seg button + button { border-left: 1px solid var(--line); }
+.ha .seg button[aria-selected="true"] { background: var(--teal); color: #fff; }
+.ha-head, .ha-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.ha-head div { font-size: .75rem; font-weight: 600; text-transform: uppercase; color: var(--muted); padding: 0 4px; }
+.ha-day, .ha-mc { background: var(--bg); border: 1px solid var(--line); border-radius: var(--r); padding: 6px; display: flex; flex-direction: column; gap: 3px; min-width: 0; min-height: 120px; }
+.ha-mc { min-height: 92px; padding: 4px; }
+.ha-day.today, .ha-mc.today { border-color: var(--teal); box-shadow: inset 0 3px 0 var(--teal); }
+.ha-day.past { opacity: .6; }
+.ha-mc.out { opacity: .45; }
+.ha-day.is-ss, .ha-mc.is-ss { background: var(--orange-soft); }
+.ha-dh { display: flex; align-items: center; justify-content: space-between; gap: 4px; background: none; border: 0; padding: 0 0 2px; font: inherit; color: var(--fg); cursor: pointer; text-align: left; }
+.ha-dh:hover b { color: var(--orange); text-decoration: underline; }
+.ha-dh .chip { padding: 0 5px; font-size: .68rem; }
+.ha-wd, .ha-mn { color: var(--muted); font-size: .78rem; }
+.ha-it { display: flex; gap: 5px; align-items: baseline; width: 100%; background: var(--surface); border: 0; border-left: 3px solid var(--muted); border-radius: 2px; padding: 2px 5px; font: inherit; font-size: .78rem; text-align: left; color: var(--fg); cursor: pointer; min-width: 0; }
+.ha-it:hover { filter: brightness(.96); text-decoration: underline; }
+.ha-t { color: var(--muted); flex: none; font-size: .72rem; }
+.ha-t:empty { display: none; }
+.ha-l { min-width: 0; flex: 1; }
+.ha-n { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.ha-mc .ha-n { -webkit-line-clamp: 1; }
+.ha-l small { display: block; color: var(--muted); font-size: .7rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ha-mc .ha-it { font-size: .72rem; padding: 1px 4px; }
+.k-ev { border-left-color: var(--ok) !important; background: var(--ok-soft) !important; }
+.k-opt { border-left-color: var(--orange) !important; background: var(--orange-soft) !important; }
+.k-req { border-left-color: var(--muted) !important; border-left-style: dashed !important; }
+.k-team { border-left-color: var(--teal) !important; background: var(--teal-soft) !important; }
+.k-appt { border-left-color: var(--warn) !important; background: var(--warn-soft) !important; }
+.k-block { border-left-color: var(--bad) !important; background: repeating-linear-gradient(135deg, var(--bad-soft) 0 5px, var(--surface) 5px 10px) !important; }
+.k-club { border-left-color: var(--club) !important; background: var(--club-soft) !important; }
+.ha-flag { display: inline-flex; align-items: center; gap: 3px; border: 0; border-radius: 2px; padding: 1px 6px; font: inherit; font-size: .74rem; font-weight: 700; cursor: pointer; align-self: flex-start; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ha-flag.ss { background: var(--orange); color: #fff; }
+.ha-flag.top { background: var(--teal-soft); color: var(--teal-d); }
+.ha-more, .ha-todo { background: none; border: 0; padding: 0 2px; font: inherit; font-size: .74rem; color: var(--teal); cursor: pointer; text-align: left; }
+.ha-todo { margin-top: auto; font-weight: 600; }
+.ha-todo.late { color: var(--bad); }
+.ha-free { margin-top: 4px; }
+.ha-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--muted); align-items: center; }
+.ha-legend > span { display: inline-flex; align-items: center; gap: 5px; }
+.ha-legend i { display: inline-block; width: 16px; height: 12px; border-left: 3px solid; border-radius: 2px; }
+.ha-legend .ha-flag { cursor: default; padding: 0 4px; }
+@media (max-width: 900px) {
+  .ha-head:not(.keep) { display: none; }
+  .ha-grid:not(.ha-month) { grid-template-columns: 1fr; gap: 4px; }
+  .ha-grid:not(.ha-month) .ha-day { min-height: 0; }
+  .ha-grid:not(.ha-month) .ha-day.past { display: none; }
+  .ha-grid:not(.ha-month) .ha-free { margin-top: 0; }
+  .ha-month { gap: 2px; }
+  .ha-mc { min-height: 54px; padding: 2px; }
+  .ha-mc .ha-it .ha-t, .ha-mc .ha-it .ha-l { display: none; }
+  .ha-mc .ha-it { height: 5px; padding: 0; border-left-width: 0; }
+  .ha-mc .k-ev { background: var(--ok) !important; } .ha-mc .k-opt { background: var(--orange) !important; } .ha-mc .k-req { background: var(--muted) !important; }
+  .ha-mc .k-team { background: var(--teal) !important; } .ha-mc .k-appt { background: var(--warn) !important; } .ha-mc .k-block { background: var(--bad) !important; } .ha-mc .k-club { background: var(--club) !important; }
+  .ha-mc .ha-flag { font-size: .62rem; padding: 0 3px; }
+  .ha-mc .ha-ft { display: none; }
+  .ha-mc .ha-todo, .ha-mc .ha-more { font-size: .64rem; }
+  .ha-mc .ha-dh .chip { display: none; }
+}
+</style>`);
 boot();
 })();
 </script>
