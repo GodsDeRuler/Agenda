@@ -8162,6 +8162,333 @@ document.head.insertAdjacentHTML("beforeend", `<style id="rq10-style">
 .evpay input { min-width: 150px; }
 @media (max-width: 760px) { .evgrid3 { grid-template-columns: 1fr; } }
 </style>`);
+
+/* ---------- Branding (Restau: Locatie › Branding): logo, kleuren, lettertype en voettekst op offerte, factuur en printjes ---------- */
+const BR_DEF = { logo: "", logoPlek: "links", kleur: "#e5621c", kleur2: "#1b7d88", font: "Open Sans", voet: "" };
+const BR_FONTS = { "Open Sans": '"Open Sans",Arial,sans-serif', Arial: "Arial,Helvetica,sans-serif", Verdana: "Verdana,Geneva,sans-serif", Georgia: "Georgia,'Times New Roman',serif" };
+const brCfg = (L = S.settings.locatie || {}) => ({ ...BR_DEF, ...(L.branding || {}) });
+const brHex = c => /^#[0-9a-f]{6}$/i.test(c || "") ? c : "";
+// Zet de huisstijl in een document dat de agenda maakt (de standaardkleuren staan vast in die documenten).
+function brandDoc(html, cfg = brCfg()) {
+  if (typeof html !== "string" || !/<body/i.test(html)) return html;
+  let h = html;
+  const k1 = brHex(cfg.kleur), k2 = brHex(cfg.kleur2);
+  if (k1 && k1.toLowerCase() !== BR_DEF.kleur) h = h.replace(/#e5621c/gi, k1);
+  if (k2 && k2.toLowerCase() !== BR_DEF.kleur2) h = h.replace(/#1b7d88/gi, k2);
+  if (BR_FONTS[cfg.font] && cfg.font !== BR_DEF.font) h = h.split(BR_FONTS[BR_DEF.font]).join(BR_FONTS[cfg.font]);
+  if (safeImg(cfg.logo)) {
+    const right = cfg.logoPlek === "rechts", img = `<img class="br-logo" src="${esc(cfg.logo)}" alt="${esc((S.settings.locatie || {}).naam || "Logo")}" style="display:block;max-height:70px;max-width:220px;margin:${right ? "0 0 10px auto" : "0 0 10px"}">`;
+    if (h.includes('<div class="hd"><div>') && !right) h = h.replace('<div class="hd"><div>', '<div class="hd"><div>' + img);
+    else if (h.includes('<div class="hd">') && h.includes('<div style="text-align:right">') && right) h = h.replace('<div style="text-align:right">', '<div style="text-align:right">' + img);
+    else h = h.replace(/<body([^>]*)>/i, `<body$1>${img}`);
+  }
+  if ((cfg.voet || "").trim()) h = h.replace(/<\/body>/i, `<p class="br-voet" style="margin-top:28px;padding-top:8px;border-top:1px solid #e3e3e3;font-size:12px;color:#8a8a8a;text-align:center">${esc(cfg.voet.trim()).replace(/\n/g, "<br>")}</p></body>`);
+  return h;
+}
+for (const name of ["quoteHtml", "invoiceHtml", "evDoc", "partySheet", "ssSheet"]) {
+  try {
+    if (name === "quoteHtml") { const b = quoteHtml; quoteHtml = function (...a) { return brandDoc(b.apply(this, a)); }; }
+    if (name === "invoiceHtml" && typeof invoiceHtml === "function") { const b = invoiceHtml; invoiceHtml = function (...a) { return brandDoc(b.apply(this, a)); }; }
+    if (name === "evDoc") { const b = evDoc; evDoc = function (...a) { return brandDoc(b.apply(this, a)); }; }
+    if (name === "partySheet") { const b = partySheet; partySheet = function (...a) { return brandDoc(b.apply(this, a)); }; }
+    if (name === "ssSheet" && typeof ssSheet === "function") { const b = ssSheet; ssSheet = function (...a) { return brandDoc(b.apply(this, a)); }; }
+  } catch (e) {}
+}
+// Logo: PNG blijft doorzichtig. In de webversie naar de opslag, anders verkleind in de instellingen.
+async function brLogoFile(file) {
+  if (typeof window.hctFotoUpload === "function") { const u = await window.hctFotoUpload(file, "logo"); if (safeImg(u)) return u; throw new Error("upload"); }
+  const img = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = bad; i.src = URL.createObjectURL(file); });
+  const sc = Math.min(1, 480 / Math.max(img.width, img.height)), c = document.createElement("canvas");
+  c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+  return /png|webp/i.test(file.type) ? c.toDataURL("image/png") : c.toDataURL("image/jpeg", 0.85);
+}
+let brDraft = null;
+function brSample() {
+  const qs = [...S.quotes.values()].filter(q => (q.lines || []).length).sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+  if (qs[0]) return qs[0];
+  return { number: "voorbeeld", date: todayISO, validUntil: addDays(todayISO, 14), customer: "Voorbeeldklant", contact: "Jan Jansen", eventDate: addDays(todayISO, 30), eventTime: "20:00–00:00", persons: 40, lines: [{ desc: "Bittergarnituur", qty: 40, price: 2.5, btw: 9 }, { desc: "Drankafkoop", qty: 40, price: 22.5, btw: 21 }], notes: "" };
+}
+VIEWS.branding = () => {
+  if (!brDraft) brDraft = brCfg();
+  const b = brDraft, ro = S.readOnly ? "disabled" : "";
+  return `<section class="stack" id="br"><div class="row spread"><h2>Branding</h2><button class="btn primary" id="br-save" ${ro}>Opslaan</button></div>
+    <div class="br-grid">
+      <div class="panel stack">
+        <p class="small muted" style="margin:0">Logo, kleuren en lettertype komen op de offerte, de factuur, het draaiboek, de keukensheet en de partysheet. De agenda zelf houdt de clubkleuren.</p>
+        <div class="f"><span>Logo</span>${safeImg(b.logo) ? `<div class="br-logo-box"><img src="${esc(b.logo)}" alt="Logo"></div><button type="button" class="btn" id="br-logo-del" ${ro}>Logo weghalen</button>` : `<label class="btn" style="align-self:flex-start">Logo uploaden<input type="file" id="br-logo" accept="image/png,image/jpeg,image/webp" hidden ${ro}></label><span class="small muted">png (doorzichtig), jpg of webp, max 5 MB</span>`}</div>
+        <div class="f"><span>Plaats van het logo</span><div class="row">${[["links", "Links boven"], ["rechts", "Rechts boven"]].map(([v, l]) => `<label class="check"><input type="radio" name="br-plek" value="${v}" ${b.logoPlek === v ? "checked" : ""} ${ro}> ${l}</label>`).join("")}</div></div>
+        <div class="fields">
+          <label class="f"><span>Kleur van titels</span><input type="color" id="br-kleur" value="${esc(brHex(b.kleur) || BR_DEF.kleur)}" ${ro}></label>
+          <label class="f"><span>Kleur van lijnen en kopjes</span><input type="color" id="br-kleur2" value="${esc(brHex(b.kleur2) || BR_DEF.kleur2)}" ${ro}></label>
+          <label class="f"><span>Lettertype</span><select id="br-font" ${ro}>${Object.keys(BR_FONTS).map(f => `<option ${f === b.font ? "selected" : ""}>${esc(f)}</option>`).join("")}</select></label>
+        </div>
+        <label class="f"><span>Voettekst onder elk document</span><textarea id="br-voet" rows="2" placeholder="bijv. HC Tilburg · Bredaseweg 447 · horeca@hctilburg.nl" ${ro}>${esc(b.voet || "")}</textarea></label>
+        <div class="row"><button type="button" class="btn ghost" id="br-std" ${ro}>Standaardkleuren terugzetten</button></div>
+        <p class="small muted" style="margin:0">De handtekening onder e-mails pas je aan bij <a href="#" id="br-mail">E-mailteksten</a>.</p>
+      </div>
+      <div class="panel stack"><h3 style="margin:0">Voorbeeld: offerte</h3><iframe id="br-prev" title="Voorbeeld van de offerte" sandbox=""></iframe></div>
+    </div></section>`;
+};
+after.branding = () => {
+  const b = brDraft;
+  const prev = () => { const f = $("#br-prev"); if (f) try { f.srcdoc = brandDoc(brPrevHtml(), b); } catch (e) {} };
+  const sync = () => {
+    b.kleur = $("#br-kleur").value; b.kleur2 = $("#br-kleur2").value; b.font = $("#br-font").value; b.voet = $("#br-voet").value;
+    const pl = document.querySelector("[name=br-plek]:checked"); if (pl) b.logoPlek = pl.value;
+  };
+  let t = null;
+  document.querySelectorAll("#br input, #br select, #br textarea").forEach(el => { el.addEventListener("input", () => { sync(); clearTimeout(t); t = setTimeout(prev, 250); }); el.addEventListener("change", () => { sync(); prev(); }); });
+  const up = $("#br-logo"); if (up) up.onchange = async () => {
+    const f = up.files && up.files[0]; if (!f) return;
+    if (f.size > 5 * 1024 * 1024) { toast("Dit bestand is groter dan 5 MB. Verklein het eerst."); return; }
+    sync(); toast("Logo verwerken…");
+    try { b.logo = await brLogoFile(f); toast("Logo staat erin. Klik op Opslaan."); render(); } catch (e) { toast("Het logo lukt nu niet. Probeer een png of jpg."); }
+  };
+  const del = $("#br-logo-del"); if (del) del.onclick = () => { sync(); b.logo = ""; render(); };
+  $("#br-std").onclick = () => { sync(); b.kleur = BR_DEF.kleur; b.kleur2 = BR_DEF.kleur2; b.font = BR_DEF.font; render(); };
+  $("#br-mail").onclick = e => { e.preventDefault(); setView("mailteksten"); };
+  const sv = $("#br-save"); if (sv) sv.onclick = async () => { sync(); if (await rqSaveSettings({ locatie: { ...(S.settings.locatie || {}), branding: { ...b } } }, "Branding opgeslagen")) { brDraft = null; render(); } };
+  prev();
+};
+// Voorbeeld zonder opgeslagen huisstijl (brandDoc zet het concept erop).
+function brPrevHtml() { const keep = S.settings.locatie; S.settings.locatie = { ...(keep || {}), branding: {} }; try { return quoteHtml(brSample()); } finally { S.settings.locatie = keep; } }
+delete SOON.branding;
+{ const sv = setView; setView = function (v) { if (v !== "branding") brDraft = null; if (v !== "acquisitie") acqDraft = null; if (v !== "opstellingen") opDraft = null; sv(v); }; }
+
+/* ---------- Acquisitie (Restau): "Hoe heeft u ons gevonden?" en "Redenen voor afwijzen", enkele of meervoudige selectie, schakelaar per optie ---------- */
+const ACQ_SEP = "; ";
+const ACQ_LISTS = { bronnen: { l: "Hoe heeft de klant ons gevonden?", field: "kf-source", help: "Kies je op de klantkaart bij Hoe bij ons gekomen." }, afwijs: { l: "Redenen voor afwijzen offerte", field: "qf-declineReason", help: "Kies je bij een afgewezen offerte." } };
+let acqDraft = null;
+function acqCfg(k, s = S.settings) {
+  const a = (s.acquisitie || {})[k];
+  if (a && Array.isArray(a.opties)) return { multi: !!a.multi, opties: a.opties.filter(o => o && String(o.t || "").trim()).map(o => ({ t: String(o.t).trim(), aan: o.aan !== false })) };
+  const base = k === "bronnen" ? CUST_SOURCES.filter(Boolean) : ((s.locatie || {}).afwijsredenen || []);
+  return { multi: false, opties: base.map(t => ({ t, aan: true })) };
+}
+const acqSplit = v => String(v || "").split(";").map(x => x.trim()).filter(Boolean);
+// Keuzeveld voor op een formulier: enkele keuze is een lijst, meervoudig zijn vinkjes met één verborgen veld (waarden met "; " ertussen).
+function acqControl(k, id, val, ro) {
+  const c = acqCfg(k), cur = c.multi ? acqSplit(val) : [String(val || "")].filter(Boolean);
+  const opts = [...new Set([...c.opties.filter(o => o.aan).map(o => o.t), ...cur])];
+  if (!c.multi) return `<select id="${id}" data-acq="${k}" ${ro}>${["", ...opts].map(t => `<option value="${esc(t)}" ${t === (val || "") ? "selected" : ""}>${t ? esc(t) : "–"}</option>`).join("")}</select>`;
+  return `<div class="acq-multi">${opts.map((t, i) => `<label class="check"><input type="checkbox" data-acqcb="${id}" value="${esc(t)}" ${cur.includes(t) ? "checked" : ""} ${ro}> ${esc(t)}</label>`).join("")}${opts.length ? "" : `<span class="small muted">Geen keuzes aan bij Instellingen › Acquisitie</span>`}</div><input type="hidden" id="${id}" data-acq="${k}" value="${esc(cur.join(ACQ_SEP))}">`;
+}
+const acqUnesc = s => String(s).replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+// Vervangt het bestaande keuzeveld in de HTML van een formulier.
+function acqInHtml(h, k, id, val) {
+  const re = new RegExp(`<label class="f"><span>([^<]*)</span><select id="${id}"([^>]*)>([\\s\\S]*?)</select></label>`);
+  const m = h.match(re); if (!m) return h;
+  if (val === undefined) { const sel = m[3].match(/<option value="([^"]*)" selected/); val = sel ? acqUnesc(sel[1]) : ""; }
+  const ro = /disabled/.test(m[2]) ? "disabled" : "", multi = acqCfg(k).multi;
+  return h.replace(m[0], multi ? `<div class="f" role="group" aria-label="${m[1]}"><span>${m[1]}</span>${acqControl(k, id, val, ro)}</div>` : `<label class="f"><span>${m[1]}</span>${acqControl(k, id, val, ro)}</label>`);
+}
+document.addEventListener("change", e => {
+  const cb = e.target && e.target.closest && e.target.closest("[data-acqcb]"); if (!cb) return;
+  const id = cb.dataset.acqcb, hid = document.getElementById(id); if (!hid) return;
+  hid.value = [...document.querySelectorAll(`[data-acqcb="${id}"]:checked`)].map(x => x.value).join(ACQ_SEP);
+  hid.dispatchEvent(new Event("input", { bubbles: true })); hid.dispatchEvent(new Event("change", { bubbles: true }));
+});
+{ const b = vKlantKaart; vKlantKaart = function (c0) { const h = b(c0), c = custDraft && custDraft.id === c0.id ? { ...c0, ...custDraft } : c0; return acqInHtml(h, "bronnen", "kf-source", c.source || ""); }; }
+for (const v of ["off", "event"]) { const b = VIEWS[v]; if (b) VIEWS[v] = (...a) => acqInHtml(b(...a), "afwijs", "qf-declineReason"); }
+// Statistiek: bij meervoudige keuze telt elke keuze apart.
+{
+  const base = statData;
+  statData = function (...a) {
+    const d = base(...a); if (!d) return d;
+    const cnt = (items, f, none) => { const m = new Map(); for (const it of items) { const ks = acqSplit(f(it)); for (const k of ks.length ? ks : [none]) m.set(k, (m.get(k) || 0) + 1); } return [...m].map(([k, n]) => ({ k, n })).sort((x, y) => y.n - x.n); };
+    if (S.customers && d.live) d.sources = cnt([...new Set(d.live.map(r => r.customerId).filter(id => S.customers.has(id)))].map(id => S.customers.get(id)), c => c.source, "Niet ingevuld");
+    if (d.made) d.declines = cnt(d.made.filter(q => q.status === "afgewezen"), q => q.declineReason, "Geen reden ingevuld");
+    return d;
+  };
+}
+VIEWS.acquisitie = () => {
+  if (!acqDraft) acqDraft = { bronnen: acqCfg("bronnen"), afwijs: acqCfg("afwijs") };
+  const ro = S.readOnly ? "disabled" : "";
+  const block = k => { const c = acqDraft[k], L = ACQ_LISTS[k]; return `<div class="panel stack" data-acqk="${k}"><h3 style="margin:0">${esc(L.l)}</h3><span class="small muted">${esc(L.help)}</span>
+    <div class="f"><span>Selectie</span><div class="row">${[["0", "Enkele selectie"], ["1", "Meervoudige selectie"]].map(([v, l]) => `<label class="check"><input type="radio" name="acq-m-${k}" data-acqmulti="${k}" value="${v}" ${+c.multi === +v ? "checked" : ""} ${ro}> ${l}</label>`).join("")}</div></div>
+    <table class="lines acq-tbl"><thead><tr><th>Optie</th><th class="c" style="width:70px">Aan</th><th style="width:118px"></th></tr></thead><tbody>
+    ${c.opties.map((o, i) => `<tr><td><input data-acqt="${k}:${i}" value="${esc(o.t)}" aria-label="Optie ${i + 1}" ${ro}></td><td class="c"><label class="evswitch acq-sw"><input type="checkbox" data-acqaan="${k}:${i}" ${o.aan ? "checked" : ""} aria-label="${esc(o.t)} aan" ${ro}><span></span></label></td>
+      <td><div class="row" style="gap:4px;flex-wrap:nowrap"><button type="button" class="btn" data-acqmv="${k}:${i}:-1" ${ro || !i ? "disabled" : ""} aria-label="Omhoog">↑</button><button type="button" class="btn" data-acqmv="${k}:${i}:1" ${ro || i === c.opties.length - 1 ? "disabled" : ""} aria-label="Omlaag">↓</button><button type="button" class="btn ghost" data-acqdel="${k}:${i}" ${ro} aria-label="Verwijderen">✕</button></div></td></tr>`).join("")}
+    </tbody></table>
+    <div class="row"><input data-acqnew="${k}" placeholder="Nieuwe optie" aria-label="Nieuwe optie" style="flex:1 1 200px" ${ro}><button type="button" class="btn" data-acqadd="${k}" ${ro}>+ Toevoegen</button></div></div>`; };
+  return `<section class="stack" id="acq"><div class="row spread"><h2>Acquisitie</h2><button class="btn primary" id="acq-save" ${ro}>Opslaan</button></div>
+    <p class="small muted" style="margin:0">Een optie die uit staat is niet meer te kiezen; wat al bij een klant of offerte staat blijft bewaard.</p>
+    <div class="grid2">${block("bronnen")}${block("afwijs")}</div></section>`;
+};
+after.acquisitie = () => {
+  const sync = () => {
+    document.querySelectorAll("[data-acqt]").forEach(el => { const [k, i] = el.dataset.acqt.split(":"); acqDraft[k].opties[+i].t = el.value; });
+    document.querySelectorAll("[data-acqaan]").forEach(el => { const [k, i] = el.dataset.acqaan.split(":"); acqDraft[k].opties[+i].aan = el.checked; });
+    document.querySelectorAll("[data-acqmulti]:checked").forEach(el => { acqDraft[el.dataset.acqmulti].multi = el.value === "1"; });
+  };
+  document.querySelectorAll("[data-acqmv]").forEach(b => b.onclick = () => { sync(); const [k, i, d] = b.dataset.acqmv.split(":"), a = acqDraft[k].opties, j = +i, n = j + +d; [a[j], a[n]] = [a[n], a[j]]; render(); });
+  document.querySelectorAll("[data-acqdel]").forEach(b => b.onclick = () => { sync(); const [k, i] = b.dataset.acqdel.split(":"); acqDraft[k].opties.splice(+i, 1); render(); });
+  const add = k => { sync(); const el = document.querySelector(`[data-acqnew="${k}"]`), t = el.value.trim(); if (!t) return; if (acqDraft[k].opties.some(o => o.t.toLowerCase() === t.toLowerCase())) { toast("Deze optie bestaat al"); return; } acqDraft[k].opties.push({ t, aan: true }); render(); };
+  document.querySelectorAll("[data-acqadd]").forEach(b => b.onclick = () => add(b.dataset.acqadd));
+  document.querySelectorAll("[data-acqnew]").forEach(el => el.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); add(el.dataset.acqnew); } });
+  const sv = $("#acq-save"); if (sv) sv.onclick = async () => {
+    sync();
+    const clean = c => ({ multi: !!c.multi, opties: c.opties.map(o => ({ t: String(o.t || "").replace(/;/g, ",").trim(), aan: !!o.aan })).filter(o => o.t) });
+    const a = { bronnen: clean(acqDraft.bronnen), afwijs: clean(acqDraft.afwijs) };
+    const L = { ...(S.settings.locatie || {}), afwijsredenen: a.afwijs.opties.map(o => o.t), bronnen: a.bronnen.opties.map(o => o.t) };
+    if (await rqSaveSettings({ acquisitie: a, locatie: L }, "Acquisitie opgeslagen")) { acqDraft = null; render(); }
+  };
+};
+delete SOON.acquisitie;
+// Algemeen: de twee lijsten staan voortaan bij Acquisitie.
+{
+  const b = VIEWS.inst;
+  VIEWS.inst = (...a) => b(...a).replace(/<label class="f"><span>Redenen voor afwijzen offerte<\/span><textarea data-ll="afwijsredenen"[\s\S]*?<\/label>/, "").replace(/<label class="f"><span>Hoe heeft de klant ons gevonden\?<\/span><textarea data-ll="bronnen"[\s\S]*?<\/label>/, `<div class="f"><span>Hoe gevonden en redenen voor afwijzen</span><span class="small muted" style="font-weight:400">Deze lijsten stel je in bij <a href="#" data-goacq>Instellingen › Acquisitie</a>, met aan/uit per optie en enkele of meervoudige keuze.</span></div>`);
+  document.addEventListener("click", e => { const a = e.target.closest && e.target.closest("[data-goacq]"); if (a) { e.preventDefault(); setView("acquisitie"); } });
+}
+
+/* ---------- Zalen › opstellingen (Restau): per zaal en opstelling capaciteit, omschrijving en 6 foto's ---------- */
+const OP_FOTOS = 6;
+let opDraft = null;
+const opInfo = (rm, o) => (rm && rm.opst && rm.opst[o]) || {};
+VIEWS.opstellingen = () => {
+  if (!opDraft) opDraft = structuredClone(S.settings.rooms || []);
+  const ro = S.readOnly ? "disabled" : "", ops = opstellingen(), ri = Math.max(0, Math.min(opDraft.length - 1, +S.opRoom || 0)), rm = opDraft[ri];
+  return `<section class="stack" id="op"><div class="row spread"><h2>Zalen › opstellingen</h2><button class="btn primary" id="op-save" ${ro}>Opslaan</button></div>
+    ${opDraft.length ? `<div class="sf-types" role="tablist" aria-label="Zaal">${opDraft.map((x, i) => `<button type="button" data-opr="${i}" aria-selected="${i === ri}">${esc(x.name || "Nieuwe ruimte")}</button>`).join("")}</div>
+    <p class="small muted" style="margin:0">Laat de capaciteit leeg als ${esc(rm.name || "deze zaal")} die opstelling niet heeft. De omschrijving en foto's komen op de offerte bij de gekozen opstelling. Welke opstellingen er zijn stel je in bij Soorten feest en programma.</p>
+    <div class="stack">${ops.map((o, oi) => { const inf = opInfo(rm, o), f = Array.isArray(inf.fotos) ? inf.fotos : []; return `<div class="panel stack op-it" data-opo="${esc(o)}">
+      <div class="row spread"><h3 style="margin:0">${esc(o)}</h3><label class="row small" style="gap:6px">Capaciteit <input type="number" min="0" data-opcap="${oi}" value="${esc(rm.caps?.[o] ?? "")}" style="width:90px;text-align:right" aria-label="Capaciteit ${esc(o)}" ${ro}> personen</label></div>
+      <label class="f"><span>Omschrijving voor de klant</span><textarea rows="2" data-opoms="${oi}" placeholder="Wat de klant over deze opstelling leest" ${ro}>${esc(inf.oms || "")}</textarea></label>
+      <div class="op-fotos">${Array.from({ length: OP_FOTOS }, (_, n) => rqPhotoBox(`op:${oi}:${n}`, f[n] || "", ro, "Foto")).join("")}</div></div>`; }).join("")}</div>`
+    : `<p class="empty panel">Nog geen ruimtes. Voeg ze toe bij Instellingen › Zalen.</p>`}</section>`;
+};
+after.opstellingen = () => {
+  if (!opDraft || !opDraft.length) return;
+  const ops = opstellingen(), ri = Math.max(0, Math.min(opDraft.length - 1, +S.opRoom || 0)), rm = opDraft[ri];
+  const inf = o => { rm.opst = rm.opst || {}; return (rm.opst[o] = rm.opst[o] || {}); };
+  const sync = () => {
+    document.querySelectorAll("[data-opcap]").forEach(el => { const o = ops[+el.dataset.opcap]; rm.caps = rm.caps || {}; if (el.value === "") delete rm.caps[o]; else rm.caps[o] = +el.value; });
+    document.querySelectorAll("[data-opoms]").forEach(el => { const o = ops[+el.dataset.opoms]; if (el.value.trim() || (rm.opst && rm.opst[o])) inf(o).oms = el.value; });
+  };
+  document.querySelectorAll("[data-opr]").forEach(b => b.onclick = () => { sync(); S.opRoom = +b.dataset.opr; render(); });
+  document.querySelectorAll("#op input, #op textarea").forEach(el => el.addEventListener("input", sync));
+  rqPhotoWire($("#op"), k => "", (k, url) => { sync(); const [, oi, n] = k.split(":"), x = inf(ops[+oi]); x.fotos = Array.isArray(x.fotos) ? x.fotos : []; x.fotos[+n] = url; });
+  const sv = $("#op-save"); if (sv) sv.onclick = async () => {
+    sync();
+    for (const r of opDraft) if (r.opst) for (const [o, x] of Object.entries(r.opst)) { x.fotos = (x.fotos || []).map(u => safeImg(u) ? u : ""); while (x.fotos.length && !x.fotos[x.fotos.length - 1]) x.fotos.pop(); if (!(x.oms || "").trim() && !x.fotos.length) delete r.opst[o]; }
+    if (await rqSaveSettings({ rooms: opDraft }, "Opstellingen opgeslagen")) { opDraft = null; render(); }
+  };
+};
+delete SOON.opstellingen;
+// Offerte voor de klant: per gekozen zaal en opstelling de omschrijving en foto's.
+function opQuoteHtml(q) {
+  if (!q || !q.rq) return "";
+  const seen = new Set(), out = [];
+  for (const dd of (q.days && q.days.length ? rqDays(q) : [q])) for (const p of rqOnParts(dd)) for (const rid of (p.rooms || []).filter(Boolean)) {
+    const k = rid + "|" + p.opstelling; if (!p.opstelling || seen.has(k)) continue; seen.add(k);
+    const inf = opInfo(room(rid), p.opstelling), f = (inf.fotos || []).filter(u => safeImg(u));
+    if (!(inf.oms || "").trim() && !f.length) continue;
+    out.push(`<div style="margin:14px 0"><h3 style="font-size:1rem;color:#1b7d88;margin:0 0 4px">${esc(roomName(rid))}: ${esc(p.opstelling)}</h3>${(inf.oms || "").trim() ? `<p style="margin:0 0 6px">${esc(inf.oms.trim()).replace(/\n/g, "<br>")}</p>` : ""}${f.length ? `<div style="display:flex;gap:8px;flex-wrap:wrap">${f.map(u => `<img src="${esc(u)}" alt="${esc(p.opstelling)}" style="width:150px;height:100px;object-fit:cover;border-radius:3px">`).join("")}</div>` : ""}</div>`);
+  }
+  return out.length ? `<div class="op-q">${out.join("")}</div>` : "";
+}
+{ const b = rqQuoteBody; rqQuoteBody = function (q) { return b(q) + opQuoteHtml(q); }; }
+
+/* ---------- Personeelsweergave (Restau: read-only voor keuken en bediening): draaiboek en keukensheet van de dag ---------- */
+// Haalt de inhoud van het printje op zonder iets te downloaden.
+function pvDocBody(kind, r) {
+  let out = ""; const sf = saveFile;
+  saveFile = (n, data) => { out = String(data || ""); return Promise.resolve(); };
+  try { evPrint(kind, r); } catch (e) { out = ""; } finally { saveFile = sf; }
+  const m = out.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+  return m ? m[1].replace(/<img class="br-logo"[^>]*>/g, "").replace(/<p class="br-voet"[\s\S]*?<\/p>/g, "").replace(/<p style="color:#8a8a8a;margin-top:28px;font-size:12px">Gemaakt[\s\S]*?<\/p>/, "") : "";
+}
+VIEWS.personeel = () => {
+  const date = S.pvDate || todayISO, kind = S.pvKind === "intern" ? "intern" : "keuken";
+  const list = resOn(date).filter(r => r.status !== "aanvraag"), cr = typeof crowd === "function" ? crowd(date) : null;
+  const kiosk = document.body.classList.contains("pv-kiosk");
+  return `<section class="stack pv" id="pv">
+    <div class="row spread wrap"><h2>${date === todayISO ? "Vandaag" : esc(longDate(date))}${date === todayISO ? ` <span class="muted" style="font-weight:400">${esc(longDate(date))}</span>` : ""}</h2>
+      <div class="row wrap"><button class="btn" data-pvd="-1" aria-label="Vorige dag">‹</button><button class="btn" data-pvd="0">Vandaag</button><button class="btn" data-pvd="1" aria-label="Volgende dag">›</button>
+        <button class="btn ${kiosk ? "primary" : ""}" id="pv-kiosk">${kiosk ? "Menu tonen" : "Volledig scherm"}</button></div></div>
+    <div class="sf-tabs" role="tablist" aria-label="Wat tonen">${[["keuken", "Keukensheet"], ["intern", "Draaiboek"]].map(([k, l]) => `<button type="button" data-pvk="${k}" aria-selected="${k === kind}">${l}</button>`).join("")}</div>
+    ${cr && cr.total ? `<div class="panel small">Verwachte drukte: <b>${esc(cr.lvlName)}</b>, ongeveer ${esc(cr.total)} bezoekers${cr.count ? ` (${esc(cr.count)} thuiswedstrijd${cr.count === 1 ? "" : "en"})` : ""}${cr.peakAt != null && cr.peak ? `, piek rond ${String(Math.floor(cr.peakAt / 60)).padStart(2, "0")}:${String(cr.peakAt % 60).padStart(2, "0")}` : ""}.</div>` : ""}
+    ${list.length ? list.map(r => `<article class="panel pv-ev"><div class="pv-hd"><span class="pv-t">${esc(r.start || "")}${r.end ? "–" + esc(r.end) : ""}</span><b>${esc(r.customer || "(zonder naam)")}</b><span>${r.persons ? esc(r.persons) + " pers." : ""}</span><span>${esc(roomName(r.roomId))}</span>${statusChip(r.status)}</div>
+      <div class="pv-doc">${pvDocBody(kind, r) || `<p class="muted">Nog niets ingevuld.</p>`}</div></article>`).join("")
+      : `<p class="empty panel">Geen events op deze dag.</p>`}
+  </section>`;
+};
+after.personeel = () => {
+  document.querySelectorAll("[data-pvd]").forEach(b => b.onclick = () => { const d = +b.dataset.pvd; S.pvDate = d ? addDays(S.pvDate || todayISO, d) : todayISO; render(); });
+  document.querySelectorAll("[data-pvk]").forEach(b => b.onclick = () => { S.pvKind = b.dataset.pvk; render(); });
+  $("#pv-kiosk").onclick = () => { document.body.classList.toggle("pv-kiosk"); render(); };
+};
+delete SOON.personeel;
+{ const sv = setView; setView = function (v) { if (v !== "personeel") document.body.classList.remove("pv-kiosk"); sv(v); }; }
+
+/* ---------- Mijn notities (Restau: persoonlijk notitieblok in de zijbalk van het dossier) ---------- */
+const mnWho = () => (document.querySelector(".who span")?.textContent || "").trim() || "Horeca";
+const mnPath = () => "notities/" + (mnWho().toLowerCase().normalize("NFD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "ik");
+let mnT = null, mnLoaded = "";
+async function mnLoad() {
+  const box = $("#mn-text"); if (!box) return;
+  const p = mnPath(); let txt = "";
+  if (S.db) { try { const s = await S.db.doc(p).get(); if (s && s.exists) txt = (s.data() || {}).text || ""; } catch (e) {} }
+  else { try { txt = localStorage.getItem("hct-" + p) || ""; } catch (e) {} }
+  mnLoaded = p; box.value = txt; box.disabled = !!S.readOnly && !!S.db; $("#mn-st").textContent = txt ? "Bewaard" : "";
+}
+async function mnSave() {
+  const box = $("#mn-text"); if (!box) return; const p = mnPath(), st = $("#mn-st");
+  if (S.db) { try { await S.db.doc(p).set({ who: mnWho(), text: box.value, updatedAt: new Date().toISOString() }); st.textContent = "Bewaard"; } catch (e) { st.textContent = "Opslaan lukt niet"; } }
+  else { try { localStorage.setItem("hct-" + p, box.value); st.textContent = "Bewaard op dit apparaat"; } catch (e) {} }
+}
+function mnOpen(open = true) {
+  let el = $("#mn");
+  if (!el) {
+    document.body.insertAdjacentHTML("beforeend", `<aside id="mn" class="mn" aria-label="Mijn notities" hidden><div class="row spread"><h3 style="margin:0">Mijn notities</h3><button type="button" class="btn ghost" id="mn-close" aria-label="Sluiten">✕</button></div>
+      <span class="small muted" id="mn-who"></span><textarea id="mn-text" placeholder="Je eigen notities: terugbellen, ideeën, wat je niet wilt vergeten" aria-label="Mijn notities"></textarea><span class="small muted" id="mn-st" aria-live="polite"></span></aside>`);
+    el = $("#mn");
+    $("#mn-close").onclick = () => mnOpen(false);
+    $("#mn-text").addEventListener("input", () => { $("#mn-st").textContent = "…"; clearTimeout(mnT); mnT = setTimeout(mnSave, 700); });
+    $("#mn-text").addEventListener("blur", () => { if (mnT) { clearTimeout(mnT); mnT = null; mnSave(); } });
+  }
+  el.hidden = !open; S.mnOpen = open;
+  const b = $("#mn-open"); if (b) b.setAttribute("aria-pressed", String(open));
+  if (open) { $("#mn-who").textContent = "Alleen voor " + mnWho(); if (mnLoaded !== mnPath()) mnLoad(); $("#mn-text").focus(); }
+}
+{
+  const b = VIEWS.event;
+  VIEWS.event = (...a) => b(...a).replace('<button class="btn" id="ev-copy"', `<button class="btn" id="mn-open" aria-pressed="${!!S.mnOpen}">Mijn notities</button><button class="btn" id="ev-copy"`);
+  const ab = after.event;
+  after.event = (...a) => { ab(...a); const o = $("#mn-open"); if (o) o.onclick = () => mnOpen(!S.mnOpen); };
+}
+{ const sv = setView; setView = function (v) { if (v !== "event" && S.mnOpen) mnOpen(false); sv(v); }; }
+
+// Menu: Instellingen › Branding, Acquisitie, Zalen › opstellingen; Agenda › Personeel
+(() => {
+  const hook = (id, add) => { const m = MENU.find(x => x.id === id), desc = m && Object.getOwnPropertyDescriptor(m, "items"); if (desc && desc.get) Object.defineProperty(m, "items", { configurable: true, get: () => add(desc.get()) }); else if (m) add(m.items); };
+  hook("inst", its => {
+    if (its.some(it => it.v === "branding")) return its;
+    const a = its.findIndex(it => it.v === "inst" && it.set && it.set.instTab === "locatie"); its.splice(a < 0 ? its.length : a + 1, 0, { l: "Branding", v: "branding" }, { l: "Acquisitie", v: "acquisitie" });
+    const z = its.findIndex(it => it.v === "zalenmanage"); its.splice(z < 0 ? its.length : z + 1, 0, { l: "Zalen › opstellingen", v: "opstellingen" });
+    return its;
+  });
+  hook("agenda", its => { if (its.some(it => it.v === "personeel")) return its; const j = its.findIndex(it => it.v === "afspraken"); its.splice(j < 0 ? its.length : j + 1, 0, { l: "Personeel: dag in één scherm", v: "personeel", set: { pvDate: todayISO } }); return its; });
+})();
+document.head.insertAdjacentHTML("beforeend", `<style id="rq11-style">
+.br-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 14px; align-items: start; }
+#br-prev { width: 100%; height: 640px; border: 1px solid var(--line, #ddd); border-radius: 4px; background: #fff; }
+.br-logo-box { padding: 10px; border: 1px dashed var(--line, #ccc); border-radius: 4px; background: #fff; align-self: flex-start; } .br-logo-box img { max-height: 70px; max-width: 220px; display: block; }
+.acq-tbl input[data-acqt] { width: 100%; } .acq-tbl th.c, .acq-tbl td.c { text-align: center; } .acq-sw { justify-content: center; }
+.acq-multi { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 6px 0; }
+.op-fotos { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; } .op-fotos .rq-photo img { max-width: 100%; max-height: 100px; object-fit: cover; }
+.pv-ev { display: flex; flex-direction: column; gap: 8px; } .pv-hd { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; font-size: 1.15rem; border-bottom: 2px solid var(--orange); padding-bottom: 6px; }
+.pv-t { font-weight: 700; color: var(--teal); font-variant-numeric: tabular-nums; }
+.pv-doc { font-size: 1.05rem; line-height: 1.5; min-width: 0; overflow-x: auto; } .pv-doc h1, .pv-doc h1 + p { display: none; }
+.pv-doc h2 { font-size: 1.05rem; color: var(--teal); margin: 14px 0 6px; } .pv-doc table { width: 100%; border-collapse: collapse; } .pv-doc td, .pv-doc th { padding: 6px; border-bottom: 1px solid var(--line, #e3e3e3); text-align: left; vertical-align: top; }
+.pv-doc .k { width: 130px; color: var(--muted, #8a8a8a); } .pv-doc .r { text-align: right; } .pv-doc .box { border: 2px solid #b3352b; padding: 8px 12px; border-radius: 4px; font-weight: 600; }
+body.pv-kiosk header.top { display: none; } body.pv-kiosk #app { max-width: none; } body.pv-kiosk .pv { font-size: 1.1rem; }
+.mn { position: fixed; top: 120px; right: 12px; bottom: 12px; width: min(340px, calc(100vw - 24px)); z-index: 40; background: var(--panel, #fff); border: 1px solid var(--line, #ddd); border-radius: 6px; box-shadow: 0 6px 24px rgba(0,0,0,.18); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.mn[hidden] { display: none; } .mn textarea { flex: 1; min-height: 200px; resize: none; }
+#mn-open[aria-pressed="true"] { background: var(--teal-soft); }
+@media (max-width: 760px) { .br-grid { grid-template-columns: 1fr; } #br-prev { height: 480px; } .op-fotos { grid-template-columns: repeat(3, minmax(0, 1fr)); } .mn { top: auto; height: 60vh; } .pv-doc .k { width: 70px; } }
+</style>`);
 /* ---------- einde offerte zoals Restau ---------- */
 
 /* ---------- Rapporten (naar voorbeeld van Restau: openstaand, facturen, aanbetalingen, arrangementen, event count, omzet bedrijven) ---------- */
