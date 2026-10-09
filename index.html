@@ -275,6 +275,12 @@ td.r, th.r { text-align: right; font-variant-numeric: tabular-nums; }
 .pcat-h { margin: 6px 0 0; }
 .psub { grid-column: 1 / -1; margin: 4px 0 -2px; }
 @media (prefers-reduced-motion: no-preference) { .day, .btn { transition: border-color .12s; } }
+/* Financiën */
+.fin-terms { display: flex; flex-wrap: wrap; gap: 4px; }
+tr.fin-grp td { background: var(--sunk); font-weight: 600; font-size: .8rem; padding: 5px 8px; color: var(--muted); }
+.modal.fin-modal { max-width: 900px; }
+.fin-prev { width: 100%; height: min(560px, 60vh); border: 1px solid var(--line); background: #fff; border-radius: var(--r); }
+@media (max-width: 600px) { .fin-sm-hide { display: none; } }
 /* Statistiek */
 .stat-chart { position: relative; padding-top: 22px; }
 .stat-bars { display: flex; align-items: flex-end; gap: 2px; height: 180px; border-bottom: 1px solid var(--line); }
@@ -677,7 +683,8 @@ const DAYS = ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag"
 const DAYS_SHORT = ["ma", "di", "wo", "do", "vr", "za", "zo"];
 const MONTHS = ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december"];
 const longDate = s => { const d = parseISO(s); return `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`; };
-const shortDate = s => { const d = parseISO(s); return `${DAYS[d.getDay()].slice(0, 2)} ${d.getDate()} ${MONTHS[d.getMonth()].slice(0, 3)}`; };
+const MONTHS_SHORT = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
+const shortDate = s => { const d = parseISO(s); return `${DAYS[d.getDay()].slice(0, 2)} ${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`; };
 const eur = n => "€ " + (Math.round((+n || 0) * 100) / 100).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const todayISO = iso(new Date());
 const strip = o => { const c = JSON.parse(JSON.stringify(o)); delete c.id; return c; };
@@ -703,7 +710,7 @@ const DEFAULT_SETTINGS = {
 const S = {
   db: null, dbState: "loading", readOnly: false,
   settings: structuredClone(DEFAULT_SETTINGS),
-  reservations: new Map(), quotes: new Map(), blocks: new Map(), customers: new Map(), contacts: new Map(), matchDays: new Map(), clubMonths: new Map(),
+  reservations: new Map(), quotes: new Map(), invoices: new Map(), blocks: new Map(), customers: new Map(), contacts: new Map(), matchDays: new Map(), clubMonths: new Map(),
   view: "agenda", month: todayISO.slice(0, 7), day: todayISO,
   resFilter: "komend", resQuery: "", quoteOpen: null, custOpen: null, custQuery: "", custFilter: "alle", importLisa: null, importIcs: null,
 };
@@ -726,7 +733,7 @@ async function write(path, data, mode = "set") {
 }
 function localApply(path, data, mode) {
   const [col, id] = path.split("/");
-  const map = { reservations: S.reservations, quotes: S.quotes, blocks: S.blocks, customers: S.customers, contacts: S.contacts, matches: S.matchDays, club: S.clubMonths }[col];
+  const map = { reservations: S.reservations, quotes: S.quotes, invoices: S.invoices, blocks: S.blocks, customers: S.customers, contacts: S.contacts, matches: S.matchDays, club: S.clubMonths }[col];
   if (col === "settings") { S.settings = normSettings(data); return; }
   if (!map) return;
   if (mode === "delete") map.delete(id); else map.set(id, { ...(mode === "update" ? map.get(id) : {}), ...data, id });
@@ -761,6 +768,7 @@ async function boot() {
   db.doc("settings/main").onSnapshot(snap => { S.settings = normSettings(snap.exists ? snap.data() : null); scheduleRender(); }, () => {});
   subscribe("reservations", S.reservations);
   subscribe("quotes", S.quotes);
+  subscribe("invoices", S.invoices);
   subscribe("blocks", S.blocks);
   subscribe("customers", S.customers);
   subscribe("contacts", S.contacts);
@@ -1159,7 +1167,7 @@ function vHome() {
   const upcoming = res.filter(r => r.date >= todayISO && r.status !== "geannuleerd").sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
   const tasks = allTasks().filter(t => !t.done);
   const qOf = r => r.quoteId && S.quotes.get(r.quoteId);
-  const openPay = qs.filter(q => q.status === "geaccepteerd" && (!q.depositPaid || !q.finalPaid));
+  const openPay = finRows().filter(x => x.terms.some(t => !t.paid));
   const tile = (n, label, go, cls = "") => `<button type="button" class="tile ${cls} ${n ? "" : "zero"}" data-go='${esc(JSON.stringify(go))}'><b>${n}</b><span>${esc(label)}</span></button>`;
   const today = resOn(todayISO), c = crowd(todayISO);
   return `<section class="stack">
@@ -1170,7 +1178,7 @@ function vHome() {
       ${tile(res.filter(r => r.status === "optie" && r.date >= todayISO).length, "In optie", { v: "res", resFilter: "opties" })}
       ${tile(upcoming.filter(r => r.date <= in30 && r.status === "bevestigd").length, "Events komende 30 dagen", { v: "res", resFilter: "komend" }, "teal")}
       ${tile(tasks.filter(t => t.due && t.due <= todayISO).length, "To-do's voor vandaag of eerder", { v: "todo", todoFilter: "open" })}
-      ${tile(openPay.length, "Betalingen nog open", { v: "off", offTab: "geaccepteerd" }, "teal")}
+      ${tile(openPay.length, "Betalingen nog open", { v: "betalingen" }, "teal")}
     </div>
     <div class="grid2">
       <div class="panel stack"><div class="row spread"><h3>Vandaag</h3><button class="btn" data-go='{"v":"dag","day":"${todayISO}"}'>Dag-agenda</button></div>
@@ -1746,9 +1754,12 @@ function quoteText(q) {
     ...q.lines.filter(l => (l.desc || l.price) && !l.optional).map(l => `${l.qty} × ${l.desc}  à ${eur(l.price)}  = ${eur(l.qty * l.price)}  (btw ${btwLabel(l)})`), ``,
     `Totaal excl. btw: ${eur(t.excl)}`, ...Object.keys(t.btw).map(r => `Btw ${r}%: ${eur(t.btw[r])}`), `Totaal incl. btw: ${eur(t.incl)}`,
     ...(q.lines.some(l => l.optional) ? [``, `Optioneel (op aanvraag):`, ...q.lines.filter(l => l.optional).map(l => `${l.qty} × ${l.desc}  à ${eur(l.price)}  = ${eur(l.qty * l.price)}`)] : []),
-    ...(+q.depositPct ? [``, `Aanbetaling ${q.depositPct}%: ${eur(t.incl * q.depositPct / 100)} · restant ${eur(t.incl * (100 - q.depositPct) / 100)} bij eindafrekening`] : []),
+    ...(hasSecondTerm(q) ? [``, ...finTerms(q).map(x => `${x.label}: ${eur(x.amount)}${x.due ? " · uiterlijk " + longDate(x.due) : ""}`)]
+      : +q.depositPct ? [``, `Aanbetaling ${q.depositPct}%: ${eur(t.incl * q.depositPct / 100)} · restant ${eur(t.incl * (100 - q.depositPct) / 100)} bij eindafrekening`] : []),
     q.notes ? `\n${q.notes}` : ""].join("\n");
 }
+// Offerte met een 2e betaling: alle termijnen noemen (uit de module Financiën).
+function hasSecondTerm(q) { return typeof finTerms === "function" && finNum(q.secondPct, finNum(finCfg().secondPct, 0)) > 0; }
 function quoteHtml(q) {
   const t = totals(q.lines);
   return `<!doctype html><html lang="nl"><head><meta charset="utf-8"><title>Offerte ${esc(q.number)} – HC Tilburg Horeca</title>
@@ -1761,7 +1772,7 @@ ${q.eventDate ? `<p>Betreft: ${esc(longDate(q.eventDate))} ${esc(q.eventTime || 
 <table><thead><tr><th>Omschrijving</th><th class="r">Aantal</th><th class="r">Prijs</th><th class="r">Btw</th><th class="r">Bedrag</th></tr></thead><tbody>
 ${q.lines.filter(l => (l.desc || l.price) && !l.optional).map(l => `<tr><td>${esc(l.desc)}${product(l.productId)?.description ? `<br><span class="muted" style="font-size:.88em">${esc(product(l.productId).description)}</span>` : ""}</td><td class="r">${esc(l.qty)}</td><td class="r">${eur(l.price)}</td><td class="r">${esc(btwLabel(l))}</td><td class="r">${eur(l.qty * l.price)}</td></tr>`).join("")}
 </tbody></table>
-<table class="tot"><tr><td>Totaal excl. btw</td><td class="r">${eur(t.excl)}</td></tr>${Object.keys(t.btw).map(r => `<tr><td>Btw ${r}%</td><td class="r">${eur(t.btw[r])}</td></tr>`).join("")}<tr class="big"><td>Totaal incl. btw</td><td class="r">${eur(t.incl)}</td></tr>${+q.depositPct ? `<tr><td>Aanbetaling ${esc(q.depositPct)}%</td><td class="r">${eur(t.incl * q.depositPct / 100)}</td></tr><tr><td>Restant bij eindafrekening</td><td class="r">${eur(t.incl * (100 - q.depositPct) / 100)}</td></tr>` : ""}</table>
+<table class="tot"><tr><td>Totaal excl. btw</td><td class="r">${eur(t.excl)}</td></tr>${Object.keys(t.btw).map(r => `<tr><td>Btw ${r}%</td><td class="r">${eur(t.btw[r])}</td></tr>`).join("")}<tr class="big"><td>Totaal incl. btw</td><td class="r">${eur(t.incl)}</td></tr>${hasSecondTerm(q) ? finTerms(q).map(x => `<tr><td>${esc(x.label)}${x.due ? ", uiterlijk " + esc(longDate(x.due)) : ""}</td><td class="r">${eur(x.amount)}</td></tr>`).join("") : +q.depositPct ? `<tr><td>Aanbetaling ${esc(q.depositPct)}%</td><td class="r">${eur(t.incl * q.depositPct / 100)}</td></tr><tr><td>Restant bij eindafrekening</td><td class="r">${eur(t.incl * (100 - q.depositPct) / 100)}</td></tr>` : ""}</table>
 ${q.lines.some(l => l.optional) ? `<h3 style="margin-top:24px">Optioneel, op aanvraag</h3><table><tbody>${q.lines.filter(l => l.optional).map(l => `<tr><td>${esc(l.desc)}</td><td class="r">${esc(l.qty)} × ${eur(l.price)}</td><td class="r">${eur(l.qty * l.price)}</td></tr>`).join("")}</tbody></table>` : ""}
 ${q.notes ? `<p>${esc(q.notes).replace(/\n/g, "<br>")}</p>` : ""}
 <p class="muted">Deze offerte is geldig tot ${q.validUntil ? esc(longDate(q.validUntil)) : "14 dagen na dagtekening"}. Alle prijzen zijn inclusief btw.</p>${S.settings.locatie?.voorwaarden ? `<h3 style="font-size:1rem;color:#1b7d88;margin-top:24px">Voorwaarden</h3><p class="muted" style="font-size:.9em">${esc(S.settings.locatie.voorwaarden).replace(/\n/g, "<br>")}</p>` : ""}</body></html>`;
@@ -2831,6 +2842,431 @@ async function syncProductTasks(q, r) {
     if (added > 0) toast(`${added} taak${added === 1 ? "" : "en"} uit producten op de reservering gezet`);
   }
 }
+/* ---------- Financiën: betalingen en facturen (naar voorbeeld van Restau) ---------- */
+/* Plakken in horeca-agenda.html binnen de IIFE, vóór de regel `boot();`. Zie financien-integratie.md.
+   Per geaccepteerde offerte de termijnen aanbetaling, (optioneel) 2e betaling en eindafrekening.
+   Facturen staan in de collectie invoices; de betaald-vinkjes blijven op de offerte (depositPaid, secondPaid, finalPaid). */
+const FIN_DEFAULT = { prefix: "HCT", termijnDagen: 14, secondPct: 0, secondWeeks: 4 };
+const FIN_TYPES = { "1e": "Aanbetaling", "2e": "2e betaling", eind: "Eindfactuur", credit: "Creditfactuur" };
+const FIN_SHORT = { "1e": "1e", "2e": "2e", eind: "eind" };
+const FIN_FLAG = { "1e": "deposit", "2e": "second", eind: "final" };
+const finCfg = () => ({ ...FIN_DEFAULT, ...((S.settings.locatie || {}).betaal || {}) });
+const finNum = (v, d) => v === "" || v == null || isNaN(+v) ? d : +v;
+const finR2 = n => Math.round((+n || 0) * 100) / 100;
+const finEventDate = q => q.eventDate || (q.reservationId && S.reservations.get(q.reservationId)?.date) || "";
+const finPayTerm = q => { const c = q && q.customerId && S.customers.get(q.customerId); return finNum(c && c.payTerm, finNum(finCfg().termijnDagen, 14)); };
+const finInvoices = () => [...S.invoices.values()];
+const finLine = l => ({ desc: l.desc || "", qty: +l.qty || 0, price: +l.price || 0, btw: +l.btw || 0, ...(isMix(l) ? { btwHigh: +l.btwHigh } : {}) });
+// Bedrag incl. btw per btw-tarief (een gemengde regel, zoals drankafkoop, telt deels bij 21% en deels bij 9%)
+function finRateSplit(lines) {
+  const m = new Map();
+  for (const l of lines || []) {
+    if (l.optional) continue;
+    const t = (+l.qty || 0) * (+l.price || 0); if (!t) continue;
+    const parts = isMix(l) ? [[21, t * l.btwHigh / 100], [9, t * (100 - l.btwHigh) / 100]] : [[+l.btw || 0, t]];
+    for (const [rate, a] of parts) m.set(rate, (m.get(rate) || 0) + a);
+  }
+  return [...m.entries()].filter(([, a]) => Math.abs(a) > 0.004).sort((a, b) => a[0] - b[0]);
+}
+// De termijnen van één offerte, met bedrag, vervaldatum, factuur en of het betaald is.
+function finTerms(q) {
+  const tot = totals(q.lines).incl, ev = finEventDate(q), term = finPayTerm(q), cfg = finCfg();
+  const dp = finNum(q.depositPct, 30), sp = finNum(q.secondPct, finNum(cfg.secondPct, 0));
+  const invs = finInvoices().filter(i => i.quoteId === q.id && i.type !== "credit" && !i.creditedBy);
+  const out = [];
+  if (dp > 0) out.push({ key: "1e", label: `Aanbetaling ${dp}%`, pct: dp });
+  if (sp > 0) out.push({ key: "2e", label: `2e betaling ${sp}%`, pct: sp });
+  out.push({ key: "eind", label: "Eindafrekening", pct: Math.max(0, 100 - dp - sp) });
+  const accepted = q.acceptedOn || q.date || todayISO;
+  for (const t of out) {
+    const f = FIN_FLAG[t.key];
+    t.inv = invs.find(i => i.type === t.key) || null;
+    t.amount = t.inv ? totals(t.inv.lines).incl : finR2(tot * t.pct / 100);
+    t.paid = !!q[f + "Paid"]; t.paidOn = q[f + "PaidOn"] || (t.inv && t.inv.paidOn) || "";
+    t.due = t.inv?.dueDate || (t.key === "1e" ? addDays(accepted, term) : !ev ? "" : t.key === "2e" ? addDays(ev, -7 * finNum(q.secondWeeks, finNum(cfg.secondWeeks, 4))) : addDays(ev, term));
+  }
+  const e = out[out.length - 1];
+  if (!e.inv) e.amount = finR2(tot - out.slice(0, -1).reduce((s, t) => s + t.amount, 0));
+  if (!e.inv && Math.abs(e.amount) < 0.005) e.paid = true; // niets meer te betalen
+  for (const t of out) t.late = !t.paid && !!t.due && t.due < todayISO;
+  return out;
+}
+// Offertes die in Betalingen horen: geaccepteerd (feest niet geannuleerd), of er is al een factuur voor.
+function finQuotes() {
+  const withInv = new Set(finInvoices().map(i => i.quoteId));
+  return [...S.quotes.values()].filter(q => {
+    const r = q.reservationId && S.reservations.get(q.reservationId);
+    return withInv.has(q.id) || (q.status === "geaccepteerd" && !(r && r.status === "geannuleerd"));
+  });
+}
+// Facturen die gemaakt moeten worden: aanbetaling meteen, 2e betaling 14 dagen voor de uiterste datum, eindfactuur vanaf de feestdag.
+function finToMake() {
+  const out = [];
+  for (const q of finQuotes()) {
+    if (q.status !== "geaccepteerd") continue;
+    const ev = finEventDate(q);
+    for (const t of finTerms(q)) {
+      if (t.inv || t.paid || t.amount <= 0) continue;
+      const from = t.key === "1e" ? "" : t.key === "2e" ? addDays(t.due || todayISO, -14) : (ev || "9999-12-31");
+      if (from <= todayISO) out.push({ q, t });
+    }
+  }
+  return out.sort((a, b) => (a.t.due || "9999").localeCompare(b.t.due || "9999"));
+}
+function finNextNumber(date) {
+  const pre = String(finCfg().prefix || "").trim() + String(date || todayISO).slice(2, 4);
+  const n = finInvoices().map(i => String(i.number || "")).filter(x => x.startsWith(pre) && /^\d+$/.test(x.slice(pre.length))).map(x => +x.slice(pre.length));
+  return pre + String((n.length ? Math.max(...n) : 0) + 1).padStart(4, "0");
+}
+function finIsLastNumber(inv) {
+  const pre = String(inv.number || "").replace(/\d{4,}$/, "");
+  const same = finInvoices().map(i => String(i.number || "")).filter(x => x.startsWith(pre) && /^\d+$/.test(x.slice(pre.length)));
+  return same.every(x => +x.slice(pre.length) <= +String(inv.number).slice(pre.length));
+}
+function finInvStatus(inv) {
+  if (inv.creditedBy) return { k: "credited", cls: "c0", txt: `Gecrediteerd (${S.invoices.get(inv.creditedBy)?.number || "creditfactuur"})` };
+  if (inv.type === "credit") return inv.paidOn ? { k: "betaald", cls: "c1", txt: `Verrekend op ${shortDate(inv.paidOn)}` } : { k: "credit", cls: "c0", txt: `Credit op ${S.invoices.get(inv.creditOf)?.number || "factuur"}` };
+  if (inv.paidOn) return { k: "betaald", cls: "c1", txt: `Betaald op ${shortDate(inv.paidOn)}` };
+  if (inv.dueDate && inv.dueDate < todayISO) return { k: "late", cls: "c3", txt: `Te laat, vervallen ${shortDate(inv.dueDate)}` };
+  return { k: "open", cls: "c2", txt: inv.dueDate ? `Te ontvangen voor ${shortDate(inv.dueDate)}` : "Open" };
+}
+
+/* Factuur maken, crediteren en betaald markeren */
+async function finMakeInvoice(q, type, src) {
+  if (S.readOnly) return null;
+  const base = type === "credit" ? src : null, from = base || q;
+  const cid = (q && q.customerId) || (base && base.customerId) || "", c = cid && S.customers.get(cid);
+  const date = todayISO, now = new Date().toISOString();
+  let lines, dueDate = addDays(date, finPayTerm(q || base));
+  if (type === "credit") { lines = base.lines.map(l => ({ ...l, qty: -(+l.qty || 0) })); dueDate = date; }
+  else if (type === "eind") {
+    lines = (q.lines || []).filter(l => !l.optional && (l.desc || +l.price)).map(finLine);
+    for (const t of finTerms(q).filter(t => t.key !== "eind")) {
+      if (t.inv) lines.push(...t.inv.lines.map(l => ({ ...finLine(l), desc: `Af: ${FIN_TYPES[t.key].toLowerCase()}, factuur ${t.inv.number}${finRateSplit(t.inv.lines).length > 1 ? ` (${l.btw}% btw)` : ""}`, qty: -(+l.qty || 0) })));
+      else if (t.paid) lines.push(...finRateSplit(q.lines).map(([rate, a], i, all) => ({ desc: `Af: ${t.label.toLowerCase()}, ontvangen${all.length > 1 ? ` (${rate}% btw)` : ""}`, qty: -1, price: finR2(a * t.pct / 100), btw: rate })));
+    }
+  } else {
+    const t = finTerms(q).find(x => x.key === type), split = finRateSplit(q.lines);
+    if (!t || !split.length) { toast("Deze offerte heeft nog geen bedrag om te factureren"); return null; }
+    lines = split.map(([rate, a]) => ({ desc: `${t.label} op offerte ${q.number}${split.length > 1 ? ` (deel tegen ${rate}% btw)` : ""}`, qty: 1, price: finR2(a * t.pct / 100), btw: rate }));
+    if (type === "2e" && t.due && t.due > dueDate) dueDate = t.due;
+  }
+  const inv = {
+    number: finNextNumber(date), type, quoteId: (q && q.id) || (base && base.quoteId) || "", reservationId: (q && q.reservationId) || (base && base.reservationId) || "", customerId: cid,
+    customer: from.customer || "", contact: from.contact || "", email: from.email || "", address: (c && c.address) || (base && base.address) || "", invoiceInfo: (c && c.invoice) || (base && base.invoiceInfo) || "",
+    quoteNumber: q ? q.number || "" : (base && base.quoteNumber) || "", eventDate: q ? finEventDate(q) : (base && base.eventDate) || "",
+    date, dueDate, lines, notes: "", paidOn: "", creditOf: base ? base.id : "", createdAt: now, updatedAt: now,
+  };
+  const id = uid();
+  if (!(await write("invoices/" + id, inv))) return null;
+  const fz = finFreeze(q); if (Object.keys(fz).length && (await write("quotes/" + q.id, fz, "update"))) { const cur = S.quotes.get(q.id); if (cur) Object.assign(cur, fz); }
+  S.invoices.set(id, { ...inv, id });
+  if (base) { await write("invoices/" + base.id, { creditedBy: id, updatedAt: now }, "update"); const b = S.invoices.get(base.id); if (b) b.creditedBy = id; }
+  toast(`${FIN_TYPES[type]} ${inv.number} gemaakt`);
+  return S.invoices.get(id);
+}
+// Legt de 2e betaling vast op de offerte, zodat een latere wijziging van de standaard bestaande feesten niet verandert.
+const finFreeze = q => q && (q.secondPct === "" || q.secondPct == null) ? { secondPct: finNum(finCfg().secondPct, 0), secondWeeks: finNum(q.secondWeeks, finNum(finCfg().secondWeeks, 4)) } : {};
+async function finSetPaid(q, key, paidOn) {
+  const f = FIN_FLAG[key]; if (!f) return false;
+  const patch = { ...finFreeze(q), [f + "Paid"]: !!paidOn, [f + "PaidOn"]: paidOn || "", updatedAt: new Date().toISOString() };
+  const t = finTerms(q).find(x => x.key === key);
+  if (!(await write("quotes/" + q.id, patch, "update"))) return false;
+  const cur = S.quotes.get(q.id); if (cur) Object.assign(cur, patch);
+  if (t && t.inv) { await write("invoices/" + t.inv.id, { paidOn: paidOn || "", updatedAt: patch.updatedAt }, "update"); const i = S.invoices.get(t.inv.id); if (i) i.paidOn = paidOn || ""; }
+  return true;
+}
+async function finSetInvoicePaid(inv, paidOn) {
+  const now = new Date().toISOString();
+  if (!(await write("invoices/" + inv.id, { paidOn: paidOn || "", updatedAt: now }, "update"))) return false;
+  const i = S.invoices.get(inv.id); if (i) i.paidOn = paidOn || "";
+  const f = FIN_FLAG[inv.type], q = inv.quoteId && S.quotes.get(inv.quoteId);
+  if (f && q) { const patch = { [f + "Paid"]: !!paidOn, [f + "PaidOn"]: paidOn || "", updatedAt: now }; if (await write("quotes/" + q.id, patch, "update")) { const cur = S.quotes.get(q.id); if (cur) Object.assign(cur, patch); } }
+  return true;
+}
+
+/* Printbare factuur (HTML), met de gegevens uit Instellingen → Algemeen */
+function invoiceHtml(inv) {
+  const L = S.settings.locatie || {}, t = totals(inv.lines), credit = inv.type === "credit", src = credit && inv.creditOf && S.invoices.get(inv.creditOf);
+  const title = credit ? "Creditfactuur" : "Factuur", naam = L.naam || "HC Tilburg Horeca";
+  const betreft = credit ? `Creditering van factuur ${src ? esc(src.number) : ""}` : `${esc(FIN_TYPES[inv.type])}${inv.quoteNumber ? ` op offerte ${esc(inv.quoteNumber)}` : ""}${inv.eventDate ? `, feest op ${esc(longDate(inv.eventDate))}` : ""}`;
+  const pay = credit ? `<p>Het bedrag van ${eur(Math.abs(t.incl))} verrekenen wij met de openstaande factuur of storten wij terug.</p>`
+    : inv.paidOn ? `<p><b>Betaald op ${esc(longDate(inv.paidOn))}.</b> Hartelijk dank.</p>`
+    : t.incl > 0 ? `<p>Wij verzoeken u het bedrag van <b>${eur(t.incl)}</b> vóór <b>${inv.dueDate ? esc(longDate(inv.dueDate)) : "de vervaldatum"}</b> over te maken${L.iban ? ` op <b>${esc(L.iban)}</b> ten name van ${esc(naam)}` : ""}, onder vermelding van factuurnummer <b>${esc(inv.number)}</b>.</p>` : "";
+  return `<!doctype html><html lang="nl"><head><meta charset="utf-8"><title>${title} ${esc(inv.number)} – ${esc(naam)}</title>
+<style>body{font-family:"Open Sans",Arial,sans-serif;font-size:14px;color:#3b3b3b;max-width:760px;margin:40px auto;padding:0 24px;line-height:1.5}h1{color:#e5621c;font-weight:600;margin:0}
+.hd{display:flex;justify-content:space-between;gap:24px;border-bottom:3px solid #1b7d88;padding-bottom:12px;margin-bottom:20px}table{width:100%;border-collapse:collapse;margin:20px 0}th,td{padding:7px 6px;border-bottom:1px solid #e3e3e3;text-align:left;vertical-align:top}th{color:#1b7d88}td.r,th.r{text-align:right;white-space:nowrap}
+.meta{display:grid;grid-template-columns:auto 1fr;gap:2px 16px;margin:0}.meta dt{color:#8a8a8a}.meta dd{margin:0}.two{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
+.tot{margin-left:auto;width:320px}.tot td{border:0;padding:3px 6px}.big td{font-weight:700;font-size:1.15em;border-top:2px solid #1b7d88}.muted{color:#8a8a8a}.ft{margin-top:32px;border-top:1px solid #e3e3e3;padding-top:8px;font-size:.85em}@media print{body{margin:0}}</style></head><body>
+<div class="hd"><div><h1>${title}</h1><div class="muted">nr. ${esc(inv.number)}</div></div><div style="text-align:right">${[`<b>${esc(naam)}</b>`, esc(L.adres || ""), esc([L.postcode, L.plaats].filter(Boolean).join(" ")), esc(L.telefoon || ""), esc(L.email || "")].filter(Boolean).join("<br>")}</div></div>
+<div class="two"><p style="margin:0"><b>${esc(inv.customer)}</b>${inv.contact ? "<br>t.a.v. " + esc(inv.contact) : ""}${inv.address ? "<br>" + esc(inv.address).replace(/\n/g, "<br>") : ""}${inv.invoiceInfo ? "<br>" + esc(inv.invoiceInfo).replace(/\n/g, "<br>") : ""}</p>
+<dl class="meta"><dt>Factuurdatum</dt><dd>${inv.date ? esc(longDate(inv.date)) : ""}</dd>${!credit && inv.dueDate ? `<dt>Vervaldatum</dt><dd>${esc(longDate(inv.dueDate))}</dd>` : ""}<dt>Factuurnummer</dt><dd>${esc(inv.number)}</dd>${inv.quoteNumber ? `<dt>Offerte</dt><dd>${esc(inv.quoteNumber)}</dd>` : ""}</dl></div>
+<p>Betreft: ${betreft}.</p>
+<table><thead><tr><th>Omschrijving</th><th class="r">Aantal</th><th class="r">Prijs</th><th class="r">Btw</th><th class="r">Bedrag</th></tr></thead><tbody>
+${inv.lines.map(l => `<tr><td>${esc(l.desc)}</td><td class="r">${esc(String(l.qty).replace(".", ","))}</td><td class="r">${eur(l.price)}</td><td class="r">${esc(btwLabel(l))}</td><td class="r">${eur((+l.qty || 0) * (+l.price || 0))}</td></tr>`).join("")}
+</tbody></table>
+<table class="tot"><tr><td>Totaal excl. btw</td><td class="r">${eur(t.excl)}</td></tr>${Object.keys(t.btw).sort((a, b) => a - b).map(r => `<tr><td>Btw ${r}%</td><td class="r">${eur(t.btw[r])}</td></tr>`).join("")}<tr class="big"><td>Totaal incl. btw</td><td class="r">${eur(t.incl)}</td></tr></table>
+${pay}${inv.notes ? `<p>${esc(inv.notes).replace(/\n/g, "<br>")}</p>` : ""}
+<p class="muted">Alle prijzen zijn inclusief btw.</p>
+<div class="ft muted">${[esc(naam), L.kvk ? "KvK " + esc(L.kvk) : "", L.btwnr ? "Btw-nr. " + esc(L.btwnr) : "", L.iban ? "IBAN " + esc(L.iban) : "", L.website ? esc(L.website) : ""].filter(Boolean).join(" · ")}</div></body></html>`;
+}
+function finMailText(inv) {
+  const L = S.settings.locatie || {}, t = totals(inv.lines), credit = inv.type === "credit", naam = L.naam || "HC Tilburg Horeca";
+  return [`Beste ${inv.contact || inv.customer || "klant"},`, ``,
+    `In de bijlage vindt u ${credit ? "creditfactuur" : "factuur"} ${inv.number} van ${naam}${inv.eventDate ? ` voor het feest op ${longDate(inv.eventDate)}` : ""}. Het bedrag is ${eur(Math.abs(t.incl))}${credit ? " in uw voordeel" : ""}.`,
+    ...(!credit && !inv.paidOn && t.incl > 0 ? [`Wij verzoeken u dit vóór ${inv.dueDate ? longDate(inv.dueDate) : "de vervaldatum"} over te maken${L.iban ? ` op ${L.iban} ten name van ${naam}` : ""}, onder vermelding van ${inv.number}.`] : []),
+    ``, `Met vriendelijke groet,`, naam, ...[L.telefoon, L.email].filter(Boolean)].join("\n");
+}
+function finCsv(list) {
+  const n = x => finR2(x).toFixed(2).replace(".", ","), cell = v => { const s = String(v ?? ""); return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  const rows = [["Factuurnummer", "Factuurdatum", "Vervaldatum", "Soort", "Klant", "Offerte", "Datum feest", "Excl. btw", "Btw 9%", "Btw 21%", "Incl. btw", "Betaald op", "Creditering van"]];
+  for (const i of list) { const t = totals(i.lines); rows.push([i.number, i.date, i.dueDate, FIN_TYPES[i.type], i.customer, i.quoteNumber, i.eventDate, n(t.excl), n(t.btw[9] || 0), n(t.btw[21] || 0), n(t.incl), i.paidOn, i.creditOf ? S.invoices.get(i.creditOf)?.number || "" : ""]); }
+  return "﻿" + rows.map(r => r.map(cell).join(";")).join("\r\n");
+}
+
+/* Weergave Betalingen */
+function finRows() {
+  return finQuotes().map(q => {
+    const terms = finTerms(q), open = terms.filter(t => !t.paid);
+    return { q, terms, ev: finEventDate(q), tot: totals(q.lines).incl, open: open.reduce((s, t) => s + t.amount, 0), next: open.map(t => t.due).filter(Boolean).sort()[0] || "", late: open.some(t => t.late), lateAmt: open.filter(t => t.late).reduce((s, t) => s + t.amount, 0) };
+  });
+}
+const finChip = t => `<span class="chip ${t.paid ? "c1" : t.late ? "c3" : "c2"}" title="${esc(`${t.label}: ${eur(t.amount)}${t.paid ? ", betaald" + (t.paidOn ? " op " + shortDate(t.paidOn) : "") : t.due ? ", te ontvangen voor " + shortDate(t.due) : ""}${t.inv ? ", factuur " + t.inv.number : ""}`)}">${FIN_SHORT[t.key]} ${t.paid ? "✓" : t.late ? "te laat" : "open"}</span>`;
+function vBetalingen() {
+  const f = S.payFilter || "open", rows = finRows(), in30 = addDays(todayISO, 30);
+  const isOpen = x => x.open > 0.004 || x.terms.some(t => !t.paid);
+  const sel = rows.filter(x => f === "alle" ? true : f === "betaald" ? !isOpen(x) : f === "late" ? x.late : isOpen(x))
+    .sort((a, b) => f === "open" || f === "late" ? (a.ev || "9999").localeCompare(b.ev || "9999") : (b.ev || "").localeCompare(a.ev || ""));
+  const sumOpen = rows.reduce((s, x) => s + x.open, 0), sumLate = rows.reduce((s, x) => s + x.lateAmt, 0);
+  const soon = rows.reduce((s, x) => s + x.terms.filter(t => !t.paid && t.due && t.due >= todayISO && t.due <= in30).reduce((a, t) => a + t.amount, 0), 0);
+  const tabs = [["open", "Openstaand", rows.filter(isOpen).length], ["late", "Te laat", rows.filter(x => x.late).length], ["betaald", "Volledig betaald", rows.filter(x => !isOpen(x)).length], ["alle", "Alle", rows.length]];
+  let lastM = null;
+  const body = sel.map(x => {
+    const m = (x.ev || "").slice(0, 7);
+    const hdr = m !== lastM ? (lastM = m, `<tr class="fin-grp"><td colspan="6">${m ? esc(MONTHS[+m.slice(5) - 1] + " " + m.slice(0, 4)) : "Zonder feestdatum"}</td></tr>`) : "";
+    return hdr + `<tr class="click" data-payq="${esc(x.q.id)}"><td class="num">${x.ev ? esc(shortDate(x.ev)) : "–"}</td><td><b>${esc(x.q.customer || "(zonder naam)")}</b><br><span class="muted small">offerte ${esc(x.q.number || "")}${x.q.status !== "geaccepteerd" ? " · " + esc(x.q.status) : ""}</span></td><td class="r fin-sm-hide" style="white-space:nowrap">${eur(x.tot)}</td><td><span class="fin-terms">${x.terms.map(finChip).join("")}</span></td><td class="r" style="white-space:nowrap;${x.late ? "color:var(--bad);font-weight:600" : ""}">${x.open > 0.004 ? eur(x.open) : "–"}</td><td class="num" style="white-space:nowrap">${x.next ? esc(shortDate(x.next)) : x.open > 0.004 ? "Te bepalen" : "–"}</td></tr>`;
+  }).join("");
+  return `<section class="stack">
+    <div class="row spread"><h2>Betalingen</h2><div class="row"><button class="btn" data-v="facturen">Facturen</button><button class="btn ghost" id="fin-cfg">Betaalinstellingen</button></div></div>
+    <div class="panel stats">
+      <div class="stat pitch"><span class="eyebrow">Nog te ontvangen</span><b class="num">${eur(sumOpen)}</b><span class="muted small">${rows.filter(isOpen).length} feesten met een open termijn</span></div>
+      <div class="stat bar"><span class="eyebrow">Waarvan te laat</span><b class="num" style="${sumLate ? "color:var(--bad)" : ""}">${eur(sumLate)}</b><span class="muted small">${rows.filter(x => x.late).length} feesten</span></div>
+      <div class="stat club"><span class="eyebrow">Komende 30 dagen</span><b class="num">${eur(soon)}</b><span class="muted small">termijnen die vervallen</span></div>
+    </div>
+    <div class="ptabs" role="group" aria-label="Welke feesten">${tabs.map(([k, l, n]) => `<button type="button" data-payf="${k}" aria-pressed="${k === f}">${l}<span class="muted">${n}</span></button>`).join("")}</div>
+    <div class="panel tbl-wrap">${sel.length ? `<table><thead><tr><th>Feest</th><th>Klant</th><th class="r fin-sm-hide">Totaal</th><th>Termijnen</th><th class="r">Nog te ontvangen</th><th>Volgende betaling</th></tr></thead><tbody>${body}</tbody></table>`
+      : `<p class="empty">${rows.length ? "Geen feesten in deze lijst." : "Nog geen geaccepteerde offertes. Zodra een offerte op geaccepteerd staat, verschijnen hier de termijnen."}</p>`}</div>
+    <p class="small muted" style="margin:0">Klik op een feest om een termijn als betaald te markeren of er een factuur van te maken. Aanbetaling standaard 30%, per offerte of vaste klant aan te passen.</p>
+  </section>`;
+}
+const finAppLinks = () => document.querySelectorAll("#app [data-v]").forEach(b => b.onclick = () => { if (b.dataset.tab) S.instTab = b.dataset.tab; setView(b.dataset.v); });
+after.betalingen = () => {
+  finAppLinks();
+  document.querySelectorAll("[data-payf]").forEach(b => b.onclick = () => { S.payFilter = b.dataset.payf; render(); });
+  document.querySelectorAll("[data-payq]").forEach(el => el.onclick = () => finOpenPay(el.dataset.payq));
+  $("#fin-cfg").onclick = finOpenCfg;
+};
+function finOpenPay(qid) {
+  const q = S.quotes.get(qid); if (!q) return;
+  const terms = finTerms(q), ro = S.readOnly ? "disabled" : "", tot = totals(q.lines).incl, cfg = finCfg(), ev = finEventDate(q);
+  const got = terms.filter(t => t.paid).reduce((s, t) => s + t.amount, 0), anyInv = terms.some(t => t.inv);
+  $("#modal-root").innerHTML = `
+  <div class="scrim" id="scrim"><div class="modal" role="dialog" aria-label="Betalingen">
+    <div class="row spread"><h2>Betalingen · ${esc(q.customer || "")}</h2><button type="button" class="btn ghost" id="fp-x" aria-label="Sluiten">✕</button></div>
+    <div class="row spread"><span>Offerte <b>${esc(q.number || "")}</b>${ev ? ` · feest ${esc(longDate(ev))}` : ""} · totaal <b>${eur(tot)}</b></span><button type="button" class="btn ghost small" id="fp-q">Offerte openen</button></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Termijn</th><th class="r">Bedrag</th><th>Te ontvangen voor</th><th>Factuur</th><th>Betaald</th></tr></thead><tbody>
+      ${terms.map(t => `<tr><td><b>${esc(t.label)}</b>${t.late ? `<br><span class="chip c3">te laat</span>` : ""}</td><td class="r">${eur(t.amount)}</td><td class="num">${t.due ? esc(shortDate(t.due)) : "Te bepalen"}</td>
+        <td>${t.inv ? `<button type="button" class="btn ghost small" data-pinv="${esc(t.inv.id)}">${esc(t.inv.number)}</button>` : t.amount > 0 ? `<button type="button" class="btn small" data-pmake="${t.key}" ${ro}>Factuur maken</button>` : "–"}</td>
+        <td><div class="row" style="flex-wrap:nowrap;gap:6px"><label class="check small"><input type="checkbox" data-ppaid="${t.key}" ${t.paid ? "checked" : ""} ${ro}> Betaald</label><input type="date" data-pdate="${t.key}" value="${esc(t.paidOn)}" aria-label="Betaald op" style="width:auto" ${ro}></div></td></tr>`).join("")}
+    </tbody></table></div>
+    <div class="tot"><span class="muted">Ontvangen</span><span>${eur(got)}</span><span class="big">Nog te ontvangen</span><span class="big">${eur(tot - got)}</span></div>
+    <details class="stack"><summary>Termijnen aanpassen</summary>
+      <div class="fields" style="margin-top:10px">
+        <label class="f"><span>Aanbetaling (%)</span><input type="number" min="0" max="100" id="fp-dp" value="${esc(finNum(q.depositPct, 30))}" ${ro}></label>
+        <label class="f"><span>2e betaling (%)</span><input type="number" min="0" max="100" id="fp-sp" value="${esc(finNum(q.secondPct, finNum(cfg.secondPct, 0)))}" ${ro}></label>
+        <label class="f"><span>2e betaling uiterlijk (weken voor het feest)</span><input type="number" min="0" id="fp-sw" value="${esc(finNum(q.secondWeeks, finNum(cfg.secondWeeks, 4)))}" ${ro}></label>
+      </div>
+      ${anyInv ? `<p class="small muted" style="margin:0">Facturen die al gemaakt zijn veranderen niet mee. Crediteer een factuur eerst als het bedrag anders moet.</p>` : ""}
+      <div class="row"><button type="button" class="btn" id="fp-save" ${ro}>Termijnen opslaan</button></div>
+    </details>
+  </div></div>`;
+  document.body.style.overflow = "hidden";
+  const again = () => { render(); finOpenPay(qid); };
+  $("#fp-x").onclick = closeModal;
+  $("#scrim").addEventListener("mousedown", e => { if (e.target.id === "scrim") closeModal(); });
+  $("#fp-q").onclick = () => { closeModal(); S.quoteOpen = q.id; setView("off"); };
+  document.querySelectorAll("[data-pinv]").forEach(b => b.onclick = () => finOpenInvoice(b.dataset.pinv));
+  document.querySelectorAll("[data-pmake]").forEach(b => b.onclick = async () => { b.disabled = true; const inv = await finMakeInvoice(S.quotes.get(qid), b.dataset.pmake); render(); if (inv) finOpenInvoice(inv.id); else again(); });
+  document.querySelectorAll("[data-ppaid]").forEach(cb => cb.onchange = async () => {
+    const k = cb.dataset.ppaid, d = document.querySelector(`[data-pdate="${k}"]`);
+    if (cb.checked && !d.value) d.value = todayISO;
+    if (await finSetPaid(S.quotes.get(qid), k, cb.checked ? d.value : "")) { toast(cb.checked ? "Betaling geregistreerd" : "Betaling weer open"); again(); }
+  });
+  document.querySelectorAll("[data-pdate]").forEach(d => d.onchange = async () => {
+    const k = d.dataset.pdate, cb = document.querySelector(`[data-ppaid="${k}"]`);
+    if (!d.value) return;
+    if (await finSetPaid(S.quotes.get(qid), k, d.value)) { cb.checked = true; again(); }
+  });
+  $("#fp-save").onclick = async () => {
+    const dp = Math.min(100, Math.max(0, +$("#fp-dp").value || 0)), sp = Math.min(100 - dp, Math.max(0, +$("#fp-sp").value || 0)), sw = Math.max(0, +$("#fp-sw").value || 0);
+    const patch = { depositPct: dp, secondPct: sp, secondWeeks: sw, updatedAt: new Date().toISOString() };
+    if (await write("quotes/" + q.id, patch, "update")) { const cur = S.quotes.get(q.id); if (cur) Object.assign(cur, patch); toast("Termijnen opgeslagen"); again(); }
+  };
+}
+
+/* Weergave Facturen */
+function vFacturen() {
+  const make = finToMake(), all = finInvoices();
+  const f = S.invFilter || (make.length ? "maken" : "open"), y = S.invYear || "alle";
+  const years = [...new Set([String(new Date().getFullYear()), ...all.map(i => (i.date || "").slice(0, 4)).filter(Boolean)])].sort().reverse();
+  const st = i => finInvStatus(i).k, inYear = i => y === "alle" || (i.date || "").startsWith(y);
+  const lists = { open: all.filter(i => st(i) === "open" || st(i) === "late"), late: all.filter(i => st(i) === "late"), betaald: all.filter(i => st(i) === "betaald"), credit: all.filter(i => i.type === "credit" || i.creditedBy), alle: all };
+  const sel = (lists[f] || []).filter(i => f === "open" || f === "late" ? true : inYear(i)).sort((a, b) => String(b.number).localeCompare(String(a.number)));
+  const L = S.settings.locatie || {}, missing = [["IBAN", L.iban], ["KvK-nummer", L.kvk], ["btw-nummer", L.btwnr]].filter(([, v]) => !String(v || "").trim()).map(([k]) => k);
+  const tabs = [["maken", "Nog te maken", make.length], ["open", "Openstaand", lists.open.length], ["late", "Te laat", lists.late.length], ["betaald", "Betaald", lists.betaald.length], ["credit", "Credit", lists.credit.length], ["alle", "Alle facturen", all.length]];
+  const sumOpen = lists.open.reduce((s, i) => s + totals(i.lines).incl, 0);
+  return `<section class="stack">
+    <div class="row spread"><h2>Facturen</h2><div class="row">
+      <select id="inv-year" style="width:auto" aria-label="Jaar"><option value="alle">Alle jaren</option>${years.map(x => `<option ${x === y ? "selected" : ""}>${x}</option>`).join("")}</select>
+      <button class="btn" id="inv-csv">Exporteren voor de boekhouding</button><button class="btn ghost" id="fin-cfg">Betaalinstellingen</button></div></div>
+    ${missing.length ? `<div class="warnbox warn row spread"><span>Vul ${esc(missing.join(", ").replace(/, ([^,]*)$/, " en $1"))} in bij Instellingen → Algemeen, dan staan ze op elke factuur.</span><button type="button" class="btn small" data-v="inst" data-tab="locatie">Naar Algemeen</button></div>` : ""}
+    <div class="ptabs" role="group" aria-label="Welke facturen">${tabs.map(([k, l, n]) => `<button type="button" data-invf="${k}" aria-pressed="${k === f}">${l}<span class="muted">${n}</span></button>`).join("")}</div>
+    ${f === "maken" ? `<div class="panel tbl-wrap">${make.length ? `<table><thead><tr><th>Feest</th><th>Klant</th><th>Termijn</th><th class="r">Bedrag</th><th>Te ontvangen voor</th><th></th></tr></thead><tbody>
+      ${make.map(({ q, t }) => `<tr><td class="num">${finEventDate(q) ? esc(shortDate(finEventDate(q))) : "–"}</td><td><b>${esc(q.customer || "")}</b><br><span class="muted small">offerte ${esc(q.number || "")}</span></td><td>${esc(FIN_TYPES[t.key])}</td><td class="r">${eur(t.amount)}</td><td class="num">${t.due ? esc(shortDate(t.due)) : "–"}</td><td class="r"><button class="btn primary small" data-imake="${esc(q.id)}:${t.key}" ${S.readOnly ? "disabled" : ""}>Maken</button></td></tr>`).join("")}
+      </tbody></table>` : `<p class="empty">Er hoeven nu geen facturen gemaakt te worden. Aanbetalingsfacturen verschijnen hier zodra een offerte geaccepteerd is, de eindfactuur vanaf de dag van het feest.</p>`}</div>`
+    : `<div class="panel tbl-wrap">${sel.length ? `<table><thead><tr><th>Nummer</th><th>Datum</th><th>Klant</th><th>Soort</th><th class="r">Bedrag</th><th>Status</th></tr></thead><tbody>
+      ${sel.map(i => { const s = finInvStatus(i); return `<tr class="click" data-inv="${esc(i.id)}"><td class="num"><b>${esc(i.number)}</b></td><td class="num">${i.date ? esc(shortDate(i.date)) : ""}</td><td>${esc(i.customer || "")}${i.eventDate ? `<br><span class="muted small">feest ${esc(shortDate(i.eventDate))}</span>` : ""}</td><td>${esc(FIN_TYPES[i.type] || i.type)}</td><td class="r">${eur(totals(i.lines).incl)}</td><td><span class="chip ${s.cls}">${esc(s.txt)}</span></td></tr>`; }).join("")}
+      </tbody></table>${f === "open" || f === "late" ? `<p class="small muted" style="margin:8px 0 0">Totaal openstaand: <b>${eur(f === "open" ? sumOpen : sel.reduce((s, i) => s + totals(i.lines).incl, 0))}</b></p>` : ""}` : `<p class="empty">Geen facturen in deze lijst.</p>`}</div>`}
+  </section>`;
+}
+after.facturen = () => {
+  finAppLinks();
+  document.querySelectorAll("[data-invf]").forEach(b => b.onclick = () => { S.invFilter = b.dataset.invf; render(); });
+  $("#inv-year").onchange = e => { S.invYear = e.target.value; render(); };
+  document.querySelectorAll("[data-inv]").forEach(el => el.onclick = () => finOpenInvoice(el.dataset.inv));
+  document.querySelectorAll("[data-imake]").forEach(b => b.onclick = async () => { const [qid, k] = b.dataset.imake.split(":"); b.disabled = true; const inv = await finMakeInvoice(S.quotes.get(qid), k); render(); if (inv) finOpenInvoice(inv.id); });
+  $("#inv-csv").onclick = () => {
+    const y = S.invYear || "alle", list = finInvoices().filter(i => y === "alle" || (i.date || "").startsWith(y)).sort((a, b) => String(a.number).localeCompare(String(b.number)));
+    if (!list.length) { toast("Er zijn nog geen facturen om te exporteren"); return; }
+    saveFile(`facturen-${y}.csv`, finCsv(list), "text/csv");
+  };
+  $("#fin-cfg").onclick = finOpenCfg;
+};
+function finOpenInvoice(id) {
+  const inv = S.invoices.get(id); if (!inv) return;
+  const s = finInvStatus(inv), t = totals(inv.lines), ro = S.readOnly ? "disabled" : "", credit = inv.type === "credit";
+  const canDel = !S.readOnly && !inv.paidOn && !inv.creditedBy && finIsLastNumber(inv);
+  const mail = inv.email ? `mailto:${encodeURIComponent(inv.email)}?subject=${encodeURIComponent(`${credit ? "Creditfactuur" : "Factuur"} ${inv.number} – ${(S.settings.locatie || {}).naam || "HC Tilburg Horeca"}`)}&body=${encodeURIComponent(finMailText(inv))}` : "";
+  $("#modal-root").innerHTML = `
+  <div class="scrim" id="scrim"><div class="modal fin-modal" role="dialog" aria-label="Factuur">
+    <div class="row spread"><h2>${esc(FIN_TYPES[inv.type] || "Factuur")} ${esc(inv.number)}</h2><button type="button" class="btn ghost" id="fi-x" aria-label="Sluiten">✕</button></div>
+    <div class="row spread"><span><b>${esc(inv.customer || "")}</b> · ${eur(t.incl)} · <span class="chip ${s.cls}">${esc(s.txt)}</span></span>
+      <span class="row">${inv.quoteId && S.quotes.has(inv.quoteId) ? `<button type="button" class="btn ghost small" id="fi-pay">Betalingen van dit feest</button>` : ""}</span></div>
+    <iframe class="fin-prev" title="Voorbeeld van de factuur" srcdoc="${esc(invoiceHtml(inv))}"></iframe>
+    <div class="row">
+      <button type="button" class="btn primary" id="fi-dl">Downloaden</button>
+      <button type="button" class="btn" id="fi-print">Printen</button>
+      ${mail ? `<a class="btn" id="fi-mail" href="${esc(mail)}" target="_blank" rel="noopener">Mailen</a>` : `<span class="small muted">Geen e-mailadres bij deze klant</span>`}
+      <button type="button" class="btn" id="fi-copy">Mailtekst kopiëren</button>
+    </div>
+    ${mail ? `<p class="small muted" style="margin:-6px 0 0">Mailen opent je mailprogramma met de tekst al ingevuld. Download de factuur eerst en voeg hem toe als bijlage.</p>` : ""}
+    <div class="fields">
+      <label class="f"><span>Factuurdatum</span><input type="date" id="fi-date" value="${esc(inv.date)}" ${ro}></label>
+      ${credit ? "" : `<label class="f"><span>Vervaldatum</span><input type="date" id="fi-due" value="${esc(inv.dueDate)}" ${ro}></label>`}
+      <label class="f"><span>${credit ? "Verrekend of teruggestort op" : "Betaald op"}</span><input type="date" id="fi-paid" value="${esc(inv.paidOn)}" ${ro}></label>
+    </div>
+    <label class="f"><span>Opmerking op de factuur</span><textarea id="fi-notes" ${ro} placeholder="bijv. referentie of kostenplaats van de klant">${esc(inv.notes)}</textarea></label>
+    <div class="row spread">
+      <span class="row">
+        ${!credit && !inv.creditedBy ? `<button type="button" class="btn danger" id="fi-credit" ${ro}>Crediteren</button>` : ""}
+        ${canDel ? `<span class="row" id="fi-delwrap"><button type="button" class="btn ghost" id="fi-del">Verwijderen</button><span id="fi-delc" hidden class="row"><span class="small">Zeker weten?</span><button type="button" class="btn danger" id="fi-del2">Ja, verwijder</button></span></span>` : ""}
+      </span>
+      <span class="row">${inv.paidOn ? `<button type="button" class="btn" id="fi-unpaid" ${ro}>Toch niet betaald</button>` : `<button type="button" class="btn" id="fi-markpaid" ${ro}>${credit ? "Verrekend" : "Betaald"} vandaag</button>`}<button type="button" class="btn primary" id="fi-save" ${ro}>Opslaan</button></span>
+    </div>
+    ${!credit && !inv.creditedBy ? `<p class="small muted" style="margin:0">Klopt het bedrag niet meer? Crediteer de factuur en maak daarna een nieuwe. Alleen de laatst gemaakte, nog niet betaalde factuur kun je verwijderen.</p>` : ""}
+  </div></div>`;
+  document.body.style.overflow = "hidden";
+  const again = () => { render(); finOpenInvoice(id); };
+  $("#fi-x").onclick = closeModal;
+  $("#scrim").addEventListener("mousedown", e => { if (e.target.id === "scrim") closeModal(); });
+  const fp = $("#fi-pay"); if (fp) fp.onclick = () => finOpenPay(inv.quoteId);
+  $("#fi-dl").onclick = () => saveFile(`${credit ? "creditfactuur" : "factuur"}-${inv.number}.html`, invoiceHtml(S.invoices.get(id) || inv), "text/html");
+  $("#fi-print").onclick = () => { try { const w = $(".fin-prev").contentWindow; w.focus(); w.print(); } catch (e) { toast("Printen lukt hier niet. Download de factuur en print hem vanuit je browser."); } };
+  $("#fi-copy").onclick = async () => { const txt = finMailText(S.invoices.get(id) || inv); try { await navigator.clipboard.writeText(txt); toast("Mailtekst gekopieerd"); } catch (e) { const ta = document.createElement("textarea"); ta.value = txt; ta.style.minHeight = "180px"; $("#fi-notes").closest("label").after(ta); ta.select(); toast("Selecteer en kopieer de tekst"); } };
+  const paidNow = async v => { if (await finSetInvoicePaid(S.invoices.get(id), v)) { toast(v ? "Factuur staat op betaald" : "Factuur staat weer open"); again(); } };
+  const mp = $("#fi-markpaid"); if (mp) mp.onclick = () => paidNow(todayISO);
+  const up = $("#fi-unpaid"); if (up) up.onclick = () => paidNow("");
+  $("#fi-save").onclick = async () => {
+    const cur = S.invoices.get(id), paid = $("#fi-paid").value;
+    const patch = { date: $("#fi-date").value || cur.date, notes: $("#fi-notes").value, updatedAt: new Date().toISOString() };
+    const due = $("#fi-due"); if (due) patch.dueDate = due.value;
+    if (!(await write("invoices/" + id, patch, "update"))) return;
+    Object.assign(S.invoices.get(id) || {}, patch);
+    if (paid !== (cur.paidOn || "")) await finSetInvoicePaid(S.invoices.get(id), paid);
+    toast("Factuur opgeslagen"); again();
+  };
+  const cr = $("#fi-credit"); if (cr) cr.onclick = async () => { cr.disabled = true; const c = await finMakeInvoice(inv.quoteId ? S.quotes.get(inv.quoteId) || null : null, "credit", S.invoices.get(id)); render(); if (c) finOpenInvoice(c.id); };
+  const dl = $("#fi-del"); if (dl) dl.onclick = () => { $("#fi-delc").hidden = false; dl.hidden = true; };
+  const dl2 = $("#fi-del2"); if (dl2) dl2.onclick = async () => {
+    if (!(await write("invoices/" + id, null, "delete"))) return;
+    S.invoices.delete(id);
+    if (inv.creditOf && S.invoices.has(inv.creditOf)) { await write("invoices/" + inv.creditOf, { creditedBy: "" }, "update"); S.invoices.get(inv.creditOf).creditedBy = ""; }
+    closeModal(); render(); toast(`Factuur ${inv.number} verwijderd`);
+  };
+}
+function finOpenCfg() {
+  const c = finCfg(), ro = S.readOnly ? "disabled" : "";
+  $("#modal-root").innerHTML = `
+  <div class="scrim" id="scrim"><form class="modal" id="fc-form" aria-label="Betaalinstellingen">
+    <div class="row spread"><h2>Betaalinstellingen</h2><button type="button" class="btn ghost" id="fc-x" aria-label="Sluiten">✕</button></div>
+    <div class="fields">
+      <label class="f"><span>Begin van het factuurnummer</span><input id="fc-prefix" value="${esc(c.prefix)}" maxlength="8" ${ro}><span class="small muted" style="font-weight:400">Daarna jaar en volgnummer, bijv. ${esc(String(c.prefix || "") + todayISO.slice(2, 4))}0001</span></label>
+      <label class="f"><span>Betaaltermijn (dagen)</span><input id="fc-term" type="number" min="0" value="${esc(c.termijnDagen)}" ${ro}><span class="small muted" style="font-weight:400">Een vaste klant kan een eigen termijn hebben</span></label>
+    </div>
+    <div class="fields">
+      <label class="f"><span>Standaard 2e betaling (%)</span><input id="fc-sp" type="number" min="0" max="100" value="${esc(c.secondPct)}" ${ro}><span class="small muted" style="font-weight:400">0 = geen 2e betaling</span></label>
+      <label class="f"><span>2e betaling uiterlijk (weken voor het feest)</span><input id="fc-sw" type="number" min="0" value="${esc(c.secondWeeks)}" ${ro}></label>
+    </div>
+    <p class="small muted" style="margin:0">De aanbetaling (standaard 30%) stel je in op de offerte of bij een vaste klant. Bedrijfsgegevens, IBAN en voorwaarden staan bij Instellingen → Algemeen.</p>
+    <div class="row spread"><span></span><button type="submit" class="btn primary" ${ro}>Opslaan</button></div>
+  </form></div>`;
+  document.body.style.overflow = "hidden";
+  $("#fc-x").onclick = closeModal;
+  $("#scrim").addEventListener("mousedown", e => { if (e.target.id === "scrim") closeModal(); });
+  $("#fc-form").onsubmit = async e => {
+    e.preventDefault();
+    const betaal = { prefix: $("#fc-prefix").value.trim().replace(/\s+/g, ""), termijnDagen: Math.max(0, +$("#fc-term").value || 0), secondPct: Math.min(100, Math.max(0, +$("#fc-sp").value || 0)), secondWeeks: Math.max(0, +$("#fc-sw").value || 0) };
+    const s = JSON.parse(JSON.stringify({ ...S.settings, locatie: { ...(S.settings.locatie || {}), betaal } }));
+    if (await write("settings/main", s)) { S.settings = normSettings(s); closeModal(); render(); toast("Betaalinstellingen opgeslagen"); }
+  };
+}
+
+/* Haakjes in bestaande onderdelen */
+// Offerte-totaal: bij een 2e betaling drie termijnen tonen in plaats van aanbetaling + restant.
+const _totHtmlFin = totHtml;
+totHtml = function (t, q) {
+  if (!q || !(finNum(q.secondPct, finNum(finCfg().secondPct, 0)) > 0)) return _totHtmlFin(t, q);
+  return _totHtmlFin(t, { ...q, depositPct: 0 }) + finTerms(q).map(x => `<span>${esc(x.label)}${x.paid ? " · betaald" : ""}</span><span>${eur(x.amount)}</span>`).join("");
+};
+// Datum van accepteren onthouden: daarop rekent de betaaltermijn van de aanbetaling.
+const _logQuoteStatusFin = logQuoteStatus;
+logQuoteStatus = async function (q, before) {
+  if (q && q.status === "geaccepteerd" && before !== "geaccepteerd" && !q.acceptedOn) {
+    const patch = { acceptedOn: todayISO, ...finFreeze(q) };
+    Object.assign(q, patch);
+    if (await write("quotes/" + q.id, patch, "update")) { const cur = S.quotes.get(q.id); if (cur) Object.assign(cur, patch); }
+  }
+  return _logQuoteStatusFin(q, before);
+};
+VIEWS.betalingen = () => vBetalingen();
+VIEWS.facturen = () => vFacturen();
+delete SOON.betalingen; delete SOON.facturen;
+(() => {
+  const fin = MENU.find(m => m.id === "fin"); if (!fin) return;
+  const it = k => fin.items.find(x => x.v === k);
+  if (it("betalingen")) it("betalingen").cnt = () => finRows().filter(x => x.late).length;
+  if (it("facturen")) it("facturen").cnt = () => finToMake().length;
+})();
 boot();
 })();
 </script>
