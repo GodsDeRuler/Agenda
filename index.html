@@ -828,6 +828,29 @@ tr.fin-grp td { background: var(--sunk); font-weight: 600; font-size: .8rem; pad
       return null;
     },
   });
+  /* ---------- foto's (alleen in de webversie) ----------
+   * hctFotoUpload(file, map) zet een afbeelding in de publieke bucket "ruimte-fotos" en geeft de publieke url terug.
+   * hctFotoVerwijder(url) haalt een eerder geüploade foto weg. Fouten krijgen dezelfde codes als de db. */
+  const BUCKET = "ruimte-fotos";
+  window.hctFotoUpload = async (file, map = "algemeen") => {
+    await klaarP;
+    if (!(file instanceof Blob) || !/^image\/(jpeg|png|webp)$/.test(file.type)) { const f = new Error("Alleen jpg, png of webp"); f.code = "invalid_argument"; throw f; }
+    if (file.size > 5 * 1024 * 1024) { const f = new Error("Foto is groter dan 5 MB"); f.code = "invalid_argument"; throw f; }
+    const ext = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" }[file.type];
+    const pad = `${String(map).replace(/[^a-z0-9_-]/gi, "-")}/${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const { error } = await sb.storage.from(BUCKET).upload(pad, file, { contentType: file.type, cacheControl: "31536000", upsert: false });
+    if (error) throw fout({ ...error, status: +error.statusCode || error.status });
+    return sb.storage.from(BUCKET).getPublicUrl(pad).data.publicUrl;
+  };
+  window.hctFotoVerwijder = async url => {
+    await klaarP;
+    const pre = sb.storage.from(BUCKET).getPublicUrl("").data.publicUrl;
+    if (!String(url || "").startsWith(pre)) return false; // geen foto uit onze bucket: niets te doen
+    const { error } = await sb.storage.from(BUCKET).remove([decodeURIComponent(url.slice(pre.length))]);
+    if (error) throw fout({ ...error, status: +error.statusCode || error.status });
+    return true;
+  };
+
   window.HCT_SB = sb; // handig voor beheer via de browserconsole
 })();
 
