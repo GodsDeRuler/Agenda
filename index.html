@@ -9318,6 +9318,38 @@ try {
 } catch (e) {}
 const _setViewNc = setView;
 setView = function (v) { if (v !== "event") ncDraft = null; _setViewNc(v); };
+/* ---------- Blokkade alleen op wedstrijddagen ---------- */
+// Gemaakt door de thread "Ruimtes toevoegen" (9 okt 2026). Uitleg: ruimtes/wedstrijdblokkade/wedstrijdblokkade-integratie.md.
+// Michel: het weekend is alleen dicht als er wedstrijden zijn. Een blokkade met alleenWedstrijddag: true geldt daarom alleen
+// op dagen met minstens één thuiswedstrijd in de geïmporteerde LISA-wedstrijden (matches/<datum>). Zonder het veld gedragen
+// de weekendblokkades (blocks/weekend-zaterdag en blocks/weekend-zondag) zich ook zo.
+const WD_DEFAULT_BLOCKS = ["weekend-zaterdag", "weekend-zondag"];
+const blockMatchOnly = b => !!b && (b.alleenWedstrijddag ?? WD_DEFAULT_BLOCKS.includes(b.id));
+const _blocksOnWD = blocksOn;
+blocksOn = function (date) {
+  const out = _blocksOnWD(date);
+  if (!out.some(blockMatchOnly)) return out;
+  const wedstrijddag = homeMatches(date).length > 0;
+  return out.filter(b => wedstrijddag || !blockMatchOnly(b));
+};
+// Blokkadeformulier: vinkje "Alleen op dagen met thuiswedstrijden". Het formulier zelf bewaart alleen zijn eigen velden,
+// dus de keuze gaat via een kleine wrapper om write mee met het opslaan van blocks/<id>.
+let wdPending = null;
+const _openBlockWD = openBlock;
+openBlock = function (b0) {
+  wdPending = null;
+  _openBlockWD(b0);
+  const anchor = $("#bf-extern")?.closest("label") || $("#bf-weekly")?.closest(".fields");
+  const form = $("#blk-form");
+  if (!anchor || !form) return;
+  anchor.insertAdjacentHTML("afterend", `<label class="check small"><input type="checkbox" id="bf-wedstrijd" ${blockMatchOnly(b0) ? "checked" : ""} ${S.readOnly ? "disabled" : ""}> Alleen op dagen met thuiswedstrijden (uit de LISA-import)</label>`);
+  form.addEventListener("submit", () => { wdPending = !!$("#bf-wedstrijd")?.checked; setTimeout(() => { wdPending = null; }); }, true);
+};
+const _writeWD = write;
+write = async function (path, data, mode = "set") {
+  if (wdPending !== null && /^blocks\//.test(path) && data && mode !== "delete") { data = { ...data, alleenWedstrijddag: wdPending }; wdPending = null; }
+  return _writeWD(path, data, mode);
+};
 boot();
 })();
 </script>
