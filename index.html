@@ -388,6 +388,28 @@ td.r, th.r { text-align: right; font-variant-numeric: tabular-nums; }
 .pcat-h { margin: 6px 0 0; }
 .psub { grid-column: 1 / -1; margin: 4px 0 -2px; }
 @media (prefers-reduced-motion: no-preference) { .day, .btn { transition: border-color .12s; } }
+/* Klanten extra */
+.cx-top { flex-wrap: wrap; gap: 6px; }
+.cx-tag { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 3px 10px; font: inherit; font-size: .82rem; cursor: pointer; color: var(--fg); }
+.cx-tag span { margin-left: 6px; font-size: .74rem; }
+.cx-tag[aria-pressed="true"] { background: var(--teal); border-color: var(--teal); color: #fff; }
+.cx-tag[aria-pressed="true"] span { color: inherit; opacity: .8; }
+.cx-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 3; border-color: var(--teal); }
+.cx-tbl .cx-c { width: 1%; white-space: nowrap; text-align: center; }
+.cx-tbl .cx-c input { width: auto; accent-color: var(--teal); }
+.cx-star, .cx-mood { background: none; border: 0; padding: 2px 4px; font-size: 1.1rem; line-height: 1; cursor: pointer; color: var(--muted); }
+.cx-star.on { color: #e0a100; }
+span.cx-star { font-size: 1.2rem; }
+.cx-rang { display: inline-block; min-width: 22px; padding: 1px 6px; border-radius: 4px; font-weight: 700; font-size: .8rem; background: var(--bg); }
+.cx-rang.rA { background: var(--pitch-soft, #e3f2e6); color: var(--pitch, #2e7d32); }
+.cx-rang.rB { background: var(--teal-soft); color: var(--teal); }
+.cx-av { border-radius: 50%; object-fit: cover; flex: none; vertical-align: middle; }
+.cx-ini { display: inline-flex; align-items: center; justify-content: center; background: var(--teal-soft); color: var(--teal); font-weight: 700; }
+td.cx-name { display: flex; gap: 10px; align-items: flex-start; }
+td.cx-name > .cx-av { margin-top: 2px; }
+.cx-card { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+.cx-photo { display: flex; gap: 12px; align-items: center; }
+.cx-favbtn.on { color: #b07d00; border-color: #e0a100; }
 /* Rapporten */
 #rp-sel { max-width: 100%; }
 /* Vragen en omzetgarantie */
@@ -8027,6 +8049,119 @@ document.head.insertAdjacentHTML("beforeend", `<style id="rq9-style">
 #zp { min-width: 0; }
 @media (max-width: 760px) { .zp-card { grid-template-columns: 1fr; } .zp-title { font-size: 1.4rem; } }
 </style>`);
+/* ---------- Eventdossier: Gegevens per dag (notities klant/intern/keuken), Betalingen met referentie en betaald-venster, offerte als Excel ---------- */
+const evDays = r => [r.date, ...((r.extraDays || []).map(x => x.date))].filter(Boolean);
+DOSSIER_TABS.gegevens = {
+  l: "Gegevens",
+  html: r => {
+    const ro = S.readOnly ? "disabled" : "", N = r.dayNotes || {};
+    return `<p class="small muted" style="margin-top:0">Notities per dag. Die voor de klant staan op het draaiboek voor de klant, die voor de keuken op de keukensheet, en de interne op het interne draaiboek.</p>
+      ${evDays(r).map(ds => { const n = N[ds] || {}; return `<div class="evday stack"><h3>${esc(longDate(ds))}</h3><div class="evgrid3">
+        ${[["klant", "Notitie voor de klant"], ["intern", "Interne notitie"], ["keuken", "Notitie voor de keuken"]].map(([k, l]) => `<label class="f"><span>${l}</span><textarea rows="4" data-dn="${esc(ds)}:${k}" ${ro}>${esc(n[k] || "")}</textarea></label>`).join("")}</div></div>`; }).join("")}`;
+  },
+  after: (r, upd) => {
+    document.querySelectorAll("[data-dn]").forEach(el => el.addEventListener("change", () => {
+      const [ds, k] = el.dataset.dn.split(":"), N = structuredClone(r.dayNotes || {}); N[ds] = { ...(N[ds] || {}), [k]: el.value };
+      upd({ dayNotes: N }, "Notitie opgeslagen");
+    }));
+  },
+};
+// Notities per dag op draaiboek (intern/klant) en keukensheet.
+let evPrintKind = "";
+{ const base = evPrint; evPrint = function (kind, r) { evPrintKind = kind; try { return base(kind, r); } finally { evPrintKind = ""; } }; }
+{
+  const base = dagSheet;
+  dagSheet = function (r) {
+    const h = base(r), k = evPrintKind === "keuken" ? "keuken" : evPrintKind === "klant" ? "klant" : evPrintKind === "intern" ? "intern" : "";
+    if (!k || !r || !r.dayNotes) return h;
+    const days = evDays(r).filter(ds => r.dayNotes[ds] && (r.dayNotes[ds][k] || "").trim()); if (!days.length) return h;
+    const t = { klant: "Notities", intern: "Interne notities per dag", keuken: "Notities voor de keuken" }[k];
+    return h + `<h2>${t}</h2>${days.map(ds => `<p><b>${esc(longDate(ds))}</b><br>${esc(r.dayNotes[ds][k].trim()).replace(/\n/g, "<br>")}</p>`).join("")}`;
+  };
+}
+// Offerte als Excel-bestand (Restau: Downloaden per event).
+PRINTS.push(["offerte-csv", "Offerte (Excel, .csv)"]);
+{
+  const base = evPrint;
+  evPrint = function (kind, r) {
+    if (kind !== "offerte-csv") return base(kind, r);
+    const q0 = evQuote(r); if (!q0) { toast("Er is nog geen offerte"); return; }
+    const q = q0.rq ? q0 : rqUpgrade(structuredClone(q0)), L = rqLines(q), n = v => String(Math.round((+v || 0) * 100) / 100).replace(".", ",");
+    const rows = [["Offerte", q.number || "", "Klant", q.customer || "", "Event", typeName(q.eventType), "Arrangement", q.arrangementName || ""], [],
+      ["Dag", "Tijd", "Gelegenheid", "Categorie", "Omschrijving", "Wie", "Aantal", "Stuksprijs", "Bruto", "Korting", "Totaal incl. btw", "Btw", "Totaal excl. btw", "Optioneel"]];
+    for (const l of L) { const t = l.qty * l.price; rows.push([l.day || q.eventDate || "", l.time || "", l.part || "", l.rqCat === "_tot" ? "Korting op totaal" : rqCatOfLine(l), l.rqDesc || l.desc, { adults: "volw.", kids: "kind.", qty: "stuk", hour: "uur", free: "" }[l.who] || "", n(l.qty), n(l.unitPrice ?? l.price), n(l.gross ?? t), n((l.gross ?? t) - t), n(t), btwLabel(l), n(rqEx(t, l)), l.optional ? "ja" : ""]); }
+    const tt = totals(L); rows.push([], ["", "", "", "", "Totaal excl. btw", "", "", "", "", "", "", "", n(tt.excl)], ["", "", "", "", "Totaal incl. btw", "", "", "", "", "", n(tt.incl)]);
+    const slug = `${r.date}-${(r.customer || "event").replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
+    return saveFile(`offerte-${q.number || slug}.csv`, "﻿" + rows.map(x => x.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\r\n"), "text/csv");
+  };
+}
+// Betalingen in het dossier (Restau: tabblad Facturen): referentie per termijn en een betaald-venster.
+DOSSIER_TABS.betalingen = {
+  html: r => {
+    const q = evQuote(r); if (!q) return `<p class="empty">Nog geen offerte.</p>`;
+    if (typeof finTerms !== "function") return dPay(r);
+    const ts = finTerms(q), ro = S.readOnly ? "disabled" : "", refs = q.refs || {}, by = q.paidBy || {}, tot = totals(q.lines).incl, got = ts.filter(t => t.paid).reduce((s, t) => s + t.amount, 0);
+    return `${q.status !== "geaccepteerd" ? `<p class="small muted">De offerte is nog niet geaccepteerd. Hieronder de termijnen zoals ze dan gaan gelden.</p>` : ""}
+      <div class="tbl-wrap"><table class="evlines evpay"><thead><tr><th>Termijn</th><th>Referentie</th><th class="r">Bedrag</th><th>Uiterlijk</th><th>Factuur</th><th>Status</th><th></th></tr></thead><tbody>
+      ${ts.map(t => `<tr><td><b>${esc(t.label)}</b></td><td><input data-pref="${t.key}" value="${esc(refs[t.key] || "")}" placeholder="bijv. inkoopnummer klant" aria-label="Referentie ${esc(t.label)}" ${ro}></td><td class="r">${eur(t.amount)}</td><td class="num">${t.due ? esc(shortDate(t.due)) : "–"}</td>
+        <td>${t.inv ? `<button type="button" class="btn ghost small" data-pinv2="${esc(t.inv.id)}">${esc(t.inv.number)}</button>` : "–"}</td>
+        <td>${t.paid ? `<span class="chip c1">betaald${t.paidOn ? " " + esc(shortDate(t.paidOn)) : ""}</span>${by[t.key] ? `<br><span class="small muted">ontvangen door ${esc(by[t.key])}</span>` : ""}` : t.late ? `<span class="chip c3">te laat</span>` : `<span class="chip c2">open</span>`}</td>
+        <td>${t.paid ? `<button type="button" class="btn ghost small" data-punpaid="${t.key}" ${ro}>Ongedaan</button>` : t.amount > 0 && q.status === "geaccepteerd" ? `<button type="button" class="btn small teal" data-ppay="${t.key}" ${ro}>Betaald</button>` : ""}</td></tr>`).join("")}
+      </tbody></table></div>
+      <div class="tot"><span class="muted">Ontvangen</span><span>${eur(got)}</span><span class="big">Nog te ontvangen</span><span class="big">${eur(tot - got)}</span></div>
+      ${q.status === "geaccepteerd" && typeof finOpenPay === "function" ? `<button class="btn" id="dp-open">Facturen maken en termijnen aanpassen</button>` : ""}`;
+  },
+  after: r => {
+    dPayWire(r);
+    const q = evQuote(r); if (!q) return;
+    document.querySelectorAll("[data-pinv2]").forEach(b => b.onclick = () => finOpenInvoice(b.dataset.pinv2));
+    document.querySelectorAll("[data-pref]").forEach(el => el.addEventListener("change", async () => {
+      const k = el.dataset.pref, refs = { ...(q.refs || {}), [k]: el.value.trim() };
+      if (!(await write("quotes/" + q.id, { refs, updatedAt: new Date().toISOString() }, "update"))) return;
+      q.refs = refs;
+      const t = finTerms(q).find(x => x.key === k);
+      if (t && t.inv) { const notes = rqRefNotes(t.inv.notes, refs[k]); if (await write("invoices/" + t.inv.id, { notes, updatedAt: new Date().toISOString() }, "update")) t.inv.notes = notes; }
+      toast("Referentie opgeslagen");
+    }));
+    document.querySelectorAll("[data-punpaid]").forEach(b => b.onclick = async () => { if (await finSetPaid(q, b.dataset.punpaid, "")) { toast("Betaling weer open"); render(); } });
+    document.querySelectorAll("[data-ppay]").forEach(b => b.onclick = () => rqPaidModal(q, b.dataset.ppay));
+  },
+};
+const rqRefNotes = (notes, ref) => { const rest = String(notes || "").split("\n").filter(x => !/^Uw referentie: /.test(x)).join("\n").trim(); return ref ? `Uw referentie: ${ref}${rest ? "\n" + rest : ""}` : rest; };
+function rqPaidModal(q, key) {
+  const t = finTerms(q).find(x => x.key === key); if (!t) return;
+  const mgrs = S.settings.locatie?.managers || [], mailOn = typeof S.mail === "object" && S.mail;
+  $("#modal-root").innerHTML = `<div class="scrim" id="scrim"><form class="modal stack" id="pd-form" aria-label="Betaald" style="max-width:460px">
+    <div class="row spread"><h2>Betaald · ${esc(t.label)}</h2><button type="button" class="btn ghost" id="pd-x" aria-label="Sluiten">✕</button></div>
+    <p style="margin:0">${esc(q.customer || "")} · ${eur(t.amount)}${t.inv ? " · factuur " + esc(t.inv.number) : ""}</p>
+    <label class="f"><span>Ontvangen door</span><input id="pd-by" list="pd-byl" value="${esc((q.paidBy || {})[key] || q.manager || "")}"><datalist id="pd-byl">${mgrs.map(m => `<option value="${esc(m)}">`).join("")}</datalist></label>
+    <label class="f"><span>Datum</span><input type="date" id="pd-date" value="${esc(todayISO)}" required></label>
+    ${mailOn ? `<p class="small muted" style="margin:0">De mail “Betaling ontvangen” komt klaar te staan in de outbox. Voeg daar de factuur als bijlage toe en verstuur hem, of sla hem over.</p>` : ""}
+    <div class="row spread"><button type="button" class="btn" id="pd-no">Annuleren</button><button type="submit" class="btn primary">Opslaan</button></div></form></div>`;
+  document.body.style.overflow = "hidden";
+  $("#pd-x").onclick = $("#pd-no").onclick = closeModal;
+  $("#pd-form").onsubmit = async e => {
+    e.preventDefault(); const d = $("#pd-date").value || todayISO, by = $("#pd-by").value.trim();
+    if (!(await finSetPaid(q, key, d))) return;
+    const paidBy = { ...(q.paidBy || {}), [key]: by };
+    if (await write("quotes/" + q.id, { paidBy, updatedAt: new Date().toISOString() }, "update")) q.paidBy = paidBy;
+    closeModal(); toast("Betaling geregistreerd"); render();
+  };
+}
+// Nieuwe factuur: referentie van de termijn erbij.
+if (typeof finMakeInvoice === "function") {
+  const base = finMakeInvoice;
+  finMakeInvoice = async function (q, type, src) {
+    const inv = await base(q, type, src), ref = q && q.refs && q.refs[type];
+    if (inv && ref) { const notes = rqRefNotes(inv.notes, ref); if (await write("invoices/" + inv.id, { notes, updatedAt: new Date().toISOString() }, "update")) inv.notes = notes; }
+    return inv;
+  };
+}
+document.head.insertAdjacentHTML("beforeend", `<style id="rq10-style">
+.evgrid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; } .evday + .evday { border-top: 1px solid var(--line, #ddd); padding-top: 10px; } .evday h3 { margin: 6px 0 0; }
+.evpay input { min-width: 150px; }
+@media (max-width: 760px) { .evgrid3 { grid-template-columns: 1fr; } }
+</style>`);
 /* ---------- einde offerte zoals Restau ---------- */
 
 /* ---------- Rapporten (naar voorbeeld van Restau: openstaand, facturen, aanbetalingen, arrangementen, event count, omzet bedrijven) ---------- */
@@ -8219,6 +8354,157 @@ VIEWS.rapporten = () => vRapporten();
   const short = { open: "Openstaande bedragen", facturen: "Openstaande facturen", aanbet: "Aanbetalingen", vooruit: "Vooruit ontvangen", arr: "Arrangementen", count: "Event count", bedrijven: "Omzet bedrijven" };
   st.items.push({ h: "Rapporten" }, ...RP_LIST.map(([v]) => ({ l: short[v], v: "rapporten", set: { rapport: v } })));
 })();
+/* ---------- Klanten extra: favoriet, rang, stemming, labels als filter, bulkacties en foto (naar voorbeeld van Restau) ---------- */
+/* Plakken in horeca-agenda.html binnen de IIFE, vóór de regel `boot();` (ná de klanten- en bedrijvenmodule). Zie klantextra-integratie.md.
+   Nieuwe velden op customers: fav (true/false), rang ("" = automatisch, of "A" | "B" | "C"), mood ("" | "blij" | "neutraal" | "ontevreden"), photo (kleine JPEG als data-URL). Geen nieuwe collectie. */
+const CX_MOODS = { blij: ["😊", "Tevreden"], neutraal: ["😐", "Neutraal"], ontevreden: ["☹️", "Ontevreden"] };
+const CX_MOOD_NEXT = { "": "blij", blij: "neutraal", neutraal: "ontevreden", ontevreden: "" };
+const cxSel = new Set();
+// Rang A/B/C op omzet uit geaccepteerde offertes: A = bovenste 20% van de klanten met omzet, B = de volgende 30%, C = de rest. Een vaste rang op de klantkaart gaat voor.
+function cxAutoRanks() {
+  const xs = [...S.customers.values()].map(c => ({ id: c.id, o: custData(c).omzet })).filter(x => x.o > 0).sort((a, b) => b.o - a.o), out = new Map();
+  xs.forEach((x, i) => out.set(x.id, i < Math.ceil(xs.length * 0.2) ? "A" : i < Math.ceil(xs.length * 0.5) ? "B" : "C"));
+  return out;
+}
+const cxRang = (c, auto) => c.rang || (auto || cxAutoRanks()).get(c.id) || "";
+const cxInitials = c => String(c.name || "?").split(/\s+/).filter(w => w && !/^(de|het|van|der|den|familie|fam\.?)$/i.test(w)).slice(0, 2).map(w => w[0].toUpperCase()).join("") || "?";
+const cxAvatar = (c, size) => c.photo ? `<img class="cx-av" src="${esc(c.photo)}" alt="" style="width:${size}px;height:${size}px">` : `<span class="cx-av cx-ini" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.4)}px" aria-hidden="true">${esc(cxInitials(c))}</span>`;
+async function cxPatch(ids, fn, msg) {
+  let n = 0; const t = new Date().toISOString();
+  for (const id of ids) {
+    const c = S.customers.get(id); if (!c) continue;
+    const patch = fn(c); if (!patch) continue;
+    if (await write("customers/" + id, { ...patch, updatedAt: t }, "update")) { Object.assign(c, patch, { updatedAt: t }); n++; }
+  }
+  if (msg && n) toast(typeof msg === "function" ? msg(n) : msg);
+  render(); return n;
+}
+// Foto verkleinen tot max. 240 px (JPEG), zodat het klantdocument klein blijft.
+function cxResize(file) {
+  return new Promise((res, rej) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => { const k = Math.min(1, 240 / Math.max(img.width, img.height)), cv = document.createElement("canvas"); cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k); cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height); URL.revokeObjectURL(url); res(cv.toDataURL("image/jpeg", 0.82)); };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("geen afbeelding")); };
+    img.src = url;
+  });
+}
+function cxCsv(ids) {
+  const auto = cxAutoRanks(), num = x => (Math.round((+x || 0) * 100) / 100).toFixed(2).replace(".", ","), cell = c => /[;"\n]/.test(String(c ?? "")) ? `"${String(c).replace(/"/g, '""')}"` : String(c ?? "");
+  const rows = [["Naam", "Soort", "Contactpersoon", "Telefoon", "E-mail", "Labels", "Favoriet", "Rang", "Stemming", "Feesten", "Omzet"]].concat(ids.map(id => S.customers.get(id)).filter(Boolean).map(c => { const d = custData(c); return [c.name, c.type || "", c.contact || "", c.phone || "", c.email || "", tagList(c.tags).join(", "), c.fav ? "ja" : "", cxRang(c, auto), CX_MOODS[c.mood]?.[1] || "", d.res.length, num(d.omzet)]; }));
+  saveFile(`klanten-${todayISO}.csv`, "﻿" + rows.map(r => r.map(cell).join(";")).join("\r\n"), "text/csv");
+}
+
+/* Klantenlijst: filters boven de tabel, kolommen erbij en de balk voor bulkacties */
+function cxListTop() {
+  const all = [...S.customers.values()], tags = new Map();
+  for (const c of all) for (const t of tagList(c.tags)) tags.set(t, (tags.get(t) || 0) + 1);
+  const favN = all.filter(c => c.fav).length, cur = S.custTag || "";
+  const chip = (k, l, n) => `<button type="button" class="cx-tag" data-cxtag="${esc(k)}" aria-pressed="${cur === k}">${esc(l)}<span class="muted">${n}</span></button>`;
+  return `<div class="row cx-top" id="cx-top">
+      ${chip("", "Alle", all.length)}${favN ? chip("★", "★ Favorieten", favN) : ""}${[...tags.entries()].sort((a, b) => a[0].localeCompare(b[0], "nl")).map(([t, n]) => chip(t, t, n)).join("")}
+      <select id="cx-sort" style="width:auto;margin-left:auto" aria-label="Sorteren"><option value="">Sorteer op naam</option><option value="omzet" ${S.custSort === "omzet" ? "selected" : ""}>Sorteer op omzet (rang)</option><option value="fav" ${S.custSort === "fav" ? "selected" : ""}>Favorieten eerst</option></select>
+    </div>
+    <div class="cx-bulk panel" id="cx-bulk" hidden></div>`;
+}
+function cxBulkHtml() {
+  const ids = [...cxSel].filter(id => S.customers.has(id)), cs = ids.map(id => S.customers.get(id)), ro = S.readOnly ? "disabled" : "";
+  const tags = [...new Set(cs.flatMap(c => tagList(c.tags)))].sort((a, b) => a.localeCompare(b, "nl")), mails = cs.map(c => c.email).filter(Boolean);
+  return `<b>${ids.length} geselecteerd</b>
+    <span class="row"><input id="cx-addtag" placeholder="Label" style="width:130px" list="cx-tags" ${ro}><datalist id="cx-tags">${[...new Set([...S.customers.values()].flatMap(c => tagList(c.tags)))].map(t => `<option value="${esc(t)}">`).join("")}</datalist><button type="button" class="btn" id="cx-addtag-go" ${ro}>Label erbij</button></span>
+    ${tags.length ? `<span class="row"><select id="cx-deltag" style="width:auto" ${ro}>${tags.map(t => `<option>${esc(t)}</option>`).join("")}</select><button type="button" class="btn" id="cx-deltag-go" ${ro}>Label weg</button></span>` : ""}
+    <span class="row"><select id="cx-type" style="width:auto" aria-label="Soort klant" ${ro}><option value="">Soort klant…</option>${CUST_TYPES.map(t => `<option>${esc(t)}</option>`).join("")}</select></span>
+    <button type="button" class="btn" id="cx-fav" ${ro}>${cs.every(c => c.fav) ? "Geen favoriet meer" : "★ Favoriet"}</button>
+    ${mails.length ? `<a class="btn" id="cx-mail" href="mailto:?bcc=${encodeURIComponent(mails.join(","))}">E-mail (${mails.length})</a>` : ""}
+    <button type="button" class="btn" id="cx-csv">Downloaden</button>
+    <button type="button" class="btn ghost" id="cx-clear">Selectie wissen</button>`;
+}
+function cxWireBulk() {
+  const box = $("#cx-bulk"); if (!box) return;
+  for (const id of [...cxSel]) if (!S.customers.has(id)) cxSel.delete(id);
+  box.hidden = !cxSel.size; if (!cxSel.size) { box.innerHTML = ""; return; }
+  box.innerHTML = cxBulkHtml();
+  const ids = () => [...cxSel];
+  $("#cx-addtag-go").onclick = () => { const t = $("#cx-addtag").value.trim().replace(/,/g, " "); if (!t) return; cxPatch(ids(), c => tagList(c.tags).includes(t) ? null : { tags: [...tagList(c.tags), t].join(", ") }, n => `Label "${t}" bij ${n} klant${n === 1 ? "" : "en"}`); };
+  const dt = $("#cx-deltag-go"); if (dt) dt.onclick = () => { const t = $("#cx-deltag").value; cxPatch(ids(), c => tagList(c.tags).includes(t) ? { tags: tagList(c.tags).filter(x => x !== t).join(", ") } : null, n => `Label "${t}" weg bij ${n} klant${n === 1 ? "" : "en"}`); };
+  $("#cx-type").onchange = e => { const v = e.target.value; if (v) cxPatch(ids(), c => c.type === v ? null : { type: v }, n => `${n} klant${n === 1 ? "" : "en"} nu ${v}`); };
+  $("#cx-fav").onclick = () => { const on = !ids().every(id => S.customers.get(id)?.fav); cxPatch(ids(), c => !!c.fav === on ? null : { fav: on }, on ? "Favoriet gemaakt" : "Favoriet weggehaald"); };
+  $("#cx-csv").onclick = () => cxCsv(ids());
+  $("#cx-clear").onclick = () => { cxSel.clear(); render(); };
+}
+function cxEnhanceList() {
+  const table = document.querySelector("#app .tbl-wrap table"), rows = table ? [...table.querySelectorAll("tbody tr[data-cust]")] : [];
+  const auto = cxAutoRanks(), ro = S.readOnly;
+  if (table && !table.dataset.cx) {
+    table.dataset.cx = "1"; table.classList.add("cx-tbl");
+    const hr = table.querySelector("thead tr");
+    if (hr) { hr.insertAdjacentHTML("afterbegin", `<th class="cx-c"><input type="checkbox" id="cx-all" aria-label="Alle zichtbare klanten selecteren"></th><th class="cx-c" title="Favoriet">★</th>`); hr.insertAdjacentHTML("beforeend", `<th class="cx-c" title="Rang op omzet: A, B of C">Rang</th><th class="cx-c" title="Stemming">Stemming</th>`); }
+    for (const tr of rows) {
+      const c = S.customers.get(tr.dataset.cust); if (!c) continue;
+      const tag = S.custTag || "", show = !tag || (tag === "★" ? c.fav : tagList(c.tags).includes(tag));
+      if (!show) { tr.remove(); continue; }
+      const r = cxRang(c, auto), m = CX_MOODS[c.mood];
+      tr.insertAdjacentHTML("afterbegin", `<td class="cx-c"><input type="checkbox" data-cxsel="${esc(c.id)}" ${cxSel.has(c.id) ? "checked" : ""} aria-label="Selecteer ${esc(c.name)}"></td><td class="cx-c"><button type="button" class="cx-star ${c.fav ? "on" : ""}" data-cxfav="${esc(c.id)}" aria-pressed="${!!c.fav}" aria-label="Favoriet" ${ro ? "disabled" : ""}>${c.fav ? "★" : "☆"}</button></td>`);
+      tr.insertAdjacentHTML("beforeend", `<td class="cx-c">${r ? `<span class="cx-rang r${r}" title="${c.rang ? "Vaste rang" : "Automatisch op omzet"}">${r}</span>` : `<span class="muted">–</span>`}</td><td class="cx-c"><button type="button" class="cx-mood" data-cxmood="${esc(c.id)}" title="${m ? m[1] : "Stemming kiezen"}" aria-label="Stemming: ${m ? m[1] : "niet gekozen"}" ${ro ? "disabled" : ""}>${m ? m[0] : "<span class=\"muted\">·</span>"}</button></td>`);
+      const nameCell = tr.children[2]; if (nameCell && !nameCell.querySelector(".cx-av")) { nameCell.classList.add("cx-name"); nameCell.insertAdjacentHTML("afterbegin", cxAvatar(c, 30)); }
+    }
+    const tbody = table.querySelector("tbody"), live = [...tbody.querySelectorAll("tr[data-cust]")];
+    if (S.custSort && S.custFilter !== "opvolgen") {
+      const om = new Map([...S.customers.values()].map(c => [c.id, custData(c).omzet]));
+      live.sort((a, b) => { const ca = S.customers.get(a.dataset.cust), cb = S.customers.get(b.dataset.cust); return S.custSort === "fav" ? (!!cb.fav - !!ca.fav) || ca.name.localeCompare(cb.name, "nl") : (om.get(cb.id) - om.get(ca.id)) || ca.name.localeCompare(cb.name, "nl"); }).forEach(tr => tbody.appendChild(tr));
+    }
+    if (!live.length) tbody.insertAdjacentHTML("beforeend", `<tr><td colspan="${hr ? hr.children.length : 9}"><p class="empty" style="margin:0">Geen klanten met dit label.</p></td></tr>`);
+  }
+  const vis = () => [...document.querySelectorAll("[data-cxsel]")];
+  const all = $("#cx-all"); if (all) { const v = vis(); all.checked = v.length > 0 && v.every(x => x.checked); all.indeterminate = !all.checked && v.some(x => x.checked); all.onchange = () => { for (const x of vis()) { x.checked = all.checked; all.checked ? cxSel.add(x.dataset.cxsel) : cxSel.delete(x.dataset.cxsel); } cxWireBulk(); }; }
+  document.querySelectorAll("[data-cxsel]").forEach(x => { x.onclick = e => e.stopPropagation(); x.onchange = () => { x.checked ? cxSel.add(x.dataset.cxsel) : cxSel.delete(x.dataset.cxsel); const a = $("#cx-all"), v = vis(); if (a) { a.checked = v.every(y => y.checked); a.indeterminate = !a.checked && v.some(y => y.checked); } cxWireBulk(); }; });
+  document.querySelectorAll(".cx-c").forEach(td => td.addEventListener("click", e => { if (td.tagName === "TD") e.stopPropagation(); }));
+  document.querySelectorAll("[data-cxfav]").forEach(b => b.onclick = e => { e.stopPropagation(); const c = S.customers.get(b.dataset.cxfav); if (c) cxPatch([c.id], x => ({ fav: !x.fav })); });
+  document.querySelectorAll("[data-cxmood]").forEach(b => b.onclick = e => { e.stopPropagation(); const c = S.customers.get(b.dataset.cxmood); if (c) cxPatch([c.id], x => ({ mood: CX_MOOD_NEXT[x.mood || ""] })); });
+  document.querySelectorAll("[data-cxtag]").forEach(b => b.onclick = () => { S.custTag = b.dataset.cxtag; render(); });
+  const so = $("#cx-sort"); if (so) so.onchange = e => { S.custSort = e.target.value; render(); };
+  cxWireBulk();
+}
+
+/* Klantkaart: foto, favoriet, rang en stemming (worden meteen bewaard) */
+function cxCardPanel(c) {
+  const ro = S.readOnly ? "disabled" : "", auto = cxAutoRanks().get(c.id) || "";
+  return `<div class="panel cx-card" id="cx-card">
+    <div class="cx-photo">${cxAvatar(c, 84)}<div class="stack" style="gap:6px"><label class="btn ${ro ? "disabled" : ""}" style="cursor:pointer">${c.photo ? "Andere foto" : "Foto kiezen"}<input type="file" id="cx-file" accept="image/*" hidden ${ro}></label>${c.photo ? `<button type="button" class="btn ghost" id="cx-nophoto" ${ro}>Foto weghalen</button>` : ""}</div></div>
+    <div class="fields" style="flex:1">
+      <label class="f"><span>Favoriet</span><button type="button" class="btn cx-favbtn ${c.fav ? "on" : ""}" id="cx-cfav" aria-pressed="${!!c.fav}" ${ro}>${c.fav ? "★ Favoriet" : "☆ Maak favoriet"}</button></label>
+      <label class="f"><span>Rang</span><select id="cx-crang" ${ro}><option value="">Automatisch${auto ? ` (nu ${auto})` : " (nog geen omzet)"}</option>${["A", "B", "C"].map(r => `<option ${c.rang === r ? "selected" : ""}>${r}</option>`).join("")}</select></label>
+      <label class="f"><span>Stemming</span><select id="cx-cmood" ${ro}><option value="">–</option>${Object.entries(CX_MOODS).map(([k, [e, l]]) => `<option value="${k}" ${c.mood === k ? "selected" : ""}>${e} ${l}</option>`).join("")}</select></label>
+    </div>
+    <p class="small muted" style="margin:0;flex-basis:100%">Foto, favoriet, rang en stemming worden meteen bewaard. Rang automatisch: A = bovenste 20% op omzet, B = volgende 30%, C = de rest.</p>
+  </div>`;
+}
+function cxEnhanceCard(c) {
+  if ($("#cx-card")) return;
+  const h2 = document.querySelector("#app section h2"); if (h2 && !h2.parentElement.querySelector(".cx-av")) h2.insertAdjacentHTML("beforebegin", cxAvatar(c, 36) + (c.fav ? `<span class="cx-star on" aria-label="Favoriet">★</span>` : ""));
+  const stats = document.querySelector("#app section .panel.stats"); if (!stats) return;
+  stats.insertAdjacentHTML("afterend", cxCardPanel(c));
+  const f = $("#cx-file"); if (f) f.onchange = async () => {
+    const file = f.files && f.files[0]; if (!file) return;
+    try { const photo = await cxResize(file); cxPatch([c.id], () => ({ photo }), "Foto opgeslagen"); } catch (e) { toast("Dit bestand is geen foto"); }
+  };
+  const np = $("#cx-nophoto"); if (np) np.onclick = () => cxPatch([c.id], () => ({ photo: "" }), "Foto weggehaald");
+  $("#cx-cfav").onclick = e => { e.preventDefault(); cxPatch([c.id], x => ({ fav: !x.fav })); };
+  $("#cx-crang").onchange = e => cxPatch([c.id], () => ({ rang: e.target.value }), "Rang opgeslagen");
+  $("#cx-cmood").onchange = e => cxPatch([c.id], () => ({ mood: e.target.value }), "Stemming opgeslagen");
+}
+
+const _vKlantCx = vKlant;
+vKlant = function () {
+  const html = _vKlantCx();
+  if (S.custOpen && S.customers.get(S.custOpen)) return html;
+  return html.replace(/(<input id="k-q"[^>]*>\s*<\/div>)/, `$1${cxListTop()}`);
+};
+const _afterKlantCx = after.klant;
+after.klant = function () {
+  _afterKlantCx && _afterKlantCx.apply(this, arguments);
+  const c = S.custOpen && S.customers.get(S.custOpen);
+  if (c) cxEnhanceCard(c); else cxEnhanceList();
+};
 boot();
 })();
 </script>
