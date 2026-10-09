@@ -8547,6 +8547,123 @@ body.pv-kiosk header.top { display: none; } body.pv-kiosk #app { max-width: none
 #mn-open[aria-pressed="true"] { background: var(--teal-soft); }
 @media (max-width: 760px) { .br-grid { grid-template-columns: 1fr; } #br-prev { height: 480px; } .op-fotos { grid-template-columns: repeat(3, minmax(0, 1fr)); } .mn { top: auto; height: 60vh; } .pv-doc .k { width: 70px; } }
 </style>`);
+
+/* ---------- Wizard "Nieuwe offerte" (Restau): 3 stappen in één venster, vanaf dashboard, dag-agenda, offertes en klantkaart ---------- */
+const NQ_KINDS = [["particulier", "Particulier"], ["bedrijf", "Zakelijk"], ["lid HC Tilburg", "Lid HC Tilburg"], ["team of vereniging", "Team of vereniging"]];
+function nqOpen(pre = {}) {
+  if (S.readOnly) return;
+  const c0 = pre.customerId && S.customers.get(pre.customerId);
+  const w = { step: 1, kind: c0 ? (c0.type || "particulier") : "particulier", type: "", date: pre.date || "", customerId: c0 ? c0.id : "",
+    name: c0 ? c0.name : "", contact: c0 ? (c0.contact || "") : "", email: c0 ? (c0.email || "") : "", phone: c0 ? (c0.phone || "") : "", birth: c0 ? (c0.birthDate || "") : "",
+    street: "", postcode: "", city: "", address: c0 ? (c0.address || "") : "", autoMail: true };
+  const zak = () => w.kind === "bedrijf" || w.kind === "team of vereniging";
+  const matches = () => { const n = normName(w.name), e = normName(w.email); if (w.customerId || (n.length < 2 && !e)) return []; return [...S.customers.values()].filter(c => (n.length >= 2 && normName(c.name).includes(n)) || (n.length >= 2 && normName(c.contact).includes(n)) || (e && normName(c.email) === e)).slice(0, 6); };
+  const stepsHtml = () => `<ol class="nq-steps">${["Soort", "Klant", "Verzending"].map((l, i) => `<li class="${i + 1 === w.step ? "on" : i + 1 < w.step ? "done" : ""}"><span>${i + 1}</span>${l}</li>`).join("")}</ol>`;
+  const body = () => {
+    if (w.step === 1) return `<div class="f"><span>Soort klant</span><div class="nq-kinds">${NQ_KINDS.map(([v, l]) => `<button type="button" data-nqk="${esc(v)}" aria-pressed="${v === w.kind}">${esc(l)}</button>`).join("")}</div></div>
+      <div class="f"><span>Event type</span><div class="nq-types">${eventTypes().map(t => `<button type="button" data-nqt="${esc(t.id)}" aria-pressed="${t.id === w.type}"><span class="sf-ti">${typeIcon(t.id)}</span>${esc(t.name)}</button>`).join("")}</div></div>
+      <label class="f" style="max-width:220px"><span>Datum van het feest</span><input type="date" id="nq-date" value="${esc(w.date)}" required></label>
+      <p class="small muted" style="margin:0">Tijden, zalen en producten vul je daarna in de offerte in.</p>`;
+    if (w.step === 2) {
+      const ms = matches();
+      return `${w.customerId ? `<div class="nq-found"><b>Bestaande klant:</b> ${esc(w.name)}${w.email ? " · " + esc(w.email) : ""} <button type="button" class="btn ghost small" id="nq-unlink">Andere klant</button></div>` : ""}
+      <div class="fields">
+        <label class="f nq-name"><span>${zak() ? "Naam bedrijf, team of vereniging" : "Naam"}</span><input id="nq-name" value="${esc(w.name)}" placeholder="Zoek op naam of e-mail, of typ een nieuwe naam" autocomplete="off" ${w.customerId ? "readonly" : ""} required>
+          ${ms.length ? `<div class="nq-ms" role="listbox">${ms.map(c => `<button type="button" data-nqc="${esc(c.id)}">${esc(c.name)}${c.email ? ` <span class="muted">${esc(c.email)}</span>` : ""}</button>`).join("")}</div>` : ""}</label>
+        ${zak() ? `<label class="f"><span>Contactpersoon</span><input id="nq-contact" value="${esc(w.contact)}"></label>` : ""}
+      </div>
+      <div class="fields"><label class="f"><span>E-mail</span><input type="email" id="nq-email" value="${esc(w.email)}"></label><label class="f"><span>Telefoon</span><input type="tel" id="nq-phone" value="${esc(w.phone)}"></label>
+        ${zak() ? "" : `<label class="f"><span>Geboortedatum</span><input type="date" id="nq-birth" value="${esc(w.birth)}"></label>`}</div>
+      ${w.customerId ? (w.address ? `<p class="small muted" style="margin:0">Adres: ${esc(w.address)}</p>` : "") : `<div class="fields"><label class="f"><span>Straat en huisnummer</span><input id="nq-street" value="${esc(w.street)}"></label><label class="f" style="max-width:130px"><span>Postcode</span><input id="nq-postcode" value="${esc(w.postcode)}"></label><label class="f"><span>Plaats</span><input id="nq-city" value="${esc(w.city)}"></label></div>`}`;
+    }
+    return `<label class="evswitch"><input type="checkbox" id="nq-auto" ${w.autoMail ? "checked" : ""}><span></span> Automatische e-mails aan</label>
+      <p class="small muted" style="margin:0">Uit: deze klant krijgt geen automatische e-mails; je kunt dit later per feest aanpassen in het dossier, tab E-mails.</p>
+      <div class="nq-sum small"><b>${esc(eventType(w.type)?.name || "")}</b> op ${esc(longDate(w.date))} voor <b>${esc(w.name)}</b>${w.customerId ? " (bestaande klant)" : " (nieuwe klant)"}</div>`;
+  };
+  const draw = (focus) => {
+    $("#modal-root").innerHTML = `<div class="scrim" id="scrim"><form class="modal stack nq" id="nq-form" aria-label="Nieuwe offerte" novalidate>
+      <div class="row spread"><h2>Nieuwe offerte</h2><button type="button" class="btn ghost" id="nq-x" aria-label="Sluiten">✕</button></div>
+      ${stepsHtml()}<div class="stack" id="nq-body">${body()}</div>
+      <div class="row spread"><span>${w.step > 1 ? `<button type="button" class="btn" id="nq-back">‹ Vorige</button>` : ""}</span>${w.step < 3 ? `<button type="submit" class="btn primary" id="nq-next">Volgende ›</button>` : `<button type="submit" class="btn primary" id="nq-make">Nieuwe offerte</button>`}</div></form></div>`;
+    document.body.style.overflow = "hidden";
+    wire(); const f = focus && $(focus); if (f) { f.focus(); if (f.setSelectionRange && f.type !== "email" && f.type !== "date") f.setSelectionRange(f.value.length, f.value.length); }
+  };
+  const read = () => { const v = id => { const el = $("#nq-" + id); return el ? el.value.trim() : null; };
+    for (const k of ["date", "name", "contact", "email", "phone", "birth", "street", "postcode", "city"]) { const x = v(k); if (x !== null) w[k] = x; }
+    const a = $("#nq-auto"); if (a) w.autoMail = a.checked; };
+  const useCust = c => { w.customerId = c.id; w.name = c.name || ""; w.contact = c.contact || ""; w.email = c.email || ""; w.phone = c.phone || ""; w.birth = c.birthDate || ""; w.address = c.address || ""; if (c.type && NQ_KINDS.some(([k]) => k === c.type)) w.kind = c.type; };
+  const wire = () => {
+    const close = () => closeModal();
+    $("#nq-x").onclick = close;
+    $("#scrim").addEventListener("mousedown", e => { if (e.target.id === "scrim") close(); });
+    document.querySelectorAll("[data-nqk]").forEach(b => b.onclick = () => { read(); w.kind = b.dataset.nqk; draw(); });
+    document.querySelectorAll("[data-nqt]").forEach(b => b.onclick = () => { read(); w.type = b.dataset.nqt; draw(); });
+    const nm = $("#nq-name"); if (nm && !w.customerId) nm.addEventListener("input", () => { read(); clearTimeout(nqOpen._t); nqOpen._t = setTimeout(() => draw("#nq-name"), 250); });
+    const em = $("#nq-email"); if (em && !w.customerId) em.addEventListener("change", () => { read(); const e = normName(w.email), c = e && [...S.customers.values()].find(x => normName(x.email) === e); if (c) { useCust(c); toast(`Bestaande klant gevonden: ${c.name}`); draw(); } });
+    document.querySelectorAll("[data-nqc]").forEach(b => b.onclick = () => { const c = S.customers.get(b.dataset.nqc); if (c) { useCust(c); draw(); } });
+    const un = $("#nq-unlink"); if (un) un.onclick = () => { w.customerId = ""; w.name = ""; w.contact = ""; w.email = ""; w.phone = ""; w.birth = ""; w.address = ""; draw("#nq-name"); };
+    const bk = $("#nq-back"); if (bk) bk.onclick = () => { read(); w.step--; draw(); };
+    $("#nq-form").onsubmit = async e => {
+      e.preventDefault(); read();
+      if (w.step === 1) { if (!w.type) { toast("Kies een event type"); return; } if (!w.date) { toast("Kies de datum van het feest"); $("#nq-date")?.focus(); return; } w.step = 2; draw("#nq-name"); return; }
+      if (w.step === 2) { if (!w.name) { toast("Vul een naam in of zoek een bestaande klant"); $("#nq-name")?.focus(); return; } w.step = 3; draw(); return; }
+      const btn = $("#nq-make"); btn.disabled = true;
+      try { await nqMake(w); } finally { if ($("#nq-make")) $("#nq-make").disabled = false; }
+    };
+  };
+  draw();
+}
+async function nqMake(w) {
+  const t = new Date().toISOString(), zak = w.kind === "bedrijf" || w.kind === "team of vereniging";
+  let cid = w.customerId;
+  if (!cid) {
+    const ex = findCustomer({ customer: w.name, email: w.email });
+    if (ex) cid = ex.id;
+    else {
+      cid = uid();
+      const addr = [w.street, [w.postcode, w.city].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+      const c = { name: w.name, type: w.kind, contact: zak ? w.contact : w.name, phone: w.phone, email: w.email, address: addr, invoice: "", notes: "", ...(w.birth ? { birthDate: w.birth } : {}), createdAt: t, updatedAt: t };
+      if (!(await write("customers/" + cid, c))) return;
+      S.customers.set(cid, { ...c, id: cid });
+    }
+  }
+  const c = S.customers.get(cid) || {};
+  const rid = uid();
+  let tasks = []; try { tasks = defaultTasks({ date: w.date, optieTot: "" }); } catch (e) {}
+  const r = { status: "aanvraag", eventType: w.type, date: w.date, start: "", end: "", roomId: "", persons: "", customer: c.name || w.name, customerId: cid,
+    contact: c.contact || w.contact || w.name, phone: c.phone || w.phone, email: c.email || w.email, arrangementId: "", dagindeling: [], notes: "", tasks, autoMail: !!w.autoMail, createdAt: t, updatedAt: t };
+  if (!(await write("reservations/" + rid, r))) return;
+  const saved = { ...r, id: rid }; S.reservations.set(rid, saved);
+  const q = newQuoteFromRes(saved);
+  if (await write("quotes/" + q.id, strip(q))) {
+    await write("reservations/" + rid, { quoteId: q.id }, "update"); saved.quoteId = q.id;
+    S.quotes.set(q.id, q); closeModal(); S.quoteOpen = q.id; setView("off"); toast("Offerte aangemaakt");
+  }
+}
+// Alle plekken waar je een nieuwe offerte begint, openen de wizard.
+MENU_ACTS.newQuote = () => nqOpen({});
+{
+  const ao = after.off; after.off = (...a) => { ao && ao(...a); const b = $("#q-new"); if (b) b.onclick = () => nqOpen({}); };
+  const vd = VIEWS.dag; VIEWS.dag = (...a) => { const h = vd(...a); return h.includes('id="d-new"') ? h.replace('<button class="btn bar" id="d-new"', `<button class="btn" id="d-newq" ${S.readOnly ? "disabled" : ""}>Nieuwe offerte</button><button class="btn bar" id="d-new"`) : h; };
+  const ad = after.dag; after.dag = (...a) => { ad && ad(...a); const b = $("#d-newq"); if (b) b.onclick = () => nqOpen({ date: S.day }); };
+  const vk = vKlantKaart; vKlantKaart = function (c0) { const h = vk(c0); return h.replace('<button class="btn" id="k-newres"', `<button class="btn" id="k-newq" ${S.readOnly ? "disabled" : ""}>Nieuwe offerte maken</button><button class="btn" id="k-newres"`); };
+  const ak = after.klant; after.klant = (...a) => { ak && ak(...a); const b = $("#k-newq"), id = S.custOpen; if (b && id) b.onclick = () => nqOpen({ customerId: id }); };
+}
+document.head.insertAdjacentHTML("beforeend", `<style id="rq12-style">
+.nq { max-width: 680px; }
+.nq-steps { display: flex; gap: 6px; list-style: none; margin: 0; padding: 0; counter-reset: s; }
+.nq-steps li { flex: 1; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-bottom: 3px solid var(--line, #ddd); color: var(--muted, #8a8a8a); font-size: .9rem; }
+.nq-steps li span { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--line, #ddd); color: #fff; font-size: .78rem; font-weight: 700; }
+.nq-steps li.on { border-color: var(--orange); color: inherit; font-weight: 600; } .nq-steps li.on span { background: var(--orange); } .nq-steps li.done span { background: var(--teal); }
+.nq-kinds, .nq-types { display: flex; flex-wrap: wrap; gap: 6px; }
+.nq-kinds button, .nq-types button { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border: 1px solid var(--line, #ddd); border-radius: 6px; background: var(--panel, #fff); color: inherit; font: inherit; cursor: pointer; }
+.nq-kinds button[aria-pressed="true"], .nq-types button[aria-pressed="true"] { background: var(--teal); border-color: var(--teal); color: #fff; }
+.nq-name { position: relative; } .nq-ms { position: absolute; top: 100%; left: 0; right: 0; z-index: 5; background: var(--panel, #fff); border: 1px solid var(--line, #ddd); border-radius: 4px; box-shadow: 0 4px 14px rgba(0,0,0,.12); display: flex; flex-direction: column; }
+.nq-ms button { text-align: left; padding: 7px 10px; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; } .nq-ms button:hover, .nq-ms button:focus { background: var(--teal-soft); }
+.nq-found { padding: 8px 10px; border-radius: 4px; background: var(--teal-soft); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.nq-sum { padding: 8px 10px; border: 1px solid var(--line, #ddd); border-radius: 4px; }
+@media (max-width: 760px) { .nq-steps li { font-size: .8rem; padding: 6px 2px; gap: 4px; } }
+</style>`);
 /* ---------- einde offerte zoals Restau ---------- */
 
 /* ---------- Rapporten (naar voorbeeld van Restau: openstaand, facturen, aanbetalingen, arrangementen, event count, omzet bedrijven) ---------- */
