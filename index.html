@@ -149,7 +149,9 @@ nav.tabs#tabs { overflow: visible; }
 .todo-row input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--teal); }
 .todo-row.done .tt { text-decoration: line-through; color: var(--muted); }
 nav.tabs > button, .mi > button { background: none; border: 0; color: inherit; width: 48px; flex: none; display: grid; place-items: center; cursor: pointer; }
-nav.tabs svg { width: 20px; height: 20px; }
+nav.tabs svg, .mi.home-left svg { width: 20px; height: 20px; }
+.mi.home-left { margin-left: 4px; }
+.mi.home-left .dd { right: auto; left: 0; }
 nav.tabs > button:hover, .mi > button:hover, .mi.open > button { background: rgba(255,255,255,.12); }
 .mi > button[aria-selected="true"] { background: var(--page); color: var(--orange); }
 .mi > button:focus-visible { outline: 2px solid #fff; outline-offset: -4px; }
@@ -170,7 +172,8 @@ nav.tabs > button:hover, .mi > button:hover, .mi.open > button { background: rgb
   .search { order: 3; flex: 1 1 100%; margin: 0 10px 8px 0; }
   nav.tabs { min-height: 44px; }
   .mi > button { width: 35px; }
-  nav.tabs svg { width: 19px; height: 19px; }
+  nav.tabs svg, .mi.home-left svg { width: 19px; height: 19px; }
+  .mi.home-left { margin-left: 0; }
   .wordmark { font-size: .74rem; letter-spacing: .08em; }
 }
 @media (max-width: 374px) { .wordmark { letter-spacing: .03em; font-size: .68rem; } .mi > button { width: 31px; } }
@@ -1110,6 +1113,9 @@ function buildMenu() {
     mi.addEventListener("focusout", e => { if (!mi.contains(e.relatedTarget)) close(); });
   });
   document.addEventListener("click", e => { if (!e.target.closest(".mi")) closeMenus(); });
+  // Homeknop links, direct naast de zoekbalk (wens Michel 9 okt)
+  const home = nav.querySelector('.mi[data-m="home"]'), srch = document.querySelector("header.top .search");
+  if (home && srch) { home.classList.add("home-left"); srch.before(home); }
 }
 document.querySelector("header.top").addEventListener("click", e => {
   const b = e.target.closest("button[data-v]"); if (!b) return;
@@ -1118,9 +1124,9 @@ document.querySelector("header.top").addEventListener("click", e => {
   setView(b.dataset.v);
 });
 function drawChrome() {
-  if (!$("#tabs .mi")) buildMenu();
+  if (!$("header.top .mi")) buildMenu();
   const cur = menuOf(S.view);
-  document.querySelectorAll("#tabs .mi").forEach(mi => {
+  document.querySelectorAll("header.top .mi").forEach(mi => {
     const m = MENU.find(x => x.id === mi.dataset.m), b = mi.querySelector(":scope > button");
     b.setAttribute("aria-selected", String(m === cur));
     const n = m.items.reduce((t, it) => t + (it.cnt ? it.cnt() : 0), 0), bd = b.querySelector(".badge");
@@ -2477,7 +2483,7 @@ function vInst() {
         <label class="f"><span>Bezoekers per jeugdwedstrijd</span><input type="number" id="sd-jeugd" value="${esc(D.jeugd)}" ${ro}></label>
         <label class="f"><span>Bezoekers per seniorenwedstrijd</span><input type="number" id="sd-senior" value="${esc(D.senior)}" ${ro}></label>
         <label class="f"><span>Bezoekers per topwedstrijd</span><input type="number" id="sd-top" value="${esc(D.top)}" ${ro}></label>
-        <label class="f"><span>Topteams (komma's)</span><input id="sd-topTeams" value="${esc(D.topTeams)}" ${ro}></label>
+        <label class="f"><span>Topteams (komma's; eigen aantal bezoekers met =, bijv. Heren 1=400, Dames 1=250)</span><input id="sd-topTeams" value="${esc(D.topTeams)}" ${ro}></label>
         <label class="f"><span>Wedstrijdduur incl. warming-up (min)</span><input type="number" id="sd-duur" value="${esc(D.duur)}" ${ro}></label>
         <label class="f"><span>Eigen clubnaam in LISA</span><input id="s-clubNaam" value="${esc(s.clubNaam)}" ${ro}></label>
       </div>
@@ -5539,7 +5545,7 @@ blocksOn = function (date) {
 };
 const _blockLinesSS = blockLines;
 blockLines = function (date) {
-  if (!superSundayOn(date)) return _blockLinesSS(date);
+  if (!superSundayOn(date)) { const tm = ssTopMatches(date); return [...(tm.length ? [`<div class="ln top">${esc(tm.map(x => x.tp.label).join(" + "))} thuis</div>`] : []), ..._blockLinesSS(date)]; }
   const rest = _blocksOnSS(date);
   return [`<div class="ln ss">★ Super Sunday</div>`, ...(rest.length ? [`<div class="ln b">${rest.length === 1 ? "+1 blokkade" : "+" + rest.length + " blokkades"}</div>`] : [])];
 };
@@ -5551,12 +5557,41 @@ dagAfterDag = function () {
   document.querySelectorAll("[data-ssres]").forEach(el => el.onclick = () => openRes(S.reservations.get(el.dataset.ssres)));
 };
 // Topteams in LISA heten "H01"/"D01": tel ze mee als topteam voor de drukte.
+// Elk topteam kan een eigen aantal bezoekers hebben: "Heren 1=400, Dames 1=250" bij Instellingen › Drukte en LISA.
+// Zonder getal: Heren 1 standaard 400 (Michel: Heren 1 thuis trekt het meeste publiek), andere topteams het getal bij "Topteam".
+const SS_TOP_DEFAULT = { "heren 1": 400 };
+function ssTopTeams() {
+  const D = S.settings.drukte || {};
+  return String(D.topTeams || "").split(",").map(x => x.trim()).filter(Boolean).map(x => {
+    const key = ssTeamKey(x.replace(/=.*$/, "")), n = /=\s*(\d+)/.exec(x);
+    return { key, label: key.startsWith("dames ") || key.startsWith("heren ") ? key[0].toUpperCase() + key.slice(1) : x.replace(/=.*$/, "").trim(), val: n ? +n[1] : SS_TOP_DEFAULT[key] ?? (+D.top || 0) };
+  });
+}
+const ssTopOf = team => ssTopTeams().find(t => t.key === ssTeamKey(team)) || null;
 const _classifySS = classify;
 classify = function (team) {
-  const r = _classifySS(team); if (r === "top") return r;
-  const tops = String(S.settings.drukte?.topTeams || "").split(",").map(ssTeamKey).filter(Boolean);
-  return tops.includes(ssTeamKey(team)) ? "top" : r;
+  return ssTopOf(team) ? "top" : _classifySS(String(team || "").replace(/=.*$/, ""));
 };
+// Zelfde berekening als de basis, maar met het eigen aantal bezoekers per topteam.
+const _crowdSS = crowd;
+crowd = function (date) {
+  const D = S.settings.drukte, dur = +D.duur || 105;
+  const ms = homeMatches(date);
+  let total = 0; const slots = new Array(48).fill(0);
+  for (const m of ms) {
+    const tp = ssTopOf(m.team), v = tp ? tp.val : (+D[classify(m.team)] || 0); total += v;
+    const s = toMin(m.time); if (s == null) continue;
+    for (let t = Math.floor(s / 30); t < Math.min(48, Math.ceil((s + dur) / 30)); t++) slots[t] += v;
+  }
+  for (const r of resOn(date)) total += +r.persons || 0;
+  let peak = 0, peakAt = null;
+  slots.forEach((v, i) => { if (v > peak) { peak = v; peakAt = i * 30; } });
+  const lvl = total === 0 ? 0 : total < D.grens2 ? 1 : total < D.grens3 ? 2 : 3;
+  const lvlName = total === 0 ? "geen activiteit" : total < D.grens1 ? "rustig" : total < D.grens2 ? "normaal" : total < D.grens3 ? "druk" : "zeer druk";
+  return { total, peak, peakAt, lvl, lvlName, slots, count: ms.length };
+};
+// Thuiswedstrijden van topteams op een dag (ook zonder Super Sunday), zwaarste eerst.
+const ssTopMatches = date => homeMatches(date).map(m => ({ m, tp: ssTopOf(m.team) })).filter(x => x.tp).sort((a, b) => b.tp.val - a.tp.val);
 
 /* Taken van een Super Sunday staan ook in de centrale to-do-lijst. */
 const _allTasksSS = allTasks;
@@ -5605,7 +5640,14 @@ function ssBand(date, home) {
     ${rs.length ? `<div class="warnbox bad" style="width:100%">Let op: ${rs.length === 1 ? "er staat al een reservering" : `er staan al ${rs.length} reserveringen`} op deze dag: ${rs.map(r => `<a href="#" data-ssres="${esc(r.id)}">${esc(r.customer || "reservering")} (${esc(roomName(r.roomId))})</a>`).join(", ")}. Verplaats of annuleer ${rs.length === 1 ? "die" : "ze"} in overleg.</div>` : ""}
   </div>`;
 }
-{ const f = VIEWS.dag; VIEWS.dag = () => { const h = f(), b = ssBand(S.day); return b ? h.replace('<div class="panel stats">', b + '<div class="panel stats">') : h; }; }
+// Geen Super Sunday maar wel een topteam thuis: lichte melding voor extra drukte (ruimtes blijven te reserveren).
+function ssTopBand(date) {
+  if (superSundayOn(date)) return "";
+  const tm = ssTopMatches(date); if (!tm.length) return "";
+  return `<div class="ss-band ss-top"><div class="ss-h"><span class="ss-star" aria-hidden="true">▲</span><div><b class="ss-t">Extra druk: ${esc(tm.map(x => x.tp.label).join(" en "))} ${tm.length > 1 ? "spelen" : "speelt"} thuis</b><br>
+    <span>${tm.map(x => `${esc(x.m.time || "tijd volgt")} ${esc(x.tp.label)}${x.m.opponent ? " – " + esc(x.m.opponent) : ""} (±${x.tp.val} bezoekers)`).join(", ")}. Reken op meer barpersoneel en voorraad.</span></div></div></div>`;
+}
+{ const f = VIEWS.dag; VIEWS.dag = () => { const h = f(), b = ssBand(S.day) || ssTopBand(S.day); return b ? h.replace('<div class="panel stats">', b + '<div class="panel stats">') : h; }; }
 { const f = VIEWS.home; VIEWS.home = () => { const h = f(), nxt = ssAll().find(x => x.on && x.date >= todayISO); const b = nxt ? ssBand(nxt.date, true) : ""; return b ? h.replace('<div class="tiles">', b + '<div class="tiles">') : h; }; }
 { const f = after.home; after.home = () => { if (f) f(); document.querySelectorAll("[data-ssres]").forEach(el => el.onclick = e => { e.preventDefault(); openRes(S.reservations.get(el.dataset.ssres)); }); }; }
 
@@ -5806,6 +5848,9 @@ ${(D.notities || "").trim() ? `<h2>Notities</h2><p>${esc(D.notities).replace(/\n
 .ss-t { color: var(--orange); font-size: 1.05rem; }
 .ss-band.ss-off { background: var(--sunk); border-color: var(--line); border-left-color: var(--muted); }
 .day .ln.ss { color: var(--orange); font-weight: 700; }
+.day .ln.top { color: var(--teal); font-weight: 600; }
+.ss-band.ss-top { background: var(--teal-soft); border-color: var(--teal); border-left-color: var(--teal); }
+.ss-band.ss-top .ss-star, .ss-band.ss-top .ss-t { color: var(--teal); }
 .ss-row { display: flex; gap: 8px; align-items: center; flex-wrap: nowrap; }
 .ss-row .ss-abs { flex: none; min-width: 64px; }
 @media (max-width: 640px) { .ss-row { flex-wrap: wrap; } .ss-row input[data-f="text"], .ss-row input[data-f="wat"] { flex: 1 1 100%; order: -1; } }
