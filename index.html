@@ -5847,9 +5847,9 @@ function vSSDay(date) {
     ${fresh && ss ? `<div class="warnbox warn">Dit is het standaard draaiboek met standaardtaken. Pas aan wat nodig is en klik op Opslaan; dan komen de taken ook in de to-do-lijst.</div>` : ""}
     ${rs.length ? `<div class="warnbox bad">Er ${rs.length === 1 ? "staat al een reservering" : `staan al ${rs.length} reserveringen`} op deze dag. Verplaats of annuleer ${rs.length === 1 ? "die" : "ze"} in overleg: ${rs.map(r => `<a href="#" data-ssres="${esc(r.id)}">${esc(r.start || "")} ${esc(r.customer || "reservering")}, ${esc(roomName(r.roomId))}</a>`).join("; ")}</div>` : ""}
     <div class="grid2">
-      <div class="panel stack" style="gap:6px"><h3 style="color:var(--pitch)">Wedstrijden (${all.length})</h3>
+      ${typeof aantalPanel === "function" ? aantalPanel(date) : `<div class="panel stack" style="gap:6px"><h3 style="color:var(--pitch)">Wedstrijden (${all.length})</h3>
         ${all.length ? `<div class="list">${all.map(m => { const top = keys.includes(ssTeamKey(m.team)); return `<div class="it"><span class="t">${esc(m.time || "–")}</span><span>${top ? "<b>" : ""}${esc(m.team)}${top ? "</b>" : ""}${m.opponent ? ` <span class="muted">– ${esc(m.opponent)}</span>` : ""}${!m.time ? ` <span class="chip c2">tijd volgt</span>` : ""}</span><span class="muted small">${esc(m.field || "")}</span></div>`; }).join("")}</div>` : `<p class="empty">Geen wedstrijden geïmporteerd voor deze dag.</p>`}
-      </div>
+      </div>`}
       <div class="panel stack" style="gap:6px"><h3>Afspraken in de agenda deze dag (${ap.length})</h3>
         ${ap.length ? `<div class="list">${ap.map(k => `<div class="it"><span class="t">${esc(String(k.at).slice(11, 16) || "–")}</span><span>${esc(k.apptType || "afspraak")}${k.text ? ` <span class="muted">· ${esc(k.text)}</span>` : ""}</span><span class="muted small">${esc(k.manager || "")}</span></div>`).join("")}</div>` : `<p class="small muted" style="margin:0">Geen afspraken met klanten of leveranciers op deze dag. Afspraken maken kan gewoon via Agenda › Afspraken; ruimtes blijven wel geblokkeerd.</p>`}
       </div>
@@ -9350,6 +9350,107 @@ write = async function (path, data, mode = "set") {
   if (wdPending !== null && /^blocks\//.test(path) && data && mode !== "delete") { data = { ...data, alleenWedstrijddag: wdPending }; wdPending = null; }
   return _writeWD(path, data, mode);
 };
+/* ---------- Aantallen per dag: trainingen uit LISA en wedstrijden zonder teamnamen ---------- */
+// Gemaakt door de thread "Super Sunday in de agenda" (9 okt 2026). Michel: "alleen het aantal per dag", geen teams.
+// Opslag: trainingen/<YYYY-MM-DD> { date, count, importedAt, source }. Alleen datum en aantal, geen teams of trainers.
+// Regels met Team "Reservering" (clinics, keeperstraining, losse veldhuur) zijn geen teamtraining en tellen niet mee.
+S.trainDays = S.trainDays || new Map();
+const trainCount = date => +(S.trainDays.get(date)?.count) || 0;
+{ const b = boot; boot = async function () { await b(); if (S.db) subscribe("trainingen", S.trainDays); }; }
+{ const la = localApply; localApply = function (path, data, mode) {
+  const [col, id] = path.split("/"); if (col !== "trainingen") return la(path, data, mode);
+  if (mode === "delete") S.trainDays.delete(id); else S.trainDays.set(id, { ...(mode === "update" ? S.trainDays.get(id) : {}), ...data, id });
+}; }
+
+/* Maand-agenda: regel "12 trainingen" onder de wedstrijden. */
+{ const f = blockLines; blockLines = function (date) { const n = trainCount(date); return [...(n ? [`<div class="ln tr">${n} training${n === 1 ? "" : "en"}</div>`] : []), ...f(date)]; }; }
+
+/* Week- en zaalagenda: aantal trainingen naast het aantal wedstrijden in de kop. */
+if (VIEWS.week) { const f = VIEWS.week; VIEWS.week = () => f().replace(/(<th[^>]*>\s*<button type="button" data-wkday="(\d{4}-\d{2}-\d{2})"[\s\S]*?)<\/th>/g, (all, head, ds) => { const n = trainCount(ds); return n ? `${head}<br><span class="muted small">${n} train.</span></th>` : all; }); }
+
+/* Dag-agenda: trainingen als cijfer bij de drukte, en de wedstrijden als aantal in plaats van een lijst met teams. */
+function aantalPanel(date) {
+  const ms = homeMatches(date), times = ms.map(m => toMin(m.time)).filter(x => x != null), open = ms.length - times.length, n = trainCount(date);
+  const tops = typeof ssTopMatches === "function" ? ssTopMatches(date) : [];
+  return `<div class="panel stack" style="gap:6px"><h3 style="color:var(--pitch)">Wedstrijden en trainingen</h3>
+    <div class="list">
+      <div class="it"><span class="t num">${ms.length}</span><span>thuiswedstrijd${ms.length === 1 ? "" : "en"}${times.length ? ` <span class="muted">· eerste ${fromMin(Math.min(...times))}, laatste ${fromMin(Math.max(...times))}</span>` : ""}${open ? ` <span class="muted">· ${open} nog zonder tijd</span>` : ""}</span><span></span></div>
+      ${tops.map(x => `<div class="it"><span class="t">${esc(x.m.time || "–")}</span><span><b>${esc(x.tp.label)}</b> speelt thuis</span><span></span></div>`).join("")}
+      <div class="it"><span class="t num">${n}</span><span>training${n === 1 ? "" : "en"}${!S.trainDays.size ? ` <span class="muted">· nog geen trainingsschema geïmporteerd</span>` : ""}</span><span></span></div>
+    </div></div>`;
+}
+{ const f = VIEWS.dag; VIEWS.dag = () => {
+  let h = f(); const d = S.day, n = trainCount(d);
+  h = h.replace('<div class="stat bar"><span class="eyebrow">Horeca-reserveringen', `<div class="stat pitch"><span class="eyebrow">Trainingen</span><b class="num">${n}</b></div><div class="stat bar"><span class="eyebrow">Horeca-reserveringen`);
+  const a = h.indexOf('<div class="panel"><h3 style="color:var(--pitch)">Wedstrijden ('); if (a < 0) return h;
+  const e = h.indexOf('\n      </div>\n      <div class="stack">', a); if (e < 0) return h;
+  return h.slice(0, a) + aantalPanel(d) + h.slice(e + '\n      </div>'.length);
+}; }
+
+/* Importeren: trainingsschema's uit LISA (CSV of Excel, één of meer weken tegelijk). */
+function trainParse(name, rows) {
+  const hi = rows.findIndex(r => r.some(c => /^datum$/i.test(String(c).trim())) && r.some(c => /^team$/i.test(String(c).trim())));
+  if (hi < 0) return null;
+  const h = rows[hi].map(c => String(c).trim().toLowerCase()), di = h.indexOf("datum"), ti = h.indexOf("team");
+  const by = {}; let skipped = 0;
+  for (const r of rows.slice(hi + 1)) {
+    const date = excelDate(r[di]), team = String(r[ti] || "").trim();
+    if (!date || !team) continue;
+    if (/^reservering$/i.test(team)) { skipped++; continue; }
+    by[date] = (by[date] || 0) + 1;
+  }
+  const dates = Object.keys(by).sort();
+  // Het hele bereik van het bestand telt: een dag zonder trainingen wordt 0 (bijv. in de vakantie).
+  const m = /(\d{8})\D+(\d{8})/.exec(name), ymd = s => `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+  const from = m ? ymd(m[1]) : dates[0], to = m ? ymd(m[2]) : dates[dates.length - 1];
+  return from ? { name, by, skipped, from, to } : null;
+}
+async function trainRead(files) {
+  if (!window.XLSX) { toast("De Excel-lezer is niet geladen. Herlaad de pagina."); return; }
+  const out = [];
+  for (const f of files) {
+    const wb = /\.(csv|txt)$/i.test(f.name) ? XLSX.read((await f.text()).replace(/^﻿/, ""), { type: "string", raw: true }) : XLSX.read(await f.arrayBuffer(), { type: "array", cellDates: true });
+    const p = trainParse(f.name, XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: "" }));
+    if (p) out.push(p);
+  }
+  if (!out.length) { toast("Geen trainingsschema herkend: er moeten kolommen Datum en Team in staan"); return; }
+  S.importTrain = out.sort((a, b) => a.from.localeCompare(b.from)); render();
+}
+{ const f = VIEWS.import; VIEWS.import = () => {
+  const h = f(), T = S.importTrain, ro = S.readOnly ? "disabled" : "";
+  const known = [...S.trainDays.values()].filter(x => x.count).map(x => x.date).sort();
+  const panel = `<div class="panel stack" id="train-panel">
+    <div><span class="eyebrow" style="color:var(--pitch)">Bron 3</span><h3>Trainingen uit LISA (alleen het aantal per dag)</h3></div>
+    <ol class="steps small"><li>Exporteer in LISA het trainingsschema per week als CSV of Excel.</li><li>Sleep de bestanden hieronder, meerdere weken tegelijk mag.</li></ol>
+    <div class="drop" id="train-drop"><p style="margin:0 0 8px">Sleep trainingsschema's hierheen</p><input type="file" id="train-file" accept=".xlsx,.xls,.csv" multiple style="width:auto" ${ro}></div>
+    <p class="small muted" style="margin:0">Alleen datum en aantal worden bewaard, geen teams of trainers. Regels met team "Reservering" (clinics, keeperstraining) tellen niet mee. ${known.length ? `Nu bekend: ${known.length} dagen, ${esc(shortDate(known[0]))} t/m ${esc(shortDate(known[known.length - 1]))}.` : "Nog geen trainingen geïmporteerd."}</p>
+    ${T ? `<div class="tbl-wrap"><table><thead><tr><th>Week</th><th>Trainingen</th><th>Niet meegeteld</th></tr></thead><tbody>${T.map(p => `<tr><td class="num">${esc(shortDate(p.from))} – ${esc(shortDate(p.to))}</td><td class="num">${Object.values(p.by).reduce((a, b) => a + b, 0)}</td><td class="num">${p.skipped || "–"}</td></tr>`).join("")}</tbody></table></div>
+      <div class="row"><button class="btn primary" id="train-go" ${ro}>Importeer ${T.length} ${T.length === 1 ? "week" : "weken"}</button><button class="btn ghost" id="train-cancel">Annuleren</button></div>` : ""}
+  </div>`;
+  const i = h.lastIndexOf("</section>"); return i < 0 ? h + panel : h.slice(0, i) + panel + h.slice(i);
+}; }
+{ const f = after.import; after.import = () => {
+  if (f) f();
+  const z = $("#train-drop"); if (!z) return;
+  const go = files => trainRead(files).catch(() => toast("Dit bestand kon ik niet lezen"));
+  $("#train-file").onchange = e => go(e.target.files);
+  z.addEventListener("dragover", e => { e.preventDefault(); z.classList.add("over"); }); z.addEventListener("dragleave", () => z.classList.remove("over"));
+  z.addEventListener("drop", e => { e.preventDefault(); z.classList.remove("over"); if (!S.readOnly && e.dataTransfer.files.length) go(e.dataTransfer.files); });
+  const c = $("#train-cancel"); if (c) c.onclick = () => { S.importTrain = null; render(); };
+  const g = $("#train-go"); if (g) g.onclick = async () => {
+    const now = new Date().toISOString(); let days = 0, total = 0;
+    for (const p of S.importTrain) {
+      for (let d = p.from; d <= p.to; d = addDays(d, 1)) {
+        const n = p.by[d] || 0;
+        if (n) { if (await write("trainingen/" + d, { date: d, count: n, importedAt: now, source: p.name })) { days++; total += n; } }
+        else if (S.trainDays.has(d)) await write("trainingen/" + d, null, "delete");
+      }
+    }
+    S.importTrain = null; toast(`${total} trainingen op ${days} dagen geïmporteerd`); render();
+  };
+}; }
+
+document.head.insertAdjacentHTML("beforeend", `<style id="aantal-style">.day .ln.tr { color: var(--muted); }</style>`);
 boot();
 })();
 </script>
