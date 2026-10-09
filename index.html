@@ -185,6 +185,41 @@ footer.foot b { font-family: Cinzel, Georgia, serif; font-weight: 500; letter-sp
 .spread { justify-content: space-between; }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; min-width: 0; }
 .stack { display: grid; gap: 12px; align-content: start; }
+.evhead { display: grid; grid-template-columns: 200px 1fr auto; gap: 18px; padding: 0; overflow: hidden; align-items: stretch; }
+.evpic { background: linear-gradient(135deg, var(--c), color-mix(in srgb, var(--c) 55%, #fff)); display: grid; place-items: center; color: #fff; min-height: 150px; }
+.evpic svg { width: 64px; height: 64px; stroke-width: 1.3; }
+.evmain { padding: 16px 0; display: grid; gap: 6px; align-content: start; }
+.evtype { font-size: 1.02rem; }
+.evname { font-size: 1.35rem; font-weight: 600; color: var(--fg); }
+.evmgr .f { max-width: 320px; } .evmgr.need select { border-color: #e0261b; }
+.evright { padding: 16px 18px 16px 0; display: grid; gap: 6px; justify-items: end; align-content: start; text-align: right; }
+.evq { color: var(--ok); font-size: 1rem; text-decoration: none; } .evamt { font-size: 1.4rem; color: var(--ok); font-weight: 600; }
+.evdots { display: flex; gap: 5px; } .evdots span { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid var(--ok); } .evdots .on { background: var(--ok); } .evdots .late { border-color: #e0261b; background: #fbd3d0; }
+.evswitch { position: relative; display: inline-flex; align-items: center; gap: 8px; font-size: .86rem; cursor: pointer; margin-top: 6px; }
+.evswitch input { position: absolute; opacity: 0; } .evswitch span { width: 40px; height: 22px; border-radius: 11px; background: #e3e3e3; position: relative; transition: .15s; }
+.evswitch span::after { content: ""; position: absolute; left: 3px; top: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: .15s; }
+.evswitch input:checked + span { background: #e0261b; } .evswitch input:checked + span::after { left: 21px; } .evswitch input:focus-visible + span { outline: 2px solid var(--orange); }
+.evtabs { display: flex; border-bottom: 2px solid var(--ok); background: var(--surface); overflow-x: auto; scrollbar-width: thin; margin-bottom: -14px; }
+.evtabs button { background: none; border: 0; padding: 10px 16px; font-size: .95rem; color: var(--ok); cursor: pointer; position: relative; white-space: nowrap; }
+.evtabs button[aria-selected="true"] { background: var(--ok); color: #fff; }
+.evtabs button.first-right { margin-left: auto; }
+.evdot { position: absolute; left: 50%; bottom: -7px; transform: translateX(-50%); background: #e0261b; color: #fff; font-size: .62rem; border-radius: 8px; min-width: 15px; line-height: 15px; text-align: center; z-index: 1; }
+.evbody { border-top: 0; }
+.evgrid { display: grid; grid-template-columns: minmax(220px, 1fr) 2fr; gap: 18px; align-items: start; }
+.evcard { border: 1px solid var(--line); padding: 10px 12px; font-size: .9rem; background: var(--field); }
+.evlines { width: 100%; border-collapse: collapse; margin-top: 6px; } .evlines td { padding: 6px 8px; border-bottom: 1px solid var(--line); font-size: .9rem; } .evlines .evtot td { font-weight: 700; border-bottom: 0; }
+.evomzet .grp td { background: var(--teal-soft); color: var(--teal-d); font-weight: 600; } .evomzet .sub td { font-style: italic; color: var(--muted); } .evomzet .evtot td { font-weight: 700; border-top: 2px solid var(--fg); }
+.evsheet h2 { font-size: 1rem; color: var(--teal); margin: 6px 0; } .evsheet table { width: 100%; border-collapse: collapse; } .evsheet td, .evsheet th { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: left; font-size: .88rem; }
+.list .it.me { background: var(--orange-soft); }
+.evmenu { position: relative; } .evmenu summary { list-style: none; } .evmenu summary::-webkit-details-marker { display: none; }
+.evmenu-dd { position: absolute; right: 0; top: calc(100% + 4px); background: var(--surface); border: 1px solid var(--line); border-top: 3px solid var(--orange); box-shadow: 0 10px 24px rgba(0,0,0,.2); z-index: 30; min-width: 230px; padding: 6px 0; }
+.evmenu-dd button { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 8px 16px; cursor: pointer; color: var(--fg); font-size: .9rem; }
+.evmenu-dd button:hover { background: var(--orange-soft); color: var(--orange); }
+@media (max-width: 760px) {
+  .evhead { grid-template-columns: 1fr; gap: 0; } .evpic { min-height: 80px; } .evpic svg { width: 40px; height: 40px; }
+  .evmain { padding: 12px 14px 0; } .evright { padding: 8px 14px 14px; justify-items: start; text-align: left; }
+  .evgrid { grid-template-columns: 1fr; } .evtabs button.first-right { margin-left: 0; }
+}
 .qfilter { display: grid; grid-template-columns: 1fr 220px 220px auto; gap: 14px; align-items: end; }
 .qtypes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .qtypes button { border: 1px solid var(--line); background: var(--field); border-radius: 16px; padding: 4px 11px; font-size: .78rem; color: var(--muted); cursor: pointer; }
@@ -200,7 +235,7 @@ footer.foot b { font-family: Cinzel, Georgia, serif; font-weight: 500; letter-sp
 .qrow:focus-visible { outline: 2px solid var(--orange); outline-offset: -2px; }
 .qdate { align-self: stretch; display: grid; place-content: center; text-align: center; background: var(--teal); color: #fff; line-height: 1.15; }
 .qdate b { font-size: 1.55rem; font-weight: 400; } .qdate span { font-size: .74rem; }
-.qdate.opt { background: #7a1f6b; } .qdate.late { background: #e0261b; } .qdate.ok { background: var(--ok); } .qdate.af { background: #9a9a9a; }
+.qdate.req { background: var(--orange); } .qdate.opt { background: #7a1f6b; } .qdate.late { background: #e0261b; } .qdate.ok { background: var(--ok); } .qdate.af { background: #9a9a9a; }
 .qwho { display: flex; align-items: center; gap: 10px; padding: 8px 12px; min-width: 0; }
 .qwho > div { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .qtype { flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--teal-soft); color: var(--teal-d); font-weight: 700; font-size: .85rem; }
@@ -214,6 +249,10 @@ footer.foot b { font-family: Cinzel, Georgia, serif; font-weight: 500; letter-sp
 .qic svg { width: 20px; height: 20px; color: #c9c9c9; } .qic.on svg { color: var(--teal); }
 .qmeta { font-size: .72rem; color: var(--muted); text-align: right; padding: 6px 12px; line-height: 1.5; }
 .qnomgr { color: #e0261b; }
+.evcnt { display: flex !important; gap: 8px; justify-content: center; align-items: center; }
+.evc { position: relative; color: var(--teal); display: inline-grid; } .evc svg { width: 22px; height: 22px; } .evc.late { color: #e0261b; }
+.evc i { position: absolute; right: -7px; top: -6px; font-style: normal; background: #e0261b; color: #fff; font-size: .6rem; border-radius: 7px; min-width: 14px; line-height: 14px; text-align: center; }
+.evrow .qacts { justify-content: center; }
 .qdet { margin-right: 12px; }
 @media (max-width: 900px) {
   .qfilter { grid-template-columns: 1fr 1fr; } .qfilter > div:first-child { grid-column: 1 / -1; }
@@ -670,7 +709,14 @@ tr.fin-grp td { background: var(--sunk); font-weight: 600; font-size: .8rem; pad
     return {
       id, path: col + "/" + id,
       onSnapshot: (cb, err) => luister(col, id, cb, err),
-      get: async () => { await zorgVoor(col); return docSnap(col, id); },
+      get: async () => {
+        if (cache.has(col)) return docSnap(col, id);
+        // Losse lezing (bijv. backups/<id>): alleen dit ene document ophalen, niet de hele collectie.
+        const { data, error } = await sb.from("agenda_docs").select("data").eq("collectie", col).eq("id", id).maybeSingle();
+        if (error) throw fout(error);
+        const d = data ? data.data : undefined;
+        return { id, exists: d !== undefined, data: () => kopie(d), get: k => kopie(d?.[k]) };
+      },
       set: async data => {
         const schoon = kopie(data);
         const { error } = await sb.from("agenda_docs").upsert({ collectie: col, id, data: schoon });
@@ -781,7 +827,7 @@ const DEFAULT_SETTINGS = {
 const S = {
   db: null, dbState: "loading", readOnly: false,
   settings: structuredClone(DEFAULT_SETTINGS),
-  reservations: new Map(), quotes: new Map(), invoices: new Map(), blocks: new Map(), dailyNotes: new Map(), customers: new Map(), contacts: new Map(), matchDays: new Map(), clubMonths: new Map(),
+  reservations: new Map(), quotes: new Map(), invoices: new Map(), blocks: new Map(), dailyNotes: new Map(), backups: new Map(), customers: new Map(), contacts: new Map(), matchDays: new Map(), clubMonths: new Map(),
   view: "agenda", month: todayISO.slice(0, 7), day: todayISO,
   resFilter: "komend", resQuery: "", quoteOpen: null, custOpen: null, custQuery: "", custFilter: "alle", importLisa: null, importIcs: null,
 };
@@ -967,7 +1013,7 @@ const MENU = [
     { h: "Gegevens" }, { l: "Importeren (LISA, Outlook)", v: "import" }] },
 ];
 const isCur = it => it.v === S.view && Object.entries(it.set || {}).every(([k, v]) => k === "day" || S[k] === v || (k === "instTab" && !INST_TABS.some(([t]) => t === S.instTab) && v === "locatie"));
-const menuOf = v => v === "home" ? MENU[0] : MENU.slice(1).find(m => m.items.some(it => it.v === v)) || MENU[0];
+const menuOf = v => v === "event" ? MENU.find(m => m.id === "off") : v === "home" ? MENU[0] : MENU.slice(1).find(m => m.items.some(it => it.v === v)) || MENU[0];
 function menuGo(it) {
   closeMenus();
   if (it.act) return MENU_ACTS[it.act]();
@@ -1034,7 +1080,7 @@ function drawChrome() {
   });
   // subbalk: de groep (tussenkop) van het menu waarin de huidige pagina valt
   const groups = []; cur.items.forEach(it => { if (it.h || !groups.length) groups.push([]); if (it.v) groups[groups.length - 1].push(it); });
-  const grp = groups.find(g => g.some(isCur)) || groups.find(g => g.length) || [];
+  const grp = (S.view === "event" && groups.find(g => g.some(it => it.v === "res"))) || groups.find(g => g.some(isCur)) || groups.find(g => g.length) || [];
   const subs = cur.id === "home" ? grp.filter(it => it.v === "home") : cur.id === "inst" ? cur.items.filter(it => it.v && !it.sub && !it.ext) : grp;
   $("#subnav").innerHTML = `<h1>${esc(cur.label)}</h1>` + subs.map(it => `<button type="button" data-v="${it.v}" data-set='${esc(JSON.stringify(Object.fromEntries(Object.entries(it.set || {}).filter(([k]) => k !== "day"))))}' ${isCur(it) ? 'aria-current="page"' : ""}>${esc(it.l)}</button>`).join("");
   drawRail(); if (S.sideOpen === "notif") drawSide(true); else if (S.sideOpen) drawSide(false);
@@ -1210,7 +1256,7 @@ function render() {
 }
 const after = {};
 /* Weergaven. Losse modules voegen hier hun eigen weergave toe: VIEWS.sleutel = () => html; after.sleutel = () => { ... } */
-const VIEWS = { home: () => vHome(), agenda: () => vAgenda(), dag: () => vDag(), res: () => vRes(), off: () => vOff(), klant: () => vKlant(), stat: () => vStat(), import: () => vImport(), inst: () => vInst(), todo: () => vTodo(), koppeling: () => vKoppeling() };
+const VIEWS = { event: () => vEvent(), home: () => vHome(), agenda: () => vAgenda(), dag: () => vDag(), res: () => vRes(), off: () => vOff(), klant: () => vKlant(), stat: () => vStat(), import: () => vImport(), inst: () => vInst(), todo: () => vTodo(), koppeling: () => vKoppeling() };
 const SOON = {
   week: ["Week- en zaalagenda", ["Per week een tijdlijn per ruimte, zoals de Super Agenda in Restau", "Reserveringen, opties, blokkeringen en wedstrijden in één overzicht"]],
   afspraken: ["Afspraken", ["Afspraken met klanten (kennismaking, proeverij, puntjes op de i)", "Aangevraagd, bevestigen of afwijzen, met herinnering", "Zichtbaar in de dag-agenda"]],
@@ -1571,24 +1617,40 @@ function vRes() {
       <input id="r-q" type="search" placeholder="Zoek op klant, ruimte of notitie" value="${esc(S.resQuery)}" style="max-width:320px">
     </div>
     ${actionPanel()}
-    <div class="panel tbl-wrap">
-      ${list.length ? `<table><thead><tr><th>Datum</th><th>Tijd</th><th>Klant</th><th>Ruimte</th><th class="r">Pers.</th><th>Arrangement</th><th>Status</th><th>Offerte</th></tr></thead><tbody>
-      ${list.map(r => { const qo = r.quoteId && S.quotes.get(r.quoteId); return `<tr class="click" data-res="${esc(r.id)}"><td class="num">${esc(shortDate(r.date))}</td><td class="num">${esc(r.start)}–${esc(r.end)}</td><td><b>${esc(r.customer)}</b>${r.contact ? `<br><span class="muted small">${esc(r.contact)}</span>` : ""}</td><td><span class="dot" style="background:${esc(room(r.roomId)?.color || "var(--bar)")}"></span> ${esc(roomName(r.roomId))}</td><td class="r">${esc(r.persons || "")}</td><td>${esc(arr(r.arrangementId)?.name || "")}</td><td>${statusChip(r.status)}</td><td>${qo ? esc(qo.number) : ""}</td></tr>`; }).join("")}
-      </tbody></table>` : `<p class="empty">Geen reserveringen gevonden. Maak er een met <b>Nieuwe reservering</b>.</p>`}
-    </div>
+    ${list.length ? (() => { const groups = new Map(); for (const r of list) { const k = MONTHS[+r.date.slice(5, 7) - 1] + " " + r.date.slice(0, 4); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(r); }
+      return [...groups.entries()].map(([k, rs]) => `<h3 class="qmonth">${esc(k)}</h3><div class="qlist">${rs.map(evRow).join("")}</div>`).join(""); })()
+      : `<p class="empty panel">Geen events gevonden. Maak er een met <b>Nieuwe reservering</b>.</p>`}
   </section>`;
+}
+// Eén regel in de eventslijst, in dezelfde opmaak als de offertelijst (Restau)
+function evRow(r) {
+  const q = r.quoteId && S.quotes.get(r.quoteId), tp = eventType(r.eventType), open = (r.tasks || []).filter(taskOpen).length, late = (r.tasks || []).filter(t => taskState(t) === "achterstallig").length;
+  const cls = r.status === "optie" ? "opt" : r.status === "aanvraag" ? "req" : r.status === "geannuleerd" || r.status === "afgerond" ? "af" : r.date < todayISO ? "af" : "";
+  return `<div class="qrow evrow" data-res="${esc(r.id)}" tabindex="0" role="button" aria-label="Event ${esc(r.customer || "")} ${esc(r.date)}">
+    <div class="qdate ${cls}"><b>${esc(r.date.slice(8, 10))}</b><span>${esc(MONTHS_SHORT[+r.date.slice(5, 7) - 1])} '${esc(r.date.slice(2, 4))}</span></div>
+    <div class="qwho"><span class="qtype" title="${esc(tp?.name || "Soort feest onbekend")}">${typeIcon(tp?.id)}</span><div><b>${esc(r.customer || "(zonder naam)")}</b><br><span class="muted small">${esc(r.start || "")}–${esc(r.end || "")} · ${esc(roomName(r.roomId))}${r.persons ? " · " + esc(r.persons) + " p." : ""}</span></div></div>
+    <div class="qst evcnt">${open ? `<span class="evc ${late ? "late" : ""}" title="${open} open to-do's${late ? ", " + late + " achterstallig" : ""}">${railIcon(ICONS.todo)}<i>${open}</i></span>` : ""}${r.dieet ? `<span class="evc" title="Dieetwensen">${railIcon('<path d="M12 20.5c-4-2-6.5-5.5-6.5-9.5a6.5 6.5 0 0 1 13 0c0 4-2.5 7.5-6.5 9.5z"/><path d="M12 7v7"/>')}</span>` : ""}${r.closed ? `<span class="chip c0">Dicht</span>` : ""}</div>
+    <div class="qamt">${q ? `<span class="qeur">€</span>${eur(totals(q.lines).incl).replace("€", "").trim()}` : `<span class="muted small">geen offerte</span>`}</div>
+    <div class="qacts">${statusChip(r.status)}</div>
+    <div class="qmeta">${q ? `Offerte ${esc(q.number)} · ${esc(q.status)}<br>` : ""}${r.createdAt ? `Gemaakt: ${esc(shortDate(r.createdAt.slice(0, 10)))}<br>` : ""}${r.manager ? esc(r.manager) : `<span class="qnomgr">Account manager?</span>`}</div>
+    <span class="btn small qdet">Details ›</span></div>`;
 }
 after.res = () => {
   $("#r-new").onclick = () => openRes({ date: todayISO });
   $("#r-filter").onchange = e => { S.resFilter = e.target.value; render(); };
   $("#r-mgr").onchange = e => { S.resMgr = e.target.value; render(); };
   const qi = $("#r-q"); qi.oninput = e => { S.resQuery = e.target.value; clearTimeout(qi._t); qi._t = setTimeout(() => { render(); const n = $("#r-q"); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 250); };
-  document.querySelectorAll("tr[data-res], .it[data-res]").forEach(el => el.onclick = () => openRes(S.reservations.get(el.dataset.res)));
+  document.querySelectorAll("tr[data-res], .it[data-res], .qrow[data-res]").forEach(el => { el.onclick = () => openRes(S.reservations.get(el.dataset.res)); el.onkeydown = e => { if (e.key === "Enter") el.click(); }; });
 };
 
 /* Reservering modal */
 function closeModal() { $("#modal-root").innerHTML = ""; document.body.style.overflow = ""; }
+// Een bestaand event opent het eventdossier (zoals Restau); een nieuw event het formulier.
 function openRes(r0) {
+  if (r0 && r0.id && S.reservations.has(r0.id)) { closeModal(); if (S.eventOpen !== r0.id) S.eventTab = "offerte"; S.eventOpen = r0.id; setView("event"); return; }
+  openResForm(r0);
+}
+function openResForm(r0) {
   if (!r0) return;
   const r = { status: "optie", start: "19:00", end: "23:00", persons: "", optieTot: addDays(todayISO, 7), ...r0 };
   const isNew = !r.id;
@@ -1713,9 +1775,9 @@ function openRes(r0) {
     const ok = await write("reservations/" + id, body);
     return ok ? { ...body, id } : null;
   };
-  $("#res-form").onsubmit = async e => { e.preventDefault(); const sv = await save(); if (sv) { closeModal(); toast("Reservering opgeslagen"); await syncProductTasks(null, sv); } };
+  $("#res-form").onsubmit = async e => { e.preventDefault(); const sv = await save(); if (sv) { closeModal(); toast("Reservering opgeslagen"); await syncProductTasks(null, sv); if (isNew) { S.eventOpen = sv.id; S.eventTab = "offerte"; setView("event"); } } };
   const del = $("#rf-del"); if (del) del.onclick = () => { $("#rf-delconfirm").hidden = false; del.hidden = true; };
-  const del2 = $("#rf-del2"); if (del2) del2.onclick = async () => { if (await write("reservations/" + r.id, null, "delete")) { closeModal(); toast("Reservering verwijderd"); } };
+  const del2 = $("#rf-del2"); if (del2) del2.onclick = async () => { if (await write("reservations/" + r.id, null, "delete")) { closeModal(); toast("Reservering verwijderd"); if (S.view === "event") { S.eventOpen = null; setView("res"); } } };
   $("#rf-quote").onclick = async () => {
     const existing = r.quoteId && S.quotes.get(r.quoteId);
     if (existing) { closeModal(); S.quoteOpen = existing.id; setView("off"); return; }
@@ -1985,7 +2047,7 @@ after.off = () => {
       const q = { id: uid(), number: nextQuoteNumber(), status: "concept", customer: "", contact: "", email: "", phone: "", eventDate: "", eventTime: "", roomId: "", persons: "", date: todayISO, validUntil: iso(valid), lines: [{ desc: "", qty: 1, price: 0, btw: 9 }], notes: "", createdAt: new Date().toISOString() };
       if (await write("quotes/" + q.id, strip(q))) { S.quotes.set(q.id, q); S.quoteOpen = q.id; render(); }
     };
-    document.querySelectorAll("[data-q]").forEach(el => { el.onclick = () => { S.quoteOpen = el.dataset.q; render(); }; el.onkeydown = e => { if (e.key === "Enter") el.click(); }; });
+    document.querySelectorAll("[data-q]").forEach(el => { el.onclick = () => { const qq = S.quotes.get(el.dataset.q); if (qq?.reservationId && S.reservations.has(qq.reservationId)) return openRes(S.reservations.get(qq.reservationId)); S.quoteOpen = el.dataset.q; render(); }; el.onkeydown = e => { if (e.key === "Enter") el.click(); }; });
     document.querySelectorAll("[data-otype]").forEach(b => b.onclick = () => { const t = b.dataset.otype, cur = S.offTypes || []; S.offTypes = cur.includes(t) ? cur.filter(x => x !== t) : [...cur, t]; render(); });
     const os = $("#o-sort"); if (os) os.onchange = e => { S.offSort = e.target.value; render(); };
     document.querySelectorAll("[data-otab]").forEach(b => b.onclick = () => { S.offTab = b.dataset.otab; render(); });
@@ -3582,6 +3644,288 @@ delete SOON.betalingen; delete SOON.facturen;
   if (it("betalingen")) it("betalingen").cnt = () => finRows().filter(x => x.late).length;
   if (it("facturen")) it("facturen").cnt = () => finToMake().length;
 })();
+/* ---------- Eventdossier (naar voorbeeld van Restau): één pagina per event met tabbladen ---------- */
+// Andere modules kunnen een tabblad toevoegen of vullen: DOSSIER_TABS.emails = { l: "E-mails", html: r => "...", after: r => {}, cnt: r => 0, right: 1 }
+const DOSSIER_TABS = {};
+const evQuote = r => r.quoteId && S.quotes.get(r.quoteId);
+function dossierTabs(r) {
+  const base = [
+    { k: "offerte", l: "Offerte", html: dOverview, after: dOverviewWire },
+    { k: "wijzigen", l: "Wijzigen", act: () => openResForm(r) },
+    { k: "draaiboek", l: "Draaiboek", html: dProgram, after: dProgramWire },
+    { k: "wensen", l: "Speciale wensen", html: dWishes, after: dWishesWire },
+    { k: "todo", l: "To-do's", html: dTodo, after: dTodoWire, cnt: r => (r.tasks || []).filter(t => taskOpen(t) && t.due && t.due <= todayISO).length },
+    { k: "vragen", l: "Vragen", soon: 1 },
+    { k: "agenda", l: "Agenda", html: dAgenda, after: dAgendaWire },
+    { k: "emails", l: "E-mails", soon: 1, right: 1 },
+    { k: "omzet", l: "Omzet", html: dOmzet, right: 1 },
+    { k: "betalingen", l: "Betalingen", html: dPay, after: dPayWire, right: 1, cnt: r => { const q = evQuote(r); return q && q.status === "geaccepteerd" && typeof finTerms === "function" ? finTerms(q).filter(t => t.late).length : 0; } },
+  ];
+  const extra = Object.entries(DOSSIER_TABS).filter(([k]) => !base.some(b => b.k === k)).map(([k, v]) => ({ k, ...v }));
+  return [...base.map(t => DOSSIER_TABS[t.k] ? { ...t, soon: 0, ...DOSSIER_TABS[t.k] } : t), ...extra];
+}
+function vEvent() {
+  const r = S.reservations.get(S.eventOpen);
+  if (!r) return `<section class="stack"><a href="#" id="ev-back" class="small">‹ Alle events</a><p class="empty panel">Dit event bestaat niet (meer).</p></section>`;
+  const q = evQuote(r), tp = eventType(r.eventType), tabs = dossierTabs(r);
+  const cur = tabs.find(t => t.k === S.eventTab && !t.act) || tabs[0];
+  const terms = q && typeof finTerms === "function" ? finTerms(q) : [];
+  const ro = S.readOnly ? "disabled" : "";
+  const tabBtn = t => { const n = t.cnt ? t.cnt(r) : 0; return `<button type="button" data-evtab="${t.k}" aria-selected="${t === cur}" ${t.right && !tabs.slice(0, tabs.indexOf(t)).some(x => x.right) ? 'class="first-right"' : ""}>${esc(t.l)}${n ? `<span class="evdot">${n}</span>` : ""}</button>`; };
+  return `<section class="stack">
+    <div class="row spread"><a href="#" id="ev-back" class="small">‹ Alle events</a>
+      <div class="row">
+        <details class="evmenu"><summary class="btn">Printen en downloaden</summary><div class="evmenu-dd">${PRINTS.map(([k, l]) => `<button type="button" data-print="${k}">${esc(l)}</button>`).join("")}</div></details>
+        <button class="btn" id="ev-copy" ${ro}>Kopiëren (reeks)</button>
+        <button class="btn" id="ev-backups">Backups</button>
+      </div></div>
+    <div class="evhead panel">
+      <div class="evpic" style="--c:${esc(room(r.roomId)?.color || "var(--teal)")}">${typeIcon(r.eventType)}</div>
+      <div class="evmain">
+        <div class="evtype">${esc(tp?.name || "Soort feest niet gekozen")} <span class="muted">|</span> ${esc(longDate(r.date))}</div>
+        <div class="evname">${esc(r.customer || "(zonder naam)")}</div>
+        <div class="small muted">${esc(r.start || "")}–${esc(r.end || "")} · ${esc(roomName(r.roomId))}${r.persons ? " · " + esc(r.persons) + " personen" : ""} · ${statusChip(r.status)}${r.closed ? ` <span class="chip c0">dossier gesloten</span>` : ""}</div>
+        <div class="evmgr ${r.manager ? "" : "need"}">${managerSelect("ev-mgr", r.manager, ro)}</div>
+      </div>
+      <div class="evright">
+        ${q ? `<a href="#" id="ev-quote" class="evq">Offerte ${esc(q.number)}</a><div class="evamt">${eur(totals(q.lines).incl)}</div>
+          <div class="evdots" title="Betalingen">${terms.map(t => `<span class="${t.paid ? "on" : t.late ? "late" : ""}" title="${esc(t.label)}: ${t.paid ? "betaald" : t.late ? "te laat" : "open"}"></span>`).join("")}</div>` : `<button class="btn primary" id="ev-mkquote" ${ro}>Maak offerte</button>`}
+        <label class="evswitch"><input type="checkbox" id="ev-closed" ${r.closed ? "checked" : ""} ${ro}><span></span> ${r.closed ? "Dossier is gesloten" : "Dossier is open"}</label>
+      </div>
+    </div>
+    <div class="evtabs" role="tablist" aria-label="Onderdelen van het event">${tabs.map(tabBtn).join("")}</div>
+    <div class="panel evbody">${cur.soon ? `<div class="soonbox"><b>${esc(cur.l)}</b><p>Dit onderdeel wordt nu gebouwd en komt hier vanzelf te staan.</p></div>` : cur.html(r)}</div>
+  </section>`;
+}
+after.event = () => {
+  const back = $("#ev-back"); if (back) back.onclick = e => { e.preventDefault(); S.eventOpen = null; setView("res"); };
+  const r = S.reservations.get(S.eventOpen); if (!r) return;
+  const tabs = dossierTabs(r), cur = tabs.find(t => t.k === S.eventTab && !t.act) || tabs[0];
+  document.querySelectorAll("[data-evtab]").forEach(b => b.onclick = () => { const t = tabs.find(x => x.k === b.dataset.evtab); if (t.act) return t.act(); S.eventTab = t.k; render(); });
+  const upd = async (patch, msg) => { if (await write("reservations/" + r.id, { ...patch, updatedAt: new Date().toISOString() }, "update")) { Object.assign(r, patch); if (msg) toast(msg); render(); } };
+  const mg = $("#ev-mgr"); if (mg) mg.onchange = () => upd({ manager: mg.value }, "Accountmanager opgeslagen");
+  const cl = $("#ev-closed"); if (cl) cl.onchange = () => upd({ closed: cl.checked }, cl.checked ? "Dossier gesloten" : "Dossier weer open");
+  const qa = $("#ev-quote"); if (qa) qa.onclick = e => { e.preventDefault(); S.quoteOpen = r.quoteId; setView("off"); };
+  const mq = $("#ev-mkquote"); if (mq) mq.onclick = () => evMakeQuote(r);
+  document.querySelectorAll("[data-print]").forEach(b => b.onclick = () => { b.closest("details").open = false; evPrint(b.dataset.print, r); });
+  $("#ev-copy").onclick = () => openCopySeries(r);
+  $("#ev-backups").onclick = () => openBackups(r);
+  if (!cur.soon && cur.after) cur.after(r, upd);
+};
+async function evMakeQuote(r) {
+  if (S.readOnly) return;
+  const q = newQuoteFromRes(r);
+  if (await write("quotes/" + q.id, strip(q))) { await write("reservations/" + r.id, { quoteId: q.id }, "update"); S.quotes.set(q.id, q); S.quoteOpen = q.id; setView("off"); toast("Offerte aangemaakt"); }
+}
+// Tekstveld dat bij verlaten wordt opgeslagen
+const evText = (id, label, val, ph, rows = 5) => `<label class="f"><span>${esc(label)}</span><textarea id="${id}" rows="${rows}" placeholder="${esc(ph)}" ${S.readOnly ? "disabled" : ""}>${esc(val || "")}</textarea></label>`;
+const evSaveOnBlur = (id, fn) => { const el = $("#" + id); if (el) el.addEventListener("change", () => fn(el.value)); };
+
+function dOverview(r) {
+  const q = evQuote(r), c = r.customerId && S.customers.get(r.customerId);
+  const lines = q ? q.lines.filter(l => (l.desc || l.price) && !l.optional) : [];
+  return `<div class="evgrid">
+    <div class="stack">
+      <button class="btn" data-evgo="wijzigen">Event wijzigen ›</button>
+      ${q ? `<button class="btn" id="ov-q">Offerte bewerken ›</button>` : `<button class="btn primary" id="ov-mkq" ${S.readOnly ? "disabled" : ""}>Maak offerte</button>`}
+      <button class="btn" id="ov-todo" ${S.readOnly ? "disabled" : ""}>Nieuwe to-do</button>
+      <div class="evcard"><b>${esc(r.customer || "")}</b>${r.contact ? `<br>${esc(r.contact)}` : ""}${r.phone ? `<br><a href="tel:${esc(r.phone)}">${esc(r.phone)}</a>` : ""}${r.email ? `<br><a href="mailto:${esc(r.email)}">${esc(r.email)}</a>` : ""}${c ? `<br><a href="#" id="ov-cust" class="small">Klantkaart ›</a>` : ""}</div>
+      ${evText("ov-feedback", "Terugkoppeling", r.feedback, "Hoe was het? Wat vond de klant?", 4)}
+    </div>
+    <div class="stack">
+      ${evText("ov-notes", "Interne notities", r.notes, "Typ hier je interne notities (opbouw, afspraken met keuken en bar)")}
+      ${q ? evText("ov-qnotes", "Notities op de offerte van de klant", q.notes, "Deze tekst staat onderaan de offerte") : ""}
+      ${q ? `<div><b>Op de offerte</b><table class="evlines">${lines.map(l => `<tr><td class="r">${esc(l.qty)}×</td><td>${esc(l.desc)}</td><td class="r">${eur(l.qty * l.price)}</td></tr>`).join("")}<tr class="evtot"><td></td><td>Totaal incl. btw</td><td class="r">${eur(totals(q.lines).incl)}</td></tr></table></div>` : ""}
+    </div></div>`;
+}
+function dOverviewWire(r, upd) {
+  document.querySelectorAll("[data-evgo]").forEach(b => b.onclick = () => openResForm(r));
+  const oq = $("#ov-q"); if (oq) oq.onclick = () => { S.quoteOpen = r.quoteId; setView("off"); };
+  const mq = $("#ov-mkq"); if (mq) mq.onclick = () => evMakeQuote(r);
+  const ot = $("#ov-todo"); if (ot) ot.onclick = () => { S.eventTab = "todo"; render(); setTimeout(() => $("#dt-text")?.focus(), 30); };
+  const oc = $("#ov-cust"); if (oc) oc.onclick = e => { e.preventDefault(); S.custOpen = r.customerId; setView("klant"); };
+  evSaveOnBlur("ov-feedback", v => upd({ feedback: v }, "Terugkoppeling opgeslagen"));
+  evSaveOnBlur("ov-notes", v => upd({ notes: v }, "Notities opgeslagen"));
+  evSaveOnBlur("ov-qnotes", async v => { const q = evQuote(r); if (q && await write("quotes/" + q.id, { notes: v, updatedAt: new Date().toISOString() }, "update")) { q.notes = v; toast("Offertenotities opgeslagen"); } });
+}
+function dProgram(r) {
+  const prog = (r.program || []).slice().sort((a, b) => (a.time || "99").localeCompare(b.time || "99"));
+  return `<div class="row spread"><h3>Draaiboek</h3><button class="btn" data-evgo="wijzigen">Draaiboek en dagindeling bewerken</button></div>
+    <div class="evsheet">${dagSheet(r) || `<p class="muted small">Nog geen dagindeling. Kies bij Wijzigen een soort feest en klik Standaard programma.</p>`}</div>
+    ${prog.length ? `<table class="evlines">${prog.map(p => `<tr><td class="num" style="width:80px">${esc(p.time || "")}</td><td>${esc(p.text)}</td></tr>`).join("")}</table>` : `<p class="muted small">Nog geen draaiboekregels.</p>`}`;
+}
+function dProgramWire(r) { document.querySelectorAll("[data-evgo]").forEach(b => b.onclick = () => openResForm(r)); }
+function dWishes(r) {
+  return `<div class="evgrid">${evText("dw-dieet", "Dieetwensen en allergieën", r.dieet, "bijv. 3× vegetarisch, 1× glutenvrij", 6)}${evText("dw-wishes", "Speciale wensen van de klant", r.wishes, "bijv. taart om 21:00 binnenbrengen, eigen muziek, versiering vanaf 17:00", 6)}</div>`;
+}
+function dWishesWire(r, upd) { evSaveOnBlur("dw-dieet", v => upd({ dieet: v }, "Dieetwensen opgeslagen")); evSaveOnBlur("dw-wishes", v => upd({ wishes: v }, "Speciale wensen opgeslagen")); }
+function dTodo(r) {
+  const mgrs = S.settings.locatie?.managers || [], ro = S.readOnly ? "disabled" : "";
+  const ts = (r.tasks || []).map((t, i) => ({ ...t, i, r })).sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999"));
+  return `<form id="dt-form" class="row" style="flex-wrap:nowrap"><input id="dt-text" placeholder="Nieuwe to-do voor dit event" ${ro}><input type="date" id="dt-due" value="${esc(todayISO)}" style="width:160px" ${ro}><button class="btn primary" ${ro}>Toevoegen</button></form>
+    ${ts.length ? `<div>${ts.map(t => { const st = taskState(t), key = esc(r.id) + ":" + t.i; return `<div class="todo-row ${t.done || st === "geannuleerd" ? "done" : ""}"><input type="checkbox" data-tdone="${key}" ${t.done ? "checked" : ""} ${ro} aria-label="Klaar"><div><span class="tt">${esc(t.text)}</span>${st === "open" ? "" : ` <span class="chip ${TASK_STATES[st][1]}">${TASK_STATES[st][0]}</span>`}${t.due ? `<br><span class="small muted">uiterlijk ${esc(shortDate(t.due))}</span>` : ""}</div>
+      <div class="row td-ctl"><select data-tstat="${key}" aria-label="Status" ${ro}>${[["open", "Open"], ["bezig", "Bezig"], ["klaar", "Klaar"], ["geannuleerd", "Geannuleerd"]].map(([v, l]) => `<option value="${v}" ${(t.done ? "klaar" : t.status || "open") === v ? "selected" : ""}>${l}</option>`).join("")}</select>
+      <select data-tmgr="${key}" aria-label="Manager" ${ro}><option value="">${r.manager ? "Manager event: " + esc(r.manager) : "Geen manager"}</option>${mgrs.map(m => `<option ${m === t.manager ? "selected" : ""}>${esc(m)}</option>`).join("")}</select></div></div>`; }).join("")}</div>` : `<p class="empty">Nog geen to-do's voor dit event.</p>`}`;
+}
+function dTodoWire(r) {
+  $("#dt-form").onsubmit = async e => {
+    e.preventDefault(); const text = $("#dt-text").value.trim(); if (!text) return;
+    const tasks = [...structuredClone(r.tasks || []), { text, due: $("#dt-due").value, done: false }];
+    if (await write("reservations/" + r.id, { tasks }, "update")) { r.tasks = tasks; toast("To-do toegevoegd"); render(); setTimeout(() => $("#dt-text")?.focus(), 30); }
+  };
+  document.querySelectorAll("[data-tdone]").forEach(cb => cb.onchange = () => patchTask(cb.dataset.tdone, t => { t.done = cb.checked; if (cb.checked) t.status = ""; }, cb.checked ? "To-do afgevinkt" : "To-do weer open"));
+  document.querySelectorAll("[data-tstat]").forEach(sel => sel.onchange = () => patchTask(sel.dataset.tstat, t => { t.done = sel.value === "klaar"; t.status = sel.value === "bezig" || sel.value === "geannuleerd" ? sel.value : ""; }, "Status bijgewerkt"));
+  document.querySelectorAll("[data-tmgr]").forEach(sel => sel.onchange = () => patchTask(sel.dataset.tmgr, t => { t.manager = sel.value; }, "Manager bijgewerkt"));
+}
+function dAgenda(r) {
+  const rs = resOn(r.date).filter(o => o.status !== "geannuleerd").sort((a, b) => (a.start || "").localeCompare(b.start || "")), bs = blocksOn(r.date), ms = matchesOn(r.date), c = crowd(r.date);
+  return `<div class="row spread"><h3>${esc(longDate(r.date))}</h3><button class="btn" id="da-day">Open dag-agenda ›</button></div>
+    <div class="evgrid"><div><b>Events op deze dag</b><div class="list">${rs.map(o => `<div class="it ${o.id === r.id ? "me" : ""}" data-evres="${esc(o.id)}" style="cursor:pointer"><span class="t">${esc(o.start)}–${esc(o.end)}</span><span><b>${esc(o.customer || "")}</b>${o.id === r.id ? " (dit event)" : ""}<br><span class="muted small">${esc(roomName(o.roomId))}${o.persons ? " · " + esc(o.persons) + " p." : ""}${roomsClash(o.roomId, r.roomId) && o.id !== r.id ? " · zelfde of gekoppelde ruimte" : ""}</span></span>${statusChip(o.status)}</div>`).join("")}</div>
+      ${bs.length ? `<p class="small" style="margin-top:10px"><b>Geblokkeerd:</b> ${bs.map(b => `${b.roomId ? esc(roomName(b.roomId)) : "alle ruimtes"} ${b.allDay ? "hele dag" : esc(b.start) + "–" + esc(b.end)}${b.reason ? " (" + esc(b.reason) + ")" : ""}`).join("; ")}</p>` : ""}</div>
+    <div><b>Op het park</b><p class="small">${ms.length} wedstrijden${ms.length ? ` (${esc(ms[0].time || "")} tot ${esc(ms[ms.length - 1].time || "")})` : ""}</p><p class="small">Verwachte drukte: <b>${esc(c.lvlName)}</b> (ongeveer ${c.total} mensen)</p></div></div>`;
+}
+function dAgendaWire(r) {
+  $("#da-day").onclick = () => { S.day = r.date; setView("dag"); };
+  document.querySelectorAll("[data-evres]").forEach(el => el.onclick = () => { S.eventOpen = el.dataset.evres; S.eventTab = "agenda"; render(); });
+}
+// Omzet per categorie (grootboek), met drankafkoop gesplitst in een 21%- en een 9%-deel, zoals Restau.
+function dOmzet(r) {
+  const q = evQuote(r); if (!q) return `<p class="empty">Nog geen offerte, dus nog geen omzet.</p>`;
+  const groups = new Map();
+  for (const l of q.lines.filter(l => (l.desc || l.price) && !l.optional)) {
+    const cat = l.category || product(l.productId)?.category || "Overig", t = (+l.qty || 0) * (+l.price || 0);
+    const parts = isMix(l) ? [[21, t * l.btwHigh / 100, " (21%-deel)"], [9, t * (100 - l.btwHigh) / 100, " (9%-deel)"]] : [[+l.btw || 0, t, ""]];
+    if (!groups.has(cat)) groups.set(cat, []);
+    for (const [rate, incl, suf] of parts) groups.get(cat).push({ desc: l.desc + suf, qty: l.qty, rate, incl, excl: incl / (1 + rate / 100) });
+  }
+  let gi = 0, ge = 0;
+  const rows = [...groups.entries()].sort((a, b) => catOrder(a[0]) - catOrder(b[0])).map(([cat, ls]) => {
+    const si = ls.reduce((s, x) => s + x.incl, 0), se = ls.reduce((s, x) => s + x.excl, 0); gi += si; ge += se;
+    return `<tr class="grp"><td colspan="6">${esc(cat)}</td></tr>${ls.map(x => `<tr><td>${esc(x.desc)}</td><td class="r">${esc(x.qty)}</td><td class="r">${x.rate}%</td><td class="r">${eur(x.excl)}</td><td class="r">${eur(x.incl - x.excl)}</td><td class="r">${eur(x.incl)}</td></tr>`).join("")}
+      <tr class="sub"><td colspan="3">Subtotaal ${esc(cat)}</td><td class="r">${eur(se)}</td><td class="r">${eur(si - se)}</td><td class="r">${eur(si)}</td></tr>`;
+  }).join("");
+  return `<div class="tbl-wrap"><table class="evomzet"><thead><tr><th>Product</th><th class="r">Aantal</th><th class="r">Btw</th><th class="r">Totaal excl.</th><th class="r">Btw-bedrag</th><th class="r">Totaal incl.</th></tr></thead><tbody>${rows}
+    <tr class="evtot"><td colspan="3">Totaal</td><td class="r">${eur(ge)}</td><td class="r">${eur(gi - ge)}</td><td class="r">${eur(gi)}</td></tr></tbody></table></div>`;
+}
+function dPay(r) {
+  const q = evQuote(r); if (!q) return `<p class="empty">Nog geen offerte.</p>`;
+  if (typeof finTerms !== "function") return `<p class="empty">Betalingen zijn hier niet beschikbaar.</p>`;
+  const ts = finTerms(q);
+  return `${q.status !== "geaccepteerd" ? `<p class="small muted">De offerte is nog niet geaccepteerd. Hieronder de termijnen zoals ze dan gaan gelden.</p>` : ""}
+    <table class="evlines">${ts.map(t => `<tr><td>${esc(t.label)}</td><td class="r">${eur(t.amount)}</td><td>${t.due ? "uiterlijk " + esc(shortDate(t.due)) : ""}</td><td>${t.paid ? `<span class="chip c1">betaald${t.paidOn ? " " + esc(shortDate(t.paidOn)) : ""}</span>` : t.late ? `<span class="chip c3">te laat</span>` : `<span class="chip c2">open</span>`}${t.inv ? ` <span class="small muted">factuur ${esc(t.inv.number)}</span>` : ""}</td></tr>`).join("")}</table>
+    ${q.status === "geaccepteerd" && typeof finOpenPay === "function" ? `<button class="btn teal" id="dp-open">Betalingen en facturen beheren</button>` : ""}`;
+}
+function dPayWire(r) { const b = $("#dp-open"); if (b) b.onclick = () => finOpenPay(r.quoteId); }
+
+// Offerte geaccepteerd: het event wordt bevestigd. Offerte afgewezen: de optie vervalt, zodat de ruimte weer vrij is.
+const _logQuoteStatusEv = logQuoteStatus;
+logQuoteStatus = async function (q, before) {
+  const r = q && before !== q.status && q.reservationId && S.reservations.get(q.reservationId);
+  const to = r && (r.status === "optie" || r.status === "aanvraag") ? (q.status === "geaccepteerd" ? "bevestigd" : q.status === "afgewezen" ? "geannuleerd" : "") : "";
+  if (to && await write("reservations/" + r.id, { status: to, updatedAt: new Date().toISOString() }, "update")) { r.status = to; toast(to === "bevestigd" ? "Event bevestigd" : "Optie vervallen, ruimte weer vrij"); }
+  return _logQuoteStatusEv(q, before);
+};
+
+/* Printen en downloaden */
+const PRINTS = [["intern", "Draaiboek intern"], ["klant", "Draaiboek klant"], ["keuken", "Keukensheet"], ["party", "Partysheet"], ["todo", "To-do-lijst"], ["csv", "Overzicht (Excel, .csv)"]];
+function evDoc(title, body) {
+  return `<!doctype html><html lang="nl"><head><meta charset="utf-8"><title>${esc(title)}</title><style>body{font-family:"Open Sans",Arial,sans-serif;font-size:14px;color:#3b3b3b;max-width:760px;margin:32px auto;padding:0 24px;line-height:1.5}h1{color:#e5621c;font-weight:600;margin:0 0 4px}h2{font-size:1.05rem;margin:22px 0 6px;color:#1b7d88}table{width:100%;border-collapse:collapse}td,th{padding:5px 6px;border-bottom:1px solid #e3e3e3;text-align:left;vertical-align:top}.k{width:150px;color:#8a8a8a}.box{border:2px solid #b3352b;padding:8px 12px;border-radius:4px}.r{text-align:right}@media print{body{margin:0}}</style></head><body>${body}<p style="color:#8a8a8a;margin-top:28px;font-size:12px">Gemaakt ${esc(new Date().toLocaleString("nl-NL"))} · ${esc(S.settings.locatie?.naam || "HC Tilburg Horeca")}</p></body></html>`;
+}
+function evPrint(kind, r) {
+  const q = evQuote(r), slug = `${r.date}-${(r.customer || "event").replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
+  const head = `<h1>${esc(r.customer || "")}</h1><p>${esc(longDate(r.date))}, ${esc(r.start)}–${esc(r.end)} · ${esc(roomName(r.roomId))}${r.persons ? " · " + esc(r.persons) + " personen" : ""}${eventType(r.eventType) ? " · " + esc(eventType(r.eventType).name) : ""}</p>`;
+  const prog = (r.program || []).length ? `<h2>Draaiboek</h2><table>${r.program.slice().sort((a, b) => (a.time || "").localeCompare(b.time || "")).map(p => `<tr><td class="k">${esc(p.time || "")}</td><td>${esc(p.text)}</td></tr>`).join("")}</table>` : "";
+  const lines = q ? q.lines.filter(l => (l.desc || l.price) && !l.optional) : [];
+  if (kind === "party") return saveFile(`partysheet-${slug}.html`, partySheet(r), "text/html");
+  if (kind === "csv") {
+    const rows = [["Omschrijving", "Aantal", "Prijs incl", "Btw", "Totaal incl"], ...lines.map(l => [l.desc, l.qty, String(l.price).replace(".", ","), btwLabel(l), String(Math.round(l.qty * l.price * 100) / 100).replace(".", ",")])];
+    return saveFile(`overzicht-${slug}.csv`, "﻿" + rows.map(x => x.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\r\n"), "text/csv");
+  }
+  let body = "";
+  if (kind === "intern") body = `${head}<p>Contact: ${esc(r.contact || "")} ${esc(r.phone || "")} ${esc(r.email || "")} · Accountmanager: ${esc(r.manager || "–")}</p>${r.dieet ? `<h2>Dieetwensen en allergieën</h2><div class="box">${esc(r.dieet).replace(/\n/g, "<br>")}</div>` : ""}${r.wishes ? `<h2>Speciale wensen</h2><p>${esc(r.wishes).replace(/\n/g, "<br>")}</p>` : ""}${dagSheet(r)}${prog}${lines.length ? `<h2>Bestelling</h2><table>${lines.map(l => `<tr><td class="r" style="width:60px">${esc(l.qty)}</td><td>${esc(l.desc)}${product(l.productId)?.kitchenNote ? `<br><i>${esc(product(l.productId).kitchenNote)}</i>` : ""}</td><td class="r">${eur(l.qty * l.price)}</td></tr>`).join("")}</table>` : ""}${r.notes ? `<h2>Interne notities</h2><p>${esc(r.notes).replace(/\n/g, "<br>")}</p>` : ""}`;
+  if (kind === "klant") body = `${head}${dagSheet(r)}${prog}${lines.length ? `<h2>Wat we voor jullie verzorgen</h2><table>${lines.map(l => `<tr><td class="r" style="width:60px">${esc(l.qty)}×</td><td>${esc(l.desc)}</td></tr>`).join("")}</table>` : ""}${r.wishes ? `<h2>Jullie wensen</h2><p>${esc(r.wishes).replace(/\n/g, "<br>")}</p>` : ""}`;
+  if (kind === "keuken") body = `<h1>Keukensheet</h1>${head}${r.dieet ? `<h2>Dieetwensen en allergieën</h2><div class="box">${esc(r.dieet).replace(/\n/g, "<br>")}</div>` : ""}${dagSheet(r)}${lines.length ? `<h2>Keuken en bar</h2><table><tr><th>Aantal</th><th>Omschrijving</th></tr>${lines.map(l => `<tr><td style="width:60px">${esc(l.qty)}</td><td>${esc(l.desc)}${product(l.productId)?.kitchenNote ? `<br><i>${esc(product(l.productId).kitchenNote)}</i>` : ""}</td></tr>`).join("")}</table>` : "<p>Nog geen bestelling.</p>"}`;
+  if (kind === "todo") body = `<h1>To-do-lijst</h1>${head}<table>${(r.tasks || []).map(t => `<tr><td style="width:24px">${t.done ? "☑" : "☐"}</td><td>${esc(t.text)}</td><td>${t.due ? esc(shortDate(t.due)) : ""}</td><td>${esc(TASK_STATES[taskState(t)][0])}</td><td>${esc(t.manager || r.manager || "")}</td></tr>`).join("")}</table>`;
+  const title = PRINTS.find(p => p[0] === kind)[1];
+  return saveFile(`${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${slug}.html`, evDoc(`${title} ${r.customer || ""}`, body), "text/html");
+}
+
+/* Kopiëren (reeks): hetzelfde event op meer data, zoals Restau */
+function seriesDates(from, to, every, days) {
+  const out = []; if (!from || !to || to < from) return out;
+  for (let d = from, n = 0; d <= to && n < 400; n++) {
+    const wd = parseISO(d).getDay(), we = wd === 0 || wd === 6;
+    if (days === "alle" || (days === "weekend" && we) || (days === "week" && !we)) out.push(d);
+    if (every === "dag") d = addDays(d, 1);
+    else if (every === "week") d = addDays(d, 7);
+    else { const x = parseISO(d); x.setMonth(x.getMonth() + 1); d = iso(x); }
+  }
+  return out;
+}
+function openCopySeries(r) {
+  const q = evQuote(r);
+  $("#modal-root").innerHTML = `<div class="scrim" id="scrim"><form class="modal" id="cs-form" aria-label="Kopiëren (reeks)" style="max-width:560px">
+    <div class="row spread"><h2>Kopiëren (reeks)</h2><button type="button" class="btn ghost" id="cs-x" aria-label="Sluiten">✕</button></div>
+    <p class="small muted" style="margin:0">Maakt kopieën van dit event (zelfde tijden, ruimte, dagindeling en draaiboek) als optie op de gekozen data.</p>
+    <div class="fields"><label class="f"><span>Vanaf</span><input type="date" id="cs-from" value="${esc(addDays(r.date, 7))}"></label><label class="f"><span>Tot en met</span><input type="date" id="cs-to" value="${esc(addDays(r.date, 28))}"></label></div>
+    <div class="fields"><label class="f"><span>Herhaling</span><select id="cs-every"><option value="week">Elke week</option><option value="dag">Elke dag</option><option value="maand">Elke maand</option></select></label>
+      <label class="f"><span>Welke dagen</span><select id="cs-days"><option value="alle">Alle dagen</option><option value="weekend">Alleen weekend</option><option value="week">Alleen doordeweeks</option></select></label></div>
+    ${q ? `<label class="check"><input type="checkbox" id="cs-quote" checked> Offerte ook kopiëren (als concept)</label>` : ""}
+    <div id="cs-prev" class="small"></div>
+    <div class="row" style="justify-content:flex-end"><button type="submit" class="btn teal" id="cs-go">Kopiëren</button></div></form></div>`;
+  document.body.style.overflow = "hidden";
+  const plan = () => seriesDates($("#cs-from").value, $("#cs-to").value, $("#cs-every").value, $("#cs-days").value).filter(d => d !== r.date).map(d => ({ d, c: conflicts({ ...r, id: "__nieuw", date: d, status: "optie" }) }));
+  const prev = () => { const p = plan(), ok = p.filter(x => !x.c.hard.length); $("#cs-prev").innerHTML = p.length ? `<b>${ok.length} kopie${ok.length === 1 ? "" : "ën"}</b>: ${ok.map(x => esc(shortDate(x.d))).join(", ")}${p.length > ok.length ? `<br><span style="color:var(--bad)">Overgeslagen (ruimte bezet): ${p.filter(x => x.c.hard.length).map(x => esc(shortDate(x.d))).join(", ")}</span>` : ""}` : "Geen data in deze reeks."; $("#cs-go").disabled = !ok.length || S.readOnly; };
+  ["cs-from", "cs-to", "cs-every", "cs-days"].forEach(id => $("#" + id).addEventListener("change", prev)); prev();
+  $("#cs-x").onclick = closeModal;
+  $("#cs-form").onsubmit = async e => {
+    e.preventDefault(); const ok = plan().filter(x => !x.c.hard.length), withQ = q && $("#cs-quote")?.checked; let n = 0;
+    for (const { d } of ok) {
+      const id = uid(), now = new Date().toISOString();
+      const { id: _i, quoteId, tasks, closed, feedback, createdAt, updatedAt, ...rest } = r;
+      const nr = { ...rest, date: d, status: "optie", optieTot: addDays(todayISO, 7), tasks: defaultTasks({ date: d, optieTot: addDays(todayISO, 7) }), copiedFrom: r.id, createdAt: now, updatedAt: now };
+      if (withQ) { const nq = { ...structuredClone(q), id: uid(), number: nextQuoteNumber(), status: "concept", reservationId: id, eventDate: d, date: todayISO, createdAt: now, updatedAt: now }; delete nq.acceptedOn; ["depositPaid", "secondPaid", "finalPaid", "depositPaidOn", "secondPaidOn", "finalPaidOn"].forEach(k => delete nq[k]); if (await write("quotes/" + nq.id, strip(nq))) { S.quotes.set(nq.id, nq); nr.quoteId = nq.id; } }
+      if (await write("reservations/" + id, nr)) n++;
+    }
+    closeModal(); toast(`${n} kopie${n === 1 ? "" : "ën"} gemaakt`); render();
+  };
+}
+
+/* Backups: vorige versies van een event en zijn offerte, automatisch bij opslaan (hoogstens één per 10 minuten) */
+const BACKUP_KEEP = 12;
+async function backupsOf(key) {
+  if (S.backups.has(key)) return S.backups.get(key);
+  let v = { items: [] };
+  if (S.db) { try { const snap = await S.db.doc("backups/" + key).get(); if (snap && snap.exists) v = snap.data() || v; } catch (e) {} }
+  S.backups.set(key, v); return v;
+}
+async function backupBefore(path, mode) {
+  const [col, id] = path.split("/"); if ((col !== "reservations" && col !== "quotes") || !id) return;
+  const cur = (col === "reservations" ? S.reservations : S.quotes).get(id); if (!cur) return;
+  const key = col === "reservations" ? id : (cur.reservationId || "q-" + id), prev = (await backupsOf(key)).items || [];
+  const last = prev.find(x => x.kind === col); if (last && Date.now() - new Date(last.at).getTime() < 10 * 60e3 && mode !== "delete") return;
+  const { id: _x, ...data } = cur;
+  const items = [{ at: new Date().toISOString(), kind: col, id, data: JSON.parse(JSON.stringify(data)), reason: mode === "delete" ? "verwijderd" : "gewijzigd" }, ...prev].slice(0, BACKUP_KEEP);
+  S.backups.set(key, { items });
+  if (S.db) { try { await S.db.doc("backups/" + key).set({ items }); } catch (e) {} }
+}
+const _writeNoBackup = write;
+write = async function (path, data, mode = "set") { if (!/^backups\//.test(path)) await backupBefore(path, mode); return _writeNoBackup(path, data, mode); };
+async function openBackups(r) {
+  const items = (await backupsOf(r.id)).items || [];
+  $("#modal-root").innerHTML = `<div class="scrim" id="scrim"><div class="modal" style="max-width:620px">
+    <div class="row spread"><h2>Backups</h2><button type="button" class="btn ghost" id="bk-x" aria-label="Sluiten">✕</button></div>
+    <p class="small muted" style="margin:0">Bij elke wijziging bewaart de agenda de vorige versie van dit event en zijn offerte (de laatste ${BACKUP_KEEP}, hoogstens één per 10 minuten).</p>
+    ${items.length ? `<div class="list">${items.map((x, i) => `<div class="it"><span class="t">${esc(shortDate(x.at.slice(0, 10)))}<br><span class="small muted">${esc(new Date(x.at).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" }))}</span></span><span>${x.kind === "quotes" ? `Offerte ${esc(x.data.number || "")} · ${esc(x.data.status || "")} · ${eur(totals(x.data.lines || []).incl)}` : `Event · ${esc(shortDate(x.data.date))} ${esc(x.data.start || "")} · ${esc(roomName(x.data.roomId))} · ${esc(x.data.persons || "?")} p. · ${esc(x.data.status || "")}`}<br><span class="small muted">versie van vóór: ${esc(x.reason)}</span></span><button class="btn small" data-bkrestore="${i}" ${S.readOnly ? "disabled" : ""}>Terugzetten</button></div>`).join("")}</div>` : `<p class="empty">Nog geen backups. Die ontstaan vanzelf zodra het event of de offerte wordt gewijzigd.</p>`}
+  </div></div>`;
+  document.body.style.overflow = "hidden";
+  $("#bk-x").onclick = closeModal;
+  document.querySelectorAll("[data-bkrestore]").forEach(b => b.onclick = async () => {
+    const x = items[+b.dataset.bkrestore]; if (!x || !confirm("Deze versie terugzetten? De huidige versie wordt eerst als backup bewaard.")) return;
+    if (await write(x.kind + "/" + x.id, { ...x.data, updatedAt: new Date().toISOString() })) { closeModal(); toast("Versie teruggezet"); render(); }
+  });
+}
+
 boot();
 })();
 </script>
