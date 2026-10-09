@@ -1754,7 +1754,7 @@ function openResForm(r0) {
     </div>
     <div class="fields">
       <label class="f"><span>Aantal personen</span><input id="rf-persons" type="number" min="0" inputmode="numeric" value="${esc(r.persons)}"></label>
-      <label class="f"><span>Arrangement</span><select id="rf-arr"><option value="">Geen / op rekening</option>${arrs.map(a => `<option value="${esc(a.id)}" ${a.id === r.arrangementId ? "selected" : ""}>${esc(a.name)} · ${eur(arrPrice(a))} p.p.</option>`).join("")}</select></label>
+      <label class="f"><span>Arrangement</span><select id="rf-arr"><option value="">Geen / op rekening</option>${arrs.map(a => `<option value="${esc(a.id)}" ${a.id === r.arrangementId ? "selected" : ""}>${esc(arrPriceLabel(a))}</option>`).join("")}</select></label>
       <label class="f"><span>Status</span><select id="rf-status">${STATUSES.map(s => `<option ${s === r.status ? "selected" : ""}>${s}</option>`).join("")}</select></label>
       ${managerSelect("rf-manager", r.manager)}
       <label class="f"><span>Optie geldig tot</span><input type="date" id="rf-optieTot" value="${esc(r.optieTot || "")}"></label>
@@ -1904,7 +1904,7 @@ function defaultTasks(r) {
 }
 function partySheet(r) {
   const q = r.quoteId && S.quotes.get(r.quoteId);
-  const lines = q ? q.lines.filter(l => (l.desc || l.price) && !l.optional) : [];
+  const lines = q ? q.lines.filter(l => (l.desc || l.price) && !l.optional && !l.disc) : [];
   return `<!doctype html><html lang="nl"><head><meta charset="utf-8"><title>Partysheet ${esc(r.customer)} – ${esc(r.date)}</title>
 <style>body{font-family:"Open Sans",Arial,sans-serif;font-size:14px;color:#3b3b3b;max-width:760px;margin:32px auto;padding:0 24px;line-height:1.5}h1,h2{font-weight:600;margin:0 0 6px}h1{color:#e5621c}h2{font-size:1.1rem;margin-top:22px;color:#1b7d88;border-bottom:2px solid #1b7d88;padding-bottom:3px}
 table{width:100%;border-collapse:collapse}td,th{padding:6px;border-bottom:1px solid #e3e3e3;text-align:left;vertical-align:top}.k{width:170px;color:#8a8a8a}.big{font-size:1.6rem;font-weight:700}.box{border:2px solid #b3352b;padding:8px 12px;border-radius:6px}</style></head><body>
@@ -2203,9 +2203,7 @@ function quoteHtml(q) {
 ${q.eventDate ? `<p>Betreft: ${esc(longDate(q.eventDate))} ${esc(q.eventTime || "")}${q.roomId ? " in " + esc(roomName(q.roomId)) : ""}${q.persons ? ", " + esc(q.persons) + " personen" : ""}.</p>` : ""}
 ${(() => { const rm = room(q.roomId); if (!rm || !(rm.omschrijving || (rm.voorzieningen || []).length)) return ""; return `<p class="muted" style="font-size:.92em">${rm.omschrijving ? esc(rm.omschrijving).replace(/\n/g, "<br>") : ""}${(rm.voorzieningen || []).length ? `${rm.omschrijving ? "<br>" : ""}Voorzieningen ${esc(rm.name)}: ${esc(rm.voorzieningen.join(", "))}.` : ""}</p>`; })()}
 ${photoQuoteHtml(q.roomId)}
-<table><thead><tr><th>Omschrijving</th><th class="r">Aantal</th><th class="r">Prijs</th><th class="r">Btw</th><th class="r">Bedrag</th></tr></thead><tbody>
-${q.lines.filter(l => (l.desc || l.price) && !l.optional).map(l => `<tr><td>${esc(l.desc)}${product(l.productId)?.description ? `<br><span class="muted" style="font-size:.88em">${esc(product(l.productId).description)}</span>` : ""}</td><td class="r">${esc(l.qty)}</td><td class="r">${eur(l.price)}</td><td class="r">${esc(btwLabel(l))}</td><td class="r">${eur(l.qty * l.price)}</td></tr>`).join("")}
-</tbody></table>
+${rqQuoteBody(q)}
 <table class="tot"><tr><td>Totaal excl. btw</td><td class="r">${eur(t.excl)}</td></tr>${Object.keys(t.btw).map(r => `<tr><td>Btw ${r}%</td><td class="r">${eur(t.btw[r])}</td></tr>`).join("")}<tr class="big"><td>Totaal incl. btw</td><td class="r">${eur(t.incl)}</td></tr>${hasSecondTerm(q) ? finTerms(q).map(x => `<tr><td>${esc(x.label)}${x.due ? ", uiterlijk " + esc(longDate(x.due)) : ""}</td><td class="r">${eur(x.amount)}</td></tr>`).join("") : +q.depositPct ? `<tr><td>Aanbetaling ${esc(q.depositPct)}%</td><td class="r">${eur(t.incl * q.depositPct / 100)}</td></tr><tr><td>Restant bij eindafrekening</td><td class="r">${eur(t.incl * (100 - q.depositPct) / 100)}</td></tr>` : ""}</table>
 ${q.lines.some(l => l.optional) ? `<h3 style="margin-top:24px">Optioneel, op aanvraag</h3><table><tbody>${q.lines.filter(l => l.optional).map(l => `<tr><td>${esc(l.desc)}</td><td class="r">${esc(l.qty)} × ${eur(l.price)}</td><td class="r">${eur(l.qty * l.price)}</td></tr>`).join("")}</tbody></table>` : ""}
 ${q.notes ? `<p>${esc(q.notes).replace(/\n/g, "<br>")}</p>` : ""}
@@ -2593,6 +2591,8 @@ function openProduct(s, idx) {
       <label class="f"><span>Eenheid</span><select id="pf-unit">${Object.entries(UNITS).map(([v, l]) => `<option value="${v}" ${v === p.unit ? "selected" : ""}>${l}</option>`).join("")}</select></label>
       <label class="f"><span>Btw</span>${btwSelect(p, 'id="pf-btw"')}</label>
       <label class="f" id="pf-mixf" ${isMix(p) ? "" : "hidden"}><span>Deel tegen 21% (%)</span><input id="pf-btwHigh" type="number" min="1" max="99" value="${esc(isMix(p) ? p.btwHigh : 75)}"></label>
+      <label class="f"><span>Prijstype in de offerte</span><select id="pf-ptype">${Object.entries(RQ_PTYPES).map(([v, l]) => `<option value="${v}" ${v === rqPtype(p) ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+      <label class="f"><span>Blok in de offerte</span><select id="pf-rqcat">${[...RQ_CATS, "Zalen"].map(c => `<option ${c === rqCatOf(p) ? "selected" : ""}>${c}</option>`).join("")}</select></label>
       <label class="f"><span>Kinderprijs (optioneel)</span><input id="pf-priceChild" type="number" step="0.01" min="0" value="${esc(p.priceChild ?? "")}"></label>
       <label class="f"><span>Inkoopprijs excl. btw (optioneel)</span><input id="pf-inkoop" type="number" step="0.01" min="0" value="${esc(p.inkoop ?? "")}"></label>
     </div>
@@ -2614,7 +2614,7 @@ function openProduct(s, idx) {
   $("#scrim").addEventListener("mousedown", e => { if (e.target.id === "scrim") closeModal(); });
   $("#prod-form").onsubmit = e => {
     e.preventDefault();
-    const np = { ...p, name: $("#pf-name").value.trim(), category: $("#pf-category").value, price: +$("#pf-price").value || 0, unit: $("#pf-unit").value, btw: $("#pf-btw").value === "mix" ? 21 : +$("#pf-btw").value, btwHigh: $("#pf-btw").value === "mix" ? Math.min(99, Math.max(1, +$("#pf-btwHigh").value || 75)) : null, sub: $("#pf-sub").value.trim(), priceChild: $("#pf-priceChild").value === "" ? null : +$("#pf-priceChild").value, inkoop: $("#pf-inkoop").value === "" ? null : +$("#pf-inkoop").value, description: $("#pf-description").value.trim(), kitchenNote: $("#pf-kitchenNote").value.trim(), todoText: $("#pf-todoText").value.trim(), todoDays: $("#pf-todoDays").value === "" ? "" : +$("#pf-todoDays").value, active: $("#pf-active").checked };
+    const np = { ...p, name: $("#pf-name").value.trim(), category: $("#pf-category").value, price: +$("#pf-price").value || 0, unit: $("#pf-unit").value, btw: $("#pf-btw").value === "mix" ? 21 : +$("#pf-btw").value, btwHigh: $("#pf-btw").value === "mix" ? Math.min(99, Math.max(1, +$("#pf-btwHigh").value || 75)) : null, sub: $("#pf-sub").value.trim(), priceChild: $("#pf-priceChild").value === "" ? null : +$("#pf-priceChild").value, inkoop: $("#pf-inkoop").value === "" ? null : +$("#pf-inkoop").value, description: $("#pf-description").value.trim(), kitchenNote: $("#pf-kitchenNote").value.trim(), todoText: $("#pf-todoText").value.trim(), todoDays: $("#pf-todoDays").value === "" ? "" : +$("#pf-todoDays").value, active: $("#pf-active").checked, ptype: $("#pf-ptype").value, rqCat: $("#pf-rqcat").value };
     if (!np.name) { toast("Geef het product een naam"); return; }
     if (isNew) s.products.push(np); else s.products[idx] = np;
     S.pcat = S.pinstCat = np.category; persist();
@@ -3805,7 +3805,7 @@ const evSaveOnBlur = (id, fn) => { const el = $("#" + id); if (el) el.addEventLi
 
 function dOverview(r) {
   const q = evQuote(r), c = r.customerId && S.customers.get(r.customerId);
-  const lines = q ? q.lines.filter(l => (l.desc || l.price) && !l.optional) : [];
+  const lines = q ? q.lines.filter(l => (l.desc || l.price) && !l.optional && !l.disc) : [];
   return `<div class="evgrid">
     <div class="stack">
       <button class="btn" data-evgo="wijzigen">Event wijzigen ›</button>
@@ -3917,7 +3917,7 @@ function evPrint(kind, r) {
   const q = evQuote(r), slug = `${r.date}-${(r.customer || "event").replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
   const head = `<h1>${esc(r.customer || "")}</h1><p>${esc(longDate(r.date))}, ${esc(r.start)}–${esc(r.end)} · ${esc(roomName(r.roomId))}${r.persons ? " · " + esc(r.persons) + " personen" : ""}${eventType(r.eventType) ? " · " + esc(eventType(r.eventType).name) : ""}</p>`;
   const prog = (r.program || []).length ? `<h2>Draaiboek</h2><table>${r.program.slice().sort((a, b) => (a.time || "").localeCompare(b.time || "")).map(p => `<tr><td class="k">${esc(p.time || "")}</td><td>${esc(p.text)}</td></tr>`).join("")}</table>` : "";
-  const lines = q ? q.lines.filter(l => (l.desc || l.price) && !l.optional) : [];
+  const lines = q ? q.lines.filter(l => (l.desc || l.price) && !l.optional && !l.disc) : [];
   if (kind === "party") return saveFile(`partysheet-${slug}.html`, partySheet(r), "text/html");
   if (kind === "csv") {
     const rows = [["Omschrijving", "Aantal", "Prijs incl", "Btw", "Totaal incl"], ...lines.map(l => [l.desc, l.qty, String(l.price).replace(".", ","), btwLabel(l), String(Math.round(l.qty * l.price * 100) / 100).replace(".", ",")])];
@@ -6236,6 +6236,1146 @@ after.aanvraagform = () => {
   document.head.appendChild(st);
 })();
 /* ---------- einde aanvragen via de website ---------- */
+
+/* ---------- Offerte zoals Restau: programma, opties per categorie, drankafkoop per gelegenheid, arrangementen als offerte-sjabloon ---------- */
+/* Eén offerte (en één arrangement) heeft: eventType, program [{ name, on, start, end, adults, kids, rooms[], opstelling, custom, diner }],
+   items [{ id, cat, productId, desc, part, time, ptype, adults, kids, follow, qty, price, priceKid, dp, dt, dpK, dtK, start, end, btw, btwHigh }],
+   drinks { gelegenheid: { p1|p2|p3|kids: { on, price, hi } } }, drinkDisc, discPct, discEur, kidsEat.
+   q.lines blijft bestaan als platte lijst (opnieuw berekend bij elke wijziging), zodat totalen, facturen en statistiek blijven werken. */
+const RQ_SEED = {"pt":{"535992":"b0","535993":"b0","535994":"b0","1900963":"a0","535995":"b0","535996":"b0","535997":"b0","3001416":"b0","522154":"b0","684203":"p0","3037013":"b1","3271700":"b1","3271718":"b1","3271722":"b1","3271723":"b1","3006954":"b1","3047536":"b1","3071123":"a1","549511":"a1","2457254":"a1","2451194":"a1","536010":"a1","2459181":"a1","536012":"a1","535371":"a1","1835964":"a1","522084":"k1","535369":"b1","535370":"b1","535372":"b1","2456203":"a1","2456212":"a1","522085":"a1","522066":"a1","561170":"a1","1912040":"a1","2459204":"a1","1873171":"a1","2459233":"a1","2459198":"k1","522065":"a1","1873246":"a1","522068":"a1","522067":"a1","561171":"a1","1873340":"a1","522072":"a1","559818":"a1","561172":"a1","522083":"a1","1873200":"a1","561183":"a1","615928":"a1","2459274":"a1","2459275":"a1","1740812":"k1","522087":"a1","561184":"a1","522153":"a1","1873214":"a1","2459516":"a1","2459517":"a1","3047535":"b1","3403852":"b1","845485":"a1","845486":"a1","845488":"a1","845489":"a1","845490":"a1","845491":"a1","845492":"a1","845493":"a1","845502":"a1","845564":"a1","845565":"a1","845567":"a1","845569":"a1","845571":"a1","845572":"a1","845573":"a1","2459826":"b1","2459828":"b1","2460018":"b1","522143":"b2","533486":"b2","522146":"b2","533597":"b2","533608":"b2","522147":"b2","533601":"b2","533605":"b2","533487":"b2","543846":"b2","533607":"b2","543843":"a2","846991":"b2","1693521":"b2","1694526":"b2","2039513":"p2","2039514":"p2","3002913":"a2","3011771":"b2","3032588":"b2","3083645":"b2","3327102":"b2","559914":"b2","846999":"b2","3011760":"b2","3005787":"b2","533858":"b2","533909":"b2","533910":"a2","535366":"b2","535362":"b2","535365":"a2","535368":"a2","535364":"a2","583577":"b2","3032590":"b2","3037023":"a2","3284538":"b2","583579":"b2","549510":"b2","608235":"b2","3201089":"b2","2460063":"a2","535361":"b2","549507":"a2","533603":"b2","533602":"b2","3198393":"b2","559916":"b2","1597647":"a2","3007195":"b2","535360":"a2","625472":"b2","533913":"a2","533916":"a2","533917":"a2","544132":"a2","584124":"a2","3110672":"b2","535986":"a2","535987":"a2","535988":"b2","535989":"a2","535990":"a2","535991":"a2","544133":"a2","544390":"a2","544396":"a2","544401":"a2","549508":"a2","552512":"a2","684217":"p2","1028619":"p3","3011790":"a3","3032116":"a3","559123":"a3","565573":"a3","522199":"b3","560136":"a3","587338":"p3","588456":"p3","522169":"a3","560238":"k3","560119":"a3","580142":"p3","580143":"p3","1689097":"a3","1689098":"a3","1689099":"a3","1689100":"a3","1689101":"a3","1711321":"a3","2442862":"p4","2442869":"p4","540243":"f6","1464468":"p6","3169690":"p6","536025":"b6","587342":"p6","588463":"p6","608589":"p6","631488":"p6","641931":"p6","665194":"b6","3064486":"h6","1679962":"p6","1821518":"p6","580292":"f6","1236870":"p7","559856":"p7","559835":"p7","559847":"p7"},"arrs":[{"rid":"2461","name":"Bruiloft luxe","eventType":"bruiloft","omschrijving":"","intern":false,"maxPerDag":"","program":[{"name":"Ontvangst","on":true,"start":"15:00","end":"15:30","adults":30,"kids":0,"rooms":[""],"opstelling":""},{"name":"Ceremonie","on":true,"start":"15:30","end":"16:15","adults":30,"kids":0,"rooms":[""],"opstelling":""},{"name":"Toost (& Taart)","on":true,"start":"16:15","end":"17:00","adults":30,"kids":0,"rooms":[""],"opstelling":""},{"name":"Borrel","on":true,"start":"17:00","end":"18:00","adults":30,"kids":0,"rooms":[""],"opstelling":""},{"name":"Diner","on":true,"start":"18:00","end":"20:00","adults":30,"kids":0,"rooms":[""],"opstelling":""},{"name":"Feest","on":true,"start":"20:00","end":"01:00","adults":80,"kids":0,"rooms":[""],"opstelling":""}],"items":[{"cat":"Diner","productId":"","desc":"Walking dinner","part":"Diner","time":"18:00","ptype":"adults","price":40.0,"btw":9,"adults":30,"kids":0,"follow":true},{"cat":"Hapjes","productId":"rbc72f3ddef","desc":"Luxe noten en zoutjes garnituur","part":"Borrel","time":"17:00","ptype":"adultskids","price":1.75,"btw":9,"adults":30,"kids":0,"follow":true,"priceKid":1.75},{"cat":"Hapjes","productId":"rbc72f3ddef","desc":"Luxe noten en zoutjes garnituur","part":"Feest","time":"20:00","ptype":"adultskids","price":1.75,"btw":9,"adults":80,"kids":0,"follow":true,"priceKid":1.75},{"cat":"Hapjes","productId":"r156b065cb9","desc":"Stokbroodje mix","part":"Feest","time":"21:00","ptype":"adultskids","price":2.5,"btw":9,"adults":80,"kids":0,"follow":true,"priceKid":2.5},{"cat":"Hapjes","productId":"ra712d7ff71","desc":"Bitterballen mix van “De Jong”","part":"Feest","time":"21:45","ptype":"adultskids","price":1.25,"btw":9,"adults":80,"kids":0,"follow":true,"priceKid":1.25},{"cat":"Hapjes","productId":"rce32a97612","desc":"Kaas/Worst & Borrelplank","part":"Feest","time":"22:30","ptype":"adultskids","price":4.5,"btw":9,"adults":80,"kids":0,"follow":true,"priceKid":4.5},{"cat":"Hapjes","productId":"rad648e4c78","desc":"Huisgemaakte wrapjes mix","part":"Feest","time":"23:00","ptype":"adultskids","price":2.5,"btw":9,"adults":80,"kids":0,"follow":true,"priceKid":2.5},{"cat":"Hapjes","productId":"rff23d3d5d9","desc":"Luxe Bittergarnituur mix","part":"Feest","time":"23:45","ptype":"adultskids","price":1.25,"btw":9,"adults":80,"kids":0,"follow":true,"priceKid":1.25},{"cat":"Hapjes","productId":"r6c5b31d0ca","desc":"1 stokje Kipsaté met stokbrood & kroepoek","part":"Feest","time":"00:30","ptype":"adults","price":11.5,"btw":9,"adults":80,"kids":0,"follow":true},{"cat":"Drankjes","productId":"r90ea857781","desc":"Prosecco geserveerd vanuit Proseccoboom","part":"Ceremonie","time":"15:30","ptype":"adults","price":4.95,"btw":21,"adults":30,"kids":0,"follow":true},{"cat":"Drankjes","productId":"rfd81b45334","desc":"Welkomst Cocktail","part":"Feest","time":"20:00","ptype":"adults","price":6.0,"btw":21,"adults":80,"kids":0,"follow":true}],"drinks":{"Borrel":{"p1":{"on":true,"price":6.0}},"Diner":{"p1":{"on":true,"price":6.0}},"Feest":{"p1":{"on":true,"price":5.5},"p2":{"on":true,"price":2.25}}},"drinkDisc":0,"discPct":0,"discEur":0},{"rid":"2465","name":"Trouwen","eventType":"bruiloft","omschrijving":"","intern":true,"maxPerDag":"","program":[{"name":"Ontvangst","on":true,"start":"14:30","end":"15:00","adults":30,"kids":0,"rooms":[""],"opstelling":""},{"name":"Ceremonie","on":true,"start":"15:00","end":"15:45","adults":30,"kids":0,"rooms":[""],"opstelling":""},{"name":"Toost (& Taart)","on":true,"start":"15:45","end":"16:00","adults":30,"kids":0,"rooms":[""],"opstelling":""},{"name":"Borrel","on":true,"start":"16:00","end":"18:00","adults":30,"kids":0,"rooms":[""],"opstelling":""},{"name":"Diner","on":true,"start":"18:00","end":"20:00","adults":30,"kids":0,"rooms":[""],"opstelling":""},{"name":"Feest","on":true,"start":"20:00","end":"01:00","adults":80,"kids":0,"rooms":[""],"opstelling":""}],"items":[{"cat":"Diner","productId":"","desc":"3-gangen dagmenu","part":"Diner","time":"18:00","ptype":"adults","price":25.0,"btw":9,"adults":30,"kids":0,"follow":true},{"cat":"Hapjes","productId":"rbc72f3ddef","desc":"Luxe noten en zoutjes garnituur","part":"Feest","time":"20:00","ptype":"adultskids","price":0,"btw":9,"adults":80,"kids":0,"follow":true,"priceKid":0},{"cat":"Hapjes","productId":"ra88b3fc265","desc":"Grote puntzak friet met mayonaise","part":"Feest","time":"00:30","ptype":"adultskids","price":3.5,"btw":9,"adults":80,"kids":0,"follow":true,"priceKid":3.5},{"cat":"Drankjes","productId":"r90ea857781","desc":"Prosecco geserveerd vanuit Proseccoboom","part":"Ceremonie","time":"15:00","ptype":"adults","price":0,"btw":21,"adults":30,"kids":0,"follow":true}],"drinks":{"Feest":{"p1":{"on":true,"price":4.0},"p2":{"on":true,"price":1.5}}},"drinkDisc":0,"discPct":0,"discEur":0},{"rid":"2469","name":"Cantus","eventType":"overig","omschrijving":"2,5 uur bier afkoop\nVoldoende Cantus tafels & banken\nPitchers voor het uitschenken\nPlastic bekers voor tijdens de cantus\n1 microfoonstandaard incl. 2 draadloze microfoons\nGelegenheid om laptop of telefoon aan te sluiten op ons geluidssysteem\nindien nodig 2 podium delen voor de cantuszangers/band.\n\n*Eventuele drankjes voor of na afkooptijd dienen meteen afgerekend te worden.\n*Versiering is toegestaan, mits er geen plakband/ducktape wordt gebruikt.\n*Organisatie/bestuur is eerder aanwezig om de ruimte mee klaar te zetten. De \n  ruimte dient veeg schoon opgeleverd te worden na de Cantus.\n*Wanneer er express met bier gegooid wordt, zullen hier €150,- aan schoonmaakkosten voor in rekening worden gebracht.\n*Wanneer wij extra kosten moeten maken voor defecten aan materialen, zullen deze in rekening worden gebracht. \n","intern":true,"maxPerDag":"","program":[{"name":"Ontvangst","on":true,"start":"19:30","end":"20:00","adults":70,"kids":0,"rooms":[""],"opstelling":""},{"name":"Lunch","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Borrel","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Diner","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Feest","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Activiteit","on":true,"start":"20:00","end":"22:30","adults":70,"kids":0,"rooms":[""],"opstelling":""}],"items":[{"cat":"Drankjes","productId":"","desc":"Afkoop studenten: Cantus pakket","part":"Activiteit","time":"20:00","ptype":"adults","price":22.5,"btw":9,"adults":70,"kids":0,"follow":true}],"drinks":{},"drinkDisc":0,"discPct":0,"discEur":0},{"rid":"3681","name":"Betjes All-in Feestavond","eventType":"overig","omschrijving":"","intern":false,"maxPerDag":"","program":[{"name":"Ontvangst","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Lunch","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Borrel","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Diner","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Feest","on":true,"start":"20:00","end":"01:00","adults":60,"kids":0,"rooms":[""],"opstelling":""},{"name":"Activiteit","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""}],"items":[{"cat":"Hapjes","productId":"rff23d3d5d9","desc":"Luxe Bittergarnituur mix","part":"Feest","time":"21:00","ptype":"adultskids","price":1.25,"btw":9,"adults":60,"kids":0,"follow":true,"priceKid":1.25},{"cat":"Hapjes","productId":"re63575dd04","desc":"Mini kipspiesjes met warme pindasaus","part":"Feest","time":"22:00","ptype":"adultskids","price":1.25,"btw":9,"adults":60,"kids":0,"follow":true,"priceKid":1.25},{"cat":"Hapjes","productId":"rdfa7dec3c1","desc":"Runderbitterballen","part":"Feest","time":"23:00","ptype":"adultskids","price":1.25,"btw":9,"adults":60,"kids":0,"follow":true,"priceKid":1.25},{"cat":"Hapjes","productId":"rff23d3d5d9","desc":"Luxe Bittergarnituur mix","part":"Feest","time":"00:00","ptype":"adultskids","price":1.25,"btw":9,"adults":60,"kids":0,"follow":true,"priceKid":1.25}],"drinks":{"Feest":{"p1":{"on":true,"price":5.5},"p2":{"on":true,"price":2.0}}},"drinkDisc":0,"discPct":0,"discEur":0},{"rid":"3917","name":"Celebration","eventType":"verjaardag","omschrijving":"","intern":false,"maxPerDag":"","program":[{"name":"Ontvangst","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Lunch","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Borrel","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Diner","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Feest","on":true,"start":"20:00","end":"01:00","adults":50,"kids":0,"rooms":[""],"opstelling":""}],"items":[{"cat":"Hapjes","productId":"rff23d3d5d9","desc":"Luxe Bittergarnituur mix","part":"Feest","time":"21:00","ptype":"adultskids","price":1.25,"btw":9,"adults":50,"kids":0,"follow":true,"priceKid":1.25},{"cat":"Hapjes","productId":"re63575dd04","desc":"Mini kipspiesjes met warme pindasaus","part":"Feest","time":"22:00","ptype":"adultskids","price":1.25,"btw":9,"adults":50,"kids":0,"follow":true,"priceKid":1.25},{"cat":"Hapjes","productId":"rdfa7dec3c1","desc":"Runderbitterballen","part":"Feest","time":"23:00","ptype":"adultskids","price":1.25,"btw":9,"adults":50,"kids":0,"follow":true,"priceKid":1.25},{"cat":"Hapjes","productId":"rff23d3d5d9","desc":"Luxe Bittergarnituur mix","part":"Feest","time":"00:00","ptype":"adultskids","price":1.25,"btw":9,"adults":50,"kids":0,"follow":true,"priceKid":1.25}],"drinks":{"Feest":{"p1":{"on":true,"price":5.5},"kids":{"on":true,"price":4.5}}},"drinkDisc":0,"discPct":0,"discEur":0},{"rid":"3919","name":"Party Legends","eventType":"verjaardag","omschrijving":"","intern":false,"maxPerDag":"","program":[{"name":"Ontvangst","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Lunch","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Borrel","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Diner","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Feest","on":true,"start":"20:00","end":"01:00","adults":50,"kids":0,"rooms":[""],"opstelling":""}],"items":[{"cat":"Hapjes","productId":"rff23d3d5d9","desc":"Luxe Bittergarnituur mix","part":"Feest","time":"21:00","ptype":"adultskids","price":1.25,"btw":9,"adults":50,"kids":0,"follow":true,"priceKid":1.25},{"cat":"Hapjes","productId":"re63575dd04","desc":"Mini kipspiesjes met warme pindasaus","part":"Feest","time":"22:00","ptype":"adultskids","price":1.25,"btw":9,"adults":50,"kids":0,"follow":true,"priceKid":1.25},{"cat":"Hapjes","productId":"rdfa7dec3c1","desc":"Runderbitterballen","part":"Feest","time":"23:00","ptype":"adultskids","price":1.25,"btw":9,"adults":50,"kids":0,"follow":true,"priceKid":1.25},{"cat":"Hapjes","productId":"rff23d3d5d9","desc":"Luxe Bittergarnituur mix","part":"Feest","time":"00:00","ptype":"adultskids","price":1.25,"btw":9,"adults":50,"kids":0,"follow":true,"priceKid":1.25}],"drinks":{"Feest":{"p1":{"on":true,"price":5.5},"p3":{"on":true,"price":1.0}}},"drinkDisc":0,"discPct":0,"discEur":0},{"rid":"3997","name":"Darten Selectieteams","eventType":"overig","omschrijving":"","intern":false,"maxPerDag":"","program":[{"name":"Ontvangst","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Lunch","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Borrel","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Diner","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Feest","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Activiteit","on":true,"start":"12:00","end":"18:00","adults":50,"kids":0,"rooms":[""],"opstelling":""}],"items":[{"cat":"Lunch","productId":"r5bf204fbb3","desc":"Broodjes Selectieteams TDV","part":"Activiteit","time":"12:30","ptype":"piece","price":125.0,"btw":9,"qty":1.0},{"cat":"Hapjes","productId":"r2252a39e04","desc":"Diner-Buffet Selectieteams TDV","part":"Activiteit","time":"17:00","ptype":"piece","price":100.0,"btw":9,"qty":1.0}],"drinks":{},"drinkDisc":0,"discPct":0,"discEur":0},{"rid":"4145","name":"Party Legends","eventType":"bedrijf","omschrijving":"","intern":false,"maxPerDag":"","program":[{"name":"Ontvangst","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Borrel","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Diner","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Feest","on":true,"start":"20:00","end":"01:00","adults":75,"kids":0,"rooms":[""],"opstelling":""}],"items":[{"cat":"Hapjes","productId":"rff23d3d5d9","desc":"Luxe Bittergarnituur mix","part":"Feest","time":"21:00","ptype":"adultskids","price":1.25,"btw":9,"adults":75,"kids":0,"follow":true,"priceKid":1.25},{"cat":"Hapjes","productId":"re63575dd04","desc":"Mini kipspiesjes met warme pindasaus","part":"Feest","time":"22:00","ptype":"adultskids","price":1.25,"btw":9,"adults":75,"kids":0,"follow":true,"priceKid":1.95},{"cat":"Hapjes","productId":"rdfa7dec3c1","desc":"Runderbitterballen","part":"Feest","time":"23:00","ptype":"adultskids","price":1.25,"btw":9,"adults":75,"kids":0,"follow":true,"priceKid":1.25},{"cat":"Hapjes","productId":"rff23d3d5d9","desc":"Luxe Bittergarnituur mix","part":"Feest","time":"00:00","ptype":"adultskids","price":1.25,"btw":9,"adults":75,"kids":0,"follow":true,"priceKid":1.25}],"drinks":{"Feest":{"p1":{"on":true,"price":5.5},"p3":{"on":true,"price":1.0}}},"drinkDisc":0,"discPct":0,"discEur":0},{"rid":"4533","name":"Party Legends","eventType":"overig","omschrijving":"","intern":false,"maxPerDag":"","program":[{"name":"Ontvangst","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Lunch","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Borrel","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Diner","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Feest","on":true,"start":"20:00","end":"01:00","adults":50,"kids":0,"rooms":[""],"opstelling":""},{"name":"Activiteit","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""}],"items":[{"cat":"Hapjes","productId":"rff23d3d5d9","desc":"Luxe Bittergarnituur mix","part":"Feest","time":"21:00","ptype":"adultskids","price":1.25,"btw":9,"adults":50,"kids":0,"follow":true,"priceKid":1.25},{"cat":"Hapjes","productId":"re63575dd04","desc":"Mini kipspiesjes met warme pindasaus","part":"Feest","time":"22:00","ptype":"adultskids","price":1.25,"btw":9,"adults":50,"kids":0,"follow":true,"priceKid":1.25},{"cat":"Hapjes","productId":"rdfa7dec3c1","desc":"Runderbitterballen","part":"Feest","time":"23:00","ptype":"adultskids","price":1.25,"btw":9,"adults":50,"kids":0,"follow":true,"priceKid":1.25},{"cat":"Hapjes","productId":"rff23d3d5d9","desc":"Luxe Bittergarnituur mix","part":"Feest","time":"00:00","ptype":"adultskids","price":1.25,"btw":9,"adults":50,"kids":0,"follow":true,"priceKid":1.25}],"drinks":{"Feest":{"p1":{"on":true,"price":5.5},"p3":{"on":true,"price":1.0}}},"drinkDisc":0,"discPct":0,"discEur":0},{"rid":"4534","name":"Celebration","eventType":"overig","omschrijving":"","intern":false,"maxPerDag":"","program":[{"name":"Ontvangst","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Lunch","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Borrel","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Diner","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Feest","on":true,"start":"20:00","end":"01:00","adults":50,"kids":0,"rooms":[""],"opstelling":""},{"name":"Activiteit","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""}],"items":[{"cat":"Hapjes","productId":"rff23d3d5d9","desc":"Luxe Bittergarnituur mix","part":"Feest","time":"21:00","ptype":"adultskids","price":1.25,"btw":9,"adults":50,"kids":0,"follow":true,"priceKid":1.25},{"cat":"Hapjes","productId":"re63575dd04","desc":"Mini kipspiesjes met warme pindasaus","part":"Feest","time":"22:00","ptype":"adultskids","price":1.25,"btw":9,"adults":50,"kids":0,"follow":true,"priceKid":1.25},{"cat":"Hapjes","productId":"rdfa7dec3c1","desc":"Runderbitterballen","part":"Feest","time":"23:00","ptype":"adultskids","price":1.25,"btw":9,"adults":50,"kids":0,"follow":true,"priceKid":1.25},{"cat":"Hapjes","productId":"rff23d3d5d9","desc":"Luxe Bittergarnituur mix","part":"Feest","time":"00:00","ptype":"adultskids","price":1.25,"btw":9,"adults":50,"kids":0,"follow":true,"priceKid":1.25}],"drinks":{"Feest":{"p1":{"on":true,"price":5.5}}},"drinkDisc":0,"discPct":0,"discEur":0},{"rid":"4864","name":"Betje All-in arrangement","eventType":"verjaardag","omschrijving":"","intern":false,"maxPerDag":"","program":[{"name":"Ontvangst","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Lunch","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Borrel","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Diner","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Feest","on":true,"start":"20:00","end":"01:00","adults":50,"kids":0,"rooms":[""],"opstelling":""}],"items":[{"cat":"Hapjes","productId":"rff23d3d5d9","desc":"Luxe Bittergarnituur mix","part":"Feest","time":"21:00","ptype":"adultskids","price":1.25,"btw":9,"adults":50,"kids":0,"follow":true,"priceKid":1.25},{"cat":"Hapjes","productId":"re63575dd04","desc":"Mini kipspiesjes met warme pindasaus","part":"Feest","time":"22:00","ptype":"adultskids","price":1.25,"btw":9,"adults":50,"kids":0,"follow":true,"priceKid":1.25},{"cat":"Hapjes","productId":"rdfa7dec3c1","desc":"Runderbitterballen","part":"Feest","time":"23:00","ptype":"adultskids","price":1.25,"btw":9,"adults":50,"kids":0,"follow":true,"priceKid":1.25},{"cat":"Hapjes","productId":"rff23d3d5d9","desc":"Luxe Bittergarnituur mix","part":"Feest","time":"00:00","ptype":"adultskids","price":1.25,"btw":9,"adults":50,"kids":0,"follow":true,"priceKid":1.25}],"drinks":{"Feest":{"p1":{"on":true,"price":5.5},"p2":{"on":true,"price":2.0}}},"drinkDisc":0,"discPct":0,"discEur":0},{"rid":"5427","name":"Date Diner","eventType":"overig","omschrijving":"","intern":false,"maxPerDag":"","program":[{"name":"Ontvangst","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Lunch","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Borrel","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Diner","on":true,"start":"19:00","end":"22:00","adults":30,"kids":0,"rooms":[""],"opstelling":""},{"name":"Feest","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Activiteit","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""}],"items":[{"cat":"Diner","productId":"ra38297dc2d","desc":"Date Diner","part":"Diner","time":"19:00","ptype":"adults","price":35.0,"btw":9,"adults":30,"kids":0,"follow":true}],"drinks":{"Diner":{"p1":{"on":true,"price":7.5}}},"drinkDisc":0,"discPct":0,"discEur":0},{"rid":"5484","name":"Date Diner 2026","eventType":"overig","omschrijving":"","intern":false,"maxPerDag":"","program":[{"name":"Ontvangst","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Lunch","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Borrel","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Diner","on":true,"start":"19:00","end":"22:00","adults":30,"kids":0,"rooms":[""],"opstelling":""},{"name":"Feest","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""},{"name":"Activiteit","on":false,"start":"","end":"","adults":"","kids":"","rooms":[""],"opstelling":""}],"items":[],"drinks":{"Diner":{"p1":{"on":true,"price":7.0}}},"drinkDisc":0,"discPct":0,"discEur":0}],"los":[{"name":"Tapbier Brand Fluitje","cat":"Bieren","unit":"Glas","price":3.4},{"name":"Heineken 0.0%","cat":"Alcoholvrij","unit":"Fles","price":3.4},{"name":"Rosebier","cat":"Bieren","unit":"Fles","price":4.5},{"name":"Koffie/Thee","cat":"Koffie & Thee","unit":"Glas","price":2.9},{"name":"Frisdranken","cat":"Frisdranken","unit":"Glas","price":3.0},{"name":"Sappen","cat":"Frisdranken","unit":"Glas","price":3.0},{"name":"Red Bull","cat":"Frisdranken","unit":"Glas","price":4.75},{"name":"Wijnen","cat":"Wijnen","unit":"Glas","price":4.9},{"name":"Vieux","cat":"Gedistilleerd binnenland","unit":"Glas","price":3.0},{"name":"Jenever","cat":"Gedistilleerd binnenland","unit":"Glas","price":3.0},{"name":"Port","cat":"Gedistilleerd binnenland","unit":"Glas","price":4.9},{"name":"Amstel Radler 2.0%","cat":"Bieren","unit":"Fles","price":4.0},{"name":"Amstel Radler 0.0%","cat":"Alcoholvrij","unit":"Fles","price":4.0},{"name":"Mixdrank met fris","cat":"Gedistilleerd buitenland","unit":"Glas","price":6.0},{"name":"Mixdrank met sap","cat":"Gedistilleerd buitenland","unit":"Glas","price":6.2},{"name":"Mixdrank met energydrank","cat":"Gedistilleerd buitenland","unit":"Glas","price":6.75},{"name":"Cappuccino","cat":"Koffie & Thee","unit":"Glas","price":3.6},{"name":"Schrobbeler","cat":"Gedistilleerd binnenland","unit":"Glas","price":4.5},{"name":"Affligem Blond 0.0","cat":"Alcoholvrij","unit":"Fles","price":4.75},{"name":"Brand Vaasje ","cat":"Bieren","unit":"Glas","price":3.8},{"name":"Speciaal Bieren","cat":"Bieren","unit":"Fles","price":6.0},{"name":"Gedestilleerd ","cat":"Dranken BTW hoog","unit":"Glas","price":4.0},{"name":"Doos Flugel","cat":"Dranken BTW hoog","unit":"Glas","price":50.0}]};
+const RQ_ORDER = ["5484", "4864", "4145", "5427", "3917", "3919", "3681", "3997", "2461", "2465", "2469", "4533", "4534"]; // volgorde van de lijst in Restau
+const RQ_CATS = ["Lunch", "Diner", "Hapjes", "Drankjes", "Decoratie pakket", "Decoratie los", "Extra mogelijkheden", "Muziek", "Leveranciers"];
+const RQ_TOTCATS = ["Zalen", "Lunch", "Diner", "Hapjes", "Drankjes", "Decoratie pakket", "Decoratie los", "Extra mogelijkheden", "Muziek", "Speciale wensen"];
+const RQ_PTYPES = { adults: "per volwassene", kids: "per kind", adultskids: "per persoon (volwassene en kind)", piece: "per stuk", hour: "per uur", free: "vrij bedrag" };
+const RQ_PTCODE = { a: "adults", k: "kids", b: "adultskids", p: "piece", h: "hour", f: "free" };
+const RQ_PK = [["p1", "Pakket 1"], ["p2", "Pakket 2"], ["p3", "Pakket 3"], ["kids", "Kinderen"]];
+const RQ_IC = {
+  Zalen: '<path d="M5 20.5V4.5h10v16M15 6.5h4v14M3 20.5h18"/><circle cx="12" cy="12.5" r=".7"/>',
+  Lunch: '<path d="M4 12.5c0-3.6 3.6-6.5 8-6.5s8 2.9 8 6.5zM3.5 12.5h17v2.5h-17zM5 15v2.5c0 1 1 2 2 2h10c1 0 2-1 2-2V15"/>',
+  Diner: '<path d="M7 3.5v7M5 3.5v4.5a2 2 0 0 0 4 0V3.5M7 10.5v10M16.5 20.5v-17c-2 1-3 3.5-3 6.5 0 1.5.8 2.5 3 2.5"/>',
+  Hapjes: '<path d="M6.5 10.5h11l-1.6 10h-7.8zM9 10.5 7.8 4M12 10.5V3.5M15 10.5l1.2-6"/>',
+  Drankjes: '<path d="M4.5 4.5h15l-7.5 8.5zM12 13v6.5M8.5 19.5h7M16 4.5l2.5-2"/>',
+  "Decoratie pakket": '<circle cx="9" cy="8" r="3.6"/><circle cx="15.5" cy="9" r="3.4"/><path d="M9 11.6 10.5 20.5M15.5 12.4l-2 8.1"/>',
+  "Decoratie los": '<ellipse cx="12" cy="9" rx="4.6" ry="5.6"/><path d="M12 14.6c-1.2 2 1.2 3.2 0 5.9"/>',
+  "Extra mogelijkheden": '<circle cx="12" cy="12" r="8.5"/><path d="M12 8v8M8 12h8"/>',
+  Muziek: '<path d="M9 18.5V6l10-2v12.5"/><circle cx="7" cy="18.5" r="2"/><circle cx="17" cy="16.5" r="2"/>',
+  Leveranciers: '<path d="M4 9.5 5.5 4.5h13L20 9.5zM5 9.5v10h14v-10M10 19.5v-5h4v5"/>',
+  "Speciale wensen": '<path d="m12 4 2.4 5 5.4.6-4 3.7 1.1 5.3L12 16l-4.9 2.6 1.1-5.3-4-3.7 5.4-.6z"/>',
+  adults: '<circle cx="8" cy="8" r="2.6"/><circle cx="16" cy="8" r="2.6"/><path d="M3.5 18.5c.5-3 2.3-4.8 4.5-4.8s4 1.8 4.5 4.8M11.5 18.5c.5-3 2.3-4.8 4.5-4.8s4 1.8 4.5 4.8"/>',
+  kids: '<rect x="4.5" y="10" width="15" height="9.5" rx="1"/><path d="M3.5 10h17M12 10v9.5M12 10c-1-3-4.5-4-4.5-1.6S12 10 12 10c1-3 4.5-4 4.5-1.6S12 10 12 10"/>',
+  cal: '<rect x="3.5" y="5" width="17" height="15.5" rx="1.5"/><path d="M3.5 9.5h17M8 3v4M16 3v4M7.5 13h2M11 13h2M14.5 13h2M7.5 16.5h2M11 16.5h2"/>',
+};
+const rqIcon = k => railIcon(RQ_IC[k] || "");
+TYPE_ICONS.bruiloft = '<circle cx="8.5" cy="6.3" r="2.3"/><circle cx="15.5" cy="6.3" r="2.3"/><path d="M5.5 20.5 6.3 11h4.4l.8 9.5M12.5 20.5l1.6-9.5h2.8l2.6 9.5z"/><path d="M8.5 11l-.8 2.5h1.6z"/>';
+
+/* Soorten feest zoals in Restau (Bruiloft, Verjaardag, Bedrijfsfeest, Vergadering, Condoleance, Overig) plus de clubsoorten.
+   on:false = staat niet in het standaard programma, maar is wel een gelegenheid die je aan kunt zetten. */
+const RQ_TYPES = [
+  { id: "bruiloft", name: "Bruiloft", optieDagen: 14, parts: [{ name: "Ontvangst", start: "15:00", end: "15:30" }, { name: "Ceremonie", start: "15:30", end: "16:15" }, { name: "Toost (& Taart)", start: "16:15", end: "17:00" }, { name: "Borrel", start: "17:00", end: "18:00" }, { name: "Diner", start: "18:00", end: "20:00" }, { name: "Feest", start: "20:00", end: "01:00" }] },
+  { id: "verjaardag", name: "Verjaardag", optieDagen: 14, parts: [{ name: "Ontvangst", start: "19:30", end: "20:00" }, { name: "Lunch", start: "12:30", end: "14:00", on: false }, { name: "Borrel", start: "20:00", end: "22:00" }, { name: "Diner", start: "18:00", end: "20:00", on: false }, { name: "Feest", start: "22:00", end: "00:30" }] },
+  { id: "bedrijf", name: "Bedrijfsfeest", optieDagen: 14, parts: [{ name: "Ontvangst", start: "16:30", end: "17:00" }, { name: "Borrel", start: "17:00", end: "19:00" }, { name: "Diner", start: "19:00", end: "21:00", on: false }, { name: "Feest", start: "21:00", end: "00:30", on: false }] },
+  { id: "vergadering", name: "Vergadering", optieDagen: 7, parts: [{ name: "Ontvangst", start: "09:00", end: "09:30" }, { name: "Vergadering ochtend", start: "09:30", end: "12:30" }, { name: "Lunch", start: "12:30", end: "13:15" }, { name: "Vergadering middag", start: "13:15", end: "17:00" }, { name: "Borrel", start: "17:00", end: "18:00", on: false }, { name: "Diner", start: "18:00", end: "20:00", on: false }] },
+  { id: "condoleance", name: "Condoleance", optieDagen: 3, parts: [{ name: "Ontvangst", start: "13:30", end: "14:00", on: false }, { name: "Bijeenkomst", start: "14:00", end: "17:00" }] },
+  { id: "overig", name: "Overig", optieDagen: 14, parts: [{ name: "Ontvangst", start: "18:30", end: "19:00", on: false }, { name: "Lunch", start: "12:00", end: "13:00", on: false }, { name: "Borrel", start: "17:00", end: "19:00", on: false }, { name: "Diner", start: "19:00", end: "21:00", on: false }, { name: "Feest", start: "21:00", end: "00:30", on: false }, { name: "Activiteit", start: "19:00", end: "23:00" }] },
+];
+(() => {
+  const club = DEFAULT_EVENT_TYPES.filter(t => !RQ_TYPES.some(x => x.id === t.id));
+  DEFAULT_EVENT_TYPES.splice(0, DEFAULT_EVENT_TYPES.length, ...structuredClone(RQ_TYPES.slice(0, 5)), ...club, structuredClone(RQ_TYPES[5]));
+})();
+
+/* Producten: prijstype en Restau-categorie (uit de Restau-export, anders afgeleid van eenheid en categorie) */
+const RQ_CATMAP = { Lunch: "Lunch", Diner: "Diner", "Buffet en diner": "Diner", Hapjes: "Hapjes", Drankjes: "Drankjes", Dranken: "Drankjes", "Dranken los": "Drankjes", Drankafkoop: "Drankjes", Decoratie: "Decoratie los", Muziek: "Muziek", "Extra's": "Extra mogelijkheden", Zaalhuur: "Zalen" };
+const rqPt = p => (p && p.restauId && RQ_SEED.pt[p.restauId]) || "";
+function rqPtype(p) {
+  if (!p) return "piece";
+  if (p.ptype && RQ_PTYPES[p.ptype]) return p.ptype;
+  const c = rqPt(p); if (c) return RQ_PTCODE[c[0]] || "adults";
+  if (p.unit === "persoon" || p.unit === "ppu") return p.priceChild != null && p.priceChild !== "" ? "adultskids" : "adults";
+  return p.unit === "uur" ? "hour" : p.unit === "vast" ? "free" : "piece";
+}
+function rqCatOf(p) {
+  if (!p) return "Speciale wensen";
+  if (p.rqCat && (RQ_CATS.includes(p.rqCat) || p.rqCat === "Zalen")) return p.rqCat;
+  const c = rqPt(p), i = c ? +c.slice(1) : -1;
+  if (i >= 0 && RQ_CATS[i]) return RQ_CATS[i];
+  return RQ_CATMAP[p.category] || "Extra mogelijkheden";
+}
+const rqCatOfLine = l => l.rqCat || (l.productId && product(l.productId) ? rqCatOf(product(l.productId)) : RQ_CATMAP[l.category] || "Speciale wensen");
+
+/* Drankafkoop per soort feest: 3 pakketten + kinderen, prijs p.p. per uur per gelegenheid (Restau: Drankjes > afkoop) */
+const DA_DESC = { p1: "Tapbier, frisdranken, wijnen, Heineken 0%, Koffie & Thee", p2: "Rosebier, Radler, Bacardi's, Wodka's, Malibu, Whiskey, Bessen, Pasoa, Safari, Apfelkorn, Boswandeling, Gin, Baileys, Schrobbeler (geen shotjes), Likeur 43, Amaretto", p3: "3 sterke dranken naar keuze", kids: "Kids: Frisdranken (excl. Redbull)" };
+const DA_HIGH = { p1: 75, p2: 100, p3: 100, kids: 0 };
+const DA_TBL = {
+  bruiloft: { "*": [6, 3, 2, 4.5], Feest: [5.5, 2.25, 1, 4.5] },
+  verjaardag: { "*": [6, 3, 2, 4.5], Feest: [5.5, 2.25, 1, 4.5] },
+  bedrijf: { "*": [6.5, 3, 1, null], Feest: [5.5, 2, 1, null] },
+  overig: { "*": [6, 3, 1.5, 4.5], Ontvangst: [6, 3, 1, null], Feest: [5.5, 2.25, 1, 4.5], Activiteit: [5.5, 2.25, 1, null] },
+};
+const DA_IDX = { p1: 0, p2: 1, p3: 2, kids: 3 };
+function daDefPrice(typeId, part, pk) {
+  if (/lunch/i.test(part || "")) return null; // in Restau geen drankafkoop bij Lunch
+  const tb = DA_TBL[typeId] || DA_TBL.overig, row = Object.prototype.hasOwnProperty.call(tb, part) ? tb[part] : tb["*"];
+  return row ? row[DA_IDX[pk]] : null;
+}
+function daCfg(typeId) {
+  const st = ((S.settings.drankafkoop || {})[typeId]) || {}, out = {};
+  for (const [pk] of RQ_PK) {
+    const s = st[pk] || {};
+    out[pk] = { omschrijving: s.omschrijving ?? (pk === "kids" && typeId === "verjaardag" ? "Fris (excl. Redbull)" : DA_DESC[pk]), foto: s.foto || "", btwHigh: s.btwHigh ?? DA_HIGH[pk], prices: s.prices || {} };
+  }
+  return out;
+}
+function daPrice(typeId, part, pk) {
+  const v = daCfg(typeId)[pk].prices[part];
+  if (v === "" || v === null) return null;
+  if (v != null) return +v;
+  return daDefPrice(typeId, part, pk);
+}
+
+/* Rekenen */
+const rqNum = v => v === "" || v == null ? 0 : +v || 0;
+const fmtN = (n, dec = 2) => (+n || 0).toLocaleString("nl-NL", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+const fmtH = h => (Math.round(h * 10) / 10).toLocaleString("nl-NL");
+const rqHours = p => { if (!p || !p.start || !p.end) return 0; const s = span2(p.start, p.end); return s ? (s[1] - s[0]) / 60 : 0; };
+const rqBx = hi => hi >= 100 ? { btw: 21 } : hi <= 0 ? { btw: 9 } : { btw: 21, btwHigh: Math.round(hi * 100) / 100 };
+const rqEx = (amt, x) => isMix(x) ? amt * x.btwHigh / 100 / 1.21 + amt * (100 - x.btwHigh) / 100 / 1.09 : amt / (1 + (+x.btw || 0) / 100);
+const rqType = d => eventType(d.eventType) || null;
+const rqOnParts = d => (d.program || []).filter(p => p.on);
+const rqPartOf = (d, name) => name ? (d.program || []).find(p => p.on && p.name === name) : null;
+const rqNewPart = (name, x = {}) => ({ name, on: false, start: "", end: "", adults: "", kids: "", rooms: [""], opstelling: "", ...x });
+const typeName = id => eventType(id)?.name || "";
+const arrLabel = a => a ? a.name + (a.eventType && typeName(a.eventType) && S.settings.arrangementen.filter(x => x.name === a.name).length > 1 ? " (" + typeName(a.eventType) + ")" : "") : "";
+
+function rqEnsure(d) {
+  d.rq = 1;
+  d.program = Array.isArray(d.program) ? d.program : [];
+  d.items = Array.isArray(d.items) ? d.items : [];
+  d.drinks = d.drinks && typeof d.drinks === "object" && !Array.isArray(d.drinks) ? d.drinks : {};
+  for (const p of d.program) { if (!Array.isArray(p.rooms)) p.rooms = [p.roomId || ""]; if (!p.rooms.length) p.rooms.push(""); }
+  const t = rqType(d);
+  if (t) {
+    for (const tp of t.parts || []) if (!d.program.some(p => p.name === tp.name)) d.program.push(rqNewPart(tp.name));
+    const names = (t.parts || []).map(p => p.name), ix = n => { const i = names.indexOf(n); return i < 0 ? 99 : i; };
+    d.program.sort((a, b) => ix(a.name) - ix(b.name));
+  }
+  for (const it of d.items) if (!it.id) it.id = uid();
+  return d;
+}
+// Andere soort feest gekozen: gelegenheden die uit staan en niet bij de nieuwe soort horen gaan weg.
+function rqTypeChange(d, typeId) {
+  d.eventType = typeId;
+  const t = eventType(typeId), names = (t?.parts || []).map(p => p.name);
+  d.program = (d.program || []).filter(p => p.on || p.custom || names.includes(p.name));
+  rqEnsure(d);
+}
+function rqItemRows(d, it) {
+  const p = rqPartOf(d, it.part), fol = it.follow !== false && p;
+  const A = fol ? rqNum(p.adults) : rqNum(it.adults), K = fol ? rqNum(p.kids) : rqNum(it.kids);
+  const row = (who, n, price, dp, dt) => ({ who, n, price, dp, dt, gross: n * price, net: n * (price - dp) - dt });
+  switch (it.ptype) {
+    case "kids": return [row("kids", K, rqNum(it.priceKid ?? it.price), rqNum(it.dpK), rqNum(it.dtK))];
+    case "adultskids": return [row("adults", A, rqNum(it.price), rqNum(it.dp), rqNum(it.dt)), row("kids", K, rqNum(it.priceKid ?? it.price), rqNum(it.dpK), rqNum(it.dtK))];
+    case "piece": return [row("qty", rqNum(it.qty), rqNum(it.price), rqNum(it.dp), rqNum(it.dt))];
+    case "hour": { const h = rqHours({ start: it.start || p?.start, end: it.end || p?.end }); return [row("hour", h, rqNum(it.price), rqNum(it.dp), rqNum(it.dt))]; }
+    case "free": { const a = rqNum(it.price); return [{ who: "free", n: 1, price: a, dp: 0, dt: rqNum(it.dt), gross: a, net: a - rqNum(it.dt) }]; }
+    default: return [row("adults", A, rqNum(it.price), rqNum(it.dp), rqNum(it.dt))];
+  }
+}
+function rqItemBx(it) {
+  const pr = product(it.productId), src = it.btw != null && it.btw !== "" ? it : pr || { btw: 9 };
+  return isMix(src) ? { btw: 21, btwHigh: +src.btwHigh } : { btw: +src.btw || 0 };
+}
+function rqDrinkRows(d) {
+  const out = [];
+  for (const p of rqOnParts(d)) {
+    const dd = (d.drinks || {})[p.name] || {}, cfg = daCfg(d.eventType);
+    for (const [pk, lab] of RQ_PK) {
+      const x = dd[pk]; if (!x || !x.on) continue;
+      const n = pk === "kids" ? rqNum(p.kids) : rqNum(p.adults), h = rqHours(p), price = rqNum(x.price);
+      out.push({ part: p.name, pk, lab, n, h, price, amt: n * h * price, hi: x.hi != null ? +x.hi : +cfg[pk].btwHigh || 0, desc: x.desc || cfg[pk].omschrijving, p });
+    }
+  }
+  return out;
+}
+// Platte offerteregels (q.lines) uit programma, opties, drankafkoop en kortingen.
+function rqLines(d) {
+  const L = [];
+  for (const it of d.items || []) {
+    const pr = product(it.productId), name = it.desc || pr?.name || "", bx = rqItemBx(it);
+    for (const r of rqItemRows(d, it)) {
+      if (!r.n && !r.net) continue;
+      L.push({ desc: name + (r.who === "kids" && it.ptype === "adultskids" ? " (kinderen)" : "") + (r.who === "hour" ? ` (${fmtH(r.n)} uur)` : ""),
+        qty: r.who === "free" || !r.n ? 1 : Math.round(r.n * 100) / 100, price: r.who === "free" || !r.n ? r.net : r.net / (Math.round(r.n * 100) / 100), ...bx,
+        ...(it.productId ? { productId: it.productId } : {}), unit: r.who === "hour" ? "uur" : r.who === "qty" ? "stuk" : r.who === "free" ? "vast" : "persoon", category: pr?.category || it.cat,
+        rqCat: it.cat, part: it.part || "", time: it.time || "", who: r.who, unitPrice: r.price, gross: r.gross, itemId: it.id, ...(it.optional ? { optional: true } : {}) });
+    }
+  }
+  const drinks = rqDrinkRows(d);
+  for (const x of drinks) {
+    if (!x.amt) continue;
+    L.push({ desc: `Drankafkoop ${x.lab.toLowerCase()}: ${x.desc} (${x.part} ${x.p.start}–${x.p.end}, ${fmtH(x.h)} uur)`, rqDesc: x.desc, qty: x.n, price: x.h * x.price, ...rqBx(x.hi), unit: "ppu", category: "Drankafkoop",
+      rqCat: "Drankjes", part: x.part, time: x.p.start, who: x.pk === "kids" ? "kids" : "adults", unitPrice: x.price, gross: x.amt, drink: x.pk, hours: x.h });
+  }
+  const dsum = drinks.reduce((t, x) => t + x.amt, 0), dd = Math.min(rqNum(d.drinkDisc), dsum);
+  if (dd > 0) L.push({ desc: "Korting op drankjes afkoop", qty: 1, price: -dd, ...rqBx(drinks.reduce((t, x) => t + x.amt * x.hi, 0) / dsum), category: "Drankafkoop", rqCat: "Drankjes", part: "", time: "", gross: 0, disc: true });
+  const base = L.filter(l => !l.optional && l.rqCat !== "Leveranciers"), sub = base.reduce((t, l) => t + l.qty * l.price, 0);
+  const disc = Math.min(sub, sub * rqNum(d.discPct) / 100 + rqNum(d.discEur));
+  if (disc > 0.004 && sub > 0) {
+    const per = {};
+    for (const l of base) { const t = l.qty * l.price; for (const [r, a] of isMix(l) ? [[21, t * l.btwHigh / 100], [9, t * (100 - l.btwHigh) / 100]] : [[+l.btw || 0, t]]) per[r] = (per[r] || 0) + a; }
+    for (const [r, a] of Object.entries(per)) if (Math.abs(a) > 0.004) L.push({ desc: "Korting op totaal", qty: 1, price: -disc * a / sub, btw: +r, category: "Korting", rqCat: "_tot", part: "", time: "", gross: 0, disc: true });
+  }
+  return L;
+}
+// Totalentabel zoals Restau: per categorie ex. btw, 9%, 21%, subtotaal, kortingen en totaal.
+function rqTotTable(lines) {
+  const z = () => ({ ex: 0, b9: 0, b21: 0, sub: 0, tot: 0, disc: 0 });
+  const c = Object.fromEntries([...RQ_TOTCATS, "Leveranciers", "_tot"].map(k => [k, z()]));
+  for (const l of lines || []) {
+    if (l.optional) continue;
+    const k = c[rqCatOfLine(l)] ? rqCatOfLine(l) : "Speciale wensen", o = c[k], t = (+l.qty || 0) * (+l.price || 0);
+    for (const [r, a] of isMix(l) ? [[21, t * l.btwHigh / 100], [9, t * (100 - l.btwHigh) / 100]] : [[+l.btw || 0, t]]) { const ex = a / (1 + r / 100); o.ex += ex; if (r === 9) o.b9 += a - ex; else if (r === 21) o.b21 += a - ex; }
+    o.tot += t; o.sub += l.gross != null ? l.gross : t;
+  }
+  for (const o of Object.values(c)) o.disc = o.sub - o.tot;
+  const sum = ks => ks.reduce((s, k) => { for (const f of ["ex", "b9", "b21", "sub", "tot", "disc"]) s[f] += c[k][f]; return s; }, z());
+  const subtotal = sum(RQ_TOTCATS), incl = sum([...RQ_TOTCATS, "_tot"]); incl.sub = subtotal.sub; incl.disc = incl.sub - incl.tot;
+  const fact = sum([...RQ_TOTCATS, "_tot", "Leveranciers"]); fact.sub = subtotal.sub + c.Leveranciers.sub; fact.disc = fact.sub - fact.tot;
+  return { c, subtotal, incl, fact };
+}
+// Afgeleide velden van een offerte: tijden, ruimte en aantal personen uit het programma.
+function rqSpan(d) {
+  const on = rqOnParts(d).filter(p => p.start).sort((a, b) => a.start.localeCompare(b.start));
+  if (!on.length) return null;
+  const s0 = toMin(on[0].start), ends = on.map(p => { const s = span2(p.start, p.end); return s ? (s[0] < s0 ? s[1] + 1440 : s[1]) : 0; });
+  const room = on.flatMap(p => p.rooms || []).find(Boolean) || "";
+  return { start: on[0].start, end: fromMin(Math.max(...ends) % 1440), persons: Math.max(...on.map(p => rqNum(p.adults) + rqNum(p.kids))), room, on };
+}
+function rqDerive(q) {
+  const s = rqSpan(q); if (!s) return q;
+  q.eventTime = `${s.start}–${s.end}`; if (s.persons) q.persons = s.persons; if (s.room) q.roomId = s.room;
+  return q;
+}
+// Dagindeling van de reservering bijwerken vanuit het programma van de offerte.
+function rqResPatch(q) {
+  const s = rqSpan(q); if (!s) return null;
+  const dag = [];
+  for (const p of s.on) { const rs = (p.rooms || []).filter(Boolean); for (const rid of rs.length ? rs : [""]) dag.push({ name: p.name, start: p.start, end: p.end, adults: p.adults ?? "", kids: p.kids ?? "", roomId: rid, opstelling: p.opstelling || "" }); }
+  return { eventType: q.eventType || "", dagindeling: dag, start: s.start, end: s.end, ...(s.persons ? { persons: s.persons } : {}), ...(s.room ? { roomId: s.room } : {}), arrangementId: q.arrangementId || "" };
+}
+function rqProgFromRes(r) {
+  const out = [];
+  for (const p of r.dagindeling || []) {
+    if (!p.name && !p.start) continue;
+    const o = out.find(x => x.name === (p.name || "Event") && x.start === p.start && x.end === p.end);
+    if (o) { if (p.roomId && !o.rooms.includes(p.roomId)) o.rooms.push(p.roomId); continue; }
+    out.push({ name: p.name || "Event", on: true, start: p.start || "", end: p.end || "", adults: p.adults ?? "", kids: p.kids ?? "", rooms: [p.roomId || r.roomId || ""], opstelling: p.opstelling || "" });
+  }
+  if (!out.length && r.start) {
+    const t = eventType(r.eventType), std = (t?.parts || []).filter(p => p.on !== false);
+    out.push({ name: std.length ? std[std.length - 1].name : "Event", on: true, start: r.start, end: r.end || "", adults: r.persons || "", kids: "", rooms: [r.roomId || ""], opstelling: r.opstelling || "", custom: !std.length });
+  }
+  return out;
+}
+// Oude offerte (alleen regels) omzetten: elke regel wordt een optie per stuk, zodat het totaal precies gelijk blijft.
+function rqUpgrade(q) {
+  if (q.rq) return rqEnsure(q);
+  const r = q.reservationId && S.reservations.get(q.reservationId);
+  q.eventType = q.eventType || r?.eventType || "";
+  q.program = r ? rqProgFromRes(r) : q.eventTime ? rqProgFromRes({ start: (q.eventTime.split(/[–-]/)[0] || "").trim(), end: (q.eventTime.split(/[–-]/)[1] || "").trim(), persons: q.persons, roomId: q.roomId, eventType: q.eventType }) : [];
+  q.items = (q.lines || []).filter(l => l.desc || +l.price).map(l => ({ id: uid(), cat: rqCatOfLine(l), productId: l.productId || "", desc: l.desc || "", part: "", time: "", ptype: "piece", qty: +l.qty || 0, price: +l.price || 0, btw: +l.btw || 0, ...(isMix(l) ? { btwHigh: +l.btwHigh } : {}), ...(l.optional ? { optional: true } : {}) }));
+  q.drinks = {};
+  if (!q.arrangementId && r?.arrangementId) { q.arrangementId = r.arrangementId; q.arrangementName = arr(r.arrangementId)?.name || ""; }
+  return rqEnsure(q);
+}
+// Prijs per persoon van een arrangement (voor keuzelijsten): totaal gedeeld door het grootste aantal gasten.
+function rqArrPP(a) {
+  const d = rqEnsure(structuredClone(a)), n = Math.max(0, ...rqOnParts(d).map(p => rqNum(p.adults) + rqNum(p.kids)));
+  const t = totals(rqLines(d)).incl; return n ? t / n : t;
+}
+// Arrangement in een offerte zetten: alles van het sjabloon overnemen (zoals Restau), lege zalen krijgen de zaal van de offerte.
+function rqApplyArr(q, a, fallbackRoom) {
+  const c = rqEnsure(structuredClone(a));
+  q.eventType = c.eventType || q.eventType || "";
+  q.program = c.program; q.items = c.items.map(it => ({ ...it, id: uid() })); q.drinks = c.drinks || {};
+  q.drinkDisc = c.drinkDisc || 0; q.discPct = c.discPct || 0; q.discEur = c.discEur || 0; q.kidsEat = c.kidsEat || "";
+  q.arrangementId = a.id; q.arrangementName = a.name;
+  if (fallbackRoom) for (const p of q.program) if (p.on && !p.rooms.some(Boolean)) p.rooms = [fallbackRoom];
+  rqEnsure(q);
+}
+// Waarschuwingen voor een arrangement in een offerte: datum, uitgesloten zaal, maximum per dag.
+function rqArrWarn(q) {
+  const a = q.arrangementId && arr(q.arrangementId); if (!a || !a.rq) return [];
+  const w = [];
+  if ((a.mogelijkOp || []).length && q.eventDate && !a.mogelijkOp.includes(q.eventDate)) w.push(`${a.name} is niet mogelijk op ${longDate(q.eventDate)}.`);
+  for (const rid of new Set(rqOnParts(q).flatMap(p => p.rooms || []).filter(Boolean))) if ((a.uitgeslotenZalen || []).includes(rid)) w.push(`${roomName(rid)} mag niet gekozen worden bij ${a.name}.`);
+  if (+a.maxPerDag && q.eventDate) {
+    const n = [...S.quotes.values()].filter(x => x.id !== q.id && x.arrangementId === a.id && x.eventDate === q.eventDate && x.status !== "afgewezen").reduce((t, x) => t + (+x.persons || 0), 0) + (+q.persons || 0);
+    if (n > +a.maxPerDag) w.push(`Op ${shortDate(q.eventDate)} zijn er ${n} personen voor ${a.name}; het maximum per dag is ${a.maxPerDag}.`);
+  }
+  return w;
+}
+function rqArrFromLegacy(o) {
+  const ps = (o.items || []).map(id => typeof id === "string" ? product(id) : null).filter(Boolean);
+  const items = ps.length ? ps.map(p => ({ id: uid(), cat: rqCatOf(p), productId: p.id, desc: p.name, part: "", time: "", ptype: rqPtype(p), follow: true, adults: 0, kids: 0, qty: 1, price: +p.price || 0, priceKid: p.priceChild ?? p.price, btw: +p.btw || 0, ...(isMix(p) ? { btwHigh: +p.btwHigh } : {}) }))
+    : [{ id: uid(), cat: "Speciale wensen", desc: o.name, part: "", time: "", ptype: "piece", qty: 1, price: +o.price || 0, btw: +o.btw || 9 }];
+  return rqEnsure({ id: o.id, name: o.name, eventType: o.eventType || "", omschrijving: o.description || "", foto: "", intern: false, mogelijkOp: [], maxPerDag: "", uitgeslotenZalen: [], program: [], items, drinks: {} });
+}
+// Instellingen bijwerken bij het laden: soorten feest aanvullen en arrangementen omzetten naar offerte-sjablonen.
+function rqMigrate(s) {
+  if (Array.isArray(s.eventTypes) && s.eventTypes.length) {
+    if (!s.eventTypes.some(t => t.id === "bruiloft")) s.eventTypes.unshift(structuredClone(RQ_TYPES[0]));
+    for (const t of s.eventTypes) { const R = RQ_TYPES.find(x => x.id === t.id); if (!R) continue; t.parts = Array.isArray(t.parts) ? t.parts : []; for (const p of R.parts) if (!t.parts.some(x => x.name === p.name)) t.parts.push({ ...p, on: false }); }
+  }
+  if (!s.arrRq) {
+    const old = Array.isArray(s.arrangementen) ? s.arrangementen : [], used = new Set();
+    const tn = { bruiloft: "Bruiloft", verjaardag: "Verjaardag", bedrijf: "Bedrijfsfeest", overig: "Overig" };
+    const seed = RQ_ORDER.map(rid => RQ_SEED.arrs.find(a => a.rid === rid)).filter(Boolean).map(a => {
+      const m = old.find(o => !o.rq && !used.has(o.id) && (o.name === `${a.name} (${tn[a.eventType]})` || o.name === a.name));
+      if (m) used.add(m.id);
+      const c = structuredClone(a); delete c.rid;
+      return rqEnsure({ ...c, id: m ? m.id : "ra" + a.rid, restauId: a.rid, foto: "", mogelijkOp: [], uitgeslotenZalen: [] });
+    });
+    s.arrangementen = [...seed, ...old.filter(o => !used.has(o.id)).map(o => o.rq ? o : rqArrFromLegacy(o))];
+    s.arrRq = 1;
+  }
+  if (!Array.isArray(s.drankPrijslijst)) s.drankPrijslijst = RQ_SEED.los.map((x, i) => ({ id: "dl" + i, ...x }));
+  return s;
+}
+{ const base = normSettings; normSettings = function (d) { return rqMigrate(base(d)); }; }
+S.settings = normSettings(S.settings);
+async function rqSaveSettings(patch, msg) {
+  const s = JSON.parse(JSON.stringify({ ...S.settings, ...patch }));
+  if (await write("settings/main", s)) { S.settings = normSettings(s); if (msg) toast(msg); return true; }
+  return false;
+}
+
+/* ---------- Gedeelde editor (offerte en arrangement): Programma, Opties, Drankafkoop, Totalen ---------- */
+const rqVal = v => v === "" || v == null ? "" : esc(v);
+function rqCap(p) {
+  let cap = 0;
+  for (const rid of (p.rooms || []).filter(Boolean)) { const rm = room(rid); if (!rm) continue; cap += +(p.opstelling && rm.caps && rm.caps[p.opstelling]) || +rm.capacity || 0; }
+  return cap;
+}
+function rqProgHtml(d, ro, o = {}) {
+  const rooms = S.settings.rooms, ops = opstellingen(), excl = o.excl || [];
+  const del = i => `<button type="button" class="rq-x" data-pdel="${i}" title="Gelegenheid verwijderen" aria-label="Gelegenheid verwijderen" ${ro}>✕</button>`;
+  const rows = d.program.map((p, i) => {
+    const sw = `<label class="rq-sw" title="${p.on ? "Staat aan" : "Staat uit"}"><input type="checkbox" data-pk="on" ${p.on ? "checked" : ""} ${ro} aria-label="${esc(p.name)} aan of uit"><span></span></label>`;
+    const nm = `<span class="rq-pn">${esc(p.name)}${p.diner ? ` <span class="muted small">(diner)</span>` : ""}</span>`;
+    if (!p.on) return `<div class="rq-pr off" data-pi="${i}">${nm}${sw}${p.custom ? del(i) : ""}</div>`;
+    const cap = rqCap(p), n = rqNum(p.adults) + rqNum(p.kids);
+    return `<div class="rq-pr" data-pi="${i}">${nm}${sw}
+      <span class="rq-time"><input type="time" data-pk="start" value="${esc(p.start)}" aria-label="${esc(p.name)} van" ${ro}><span class="rq-arrow">→</span><input type="time" data-pk="end" value="${esc(p.end)}" aria-label="${esc(p.name)} tot" ${ro}></span>
+      <span class="rq-n"><span class="rq-ic" title="Volwassenen">${rqIcon("adults")}</span><input type="number" min="0" data-pk="adults" value="${rqVal(p.adults)}" aria-label="${esc(p.name)} volwassenen" ${ro}><span class="rq-ic" title="Kinderen">${rqIcon("kids")}</span><input type="number" min="0" data-pk="kids" value="${rqVal(p.kids)}" aria-label="${esc(p.name)} kinderen" ${ro}></span>
+      <span class="rq-rooms">${p.rooms.map((rid, j) => `<span class="rq-room"><select data-proom="${j}" aria-label="${esc(p.name)} zaal ${j + 1}" ${ro}><option value="">Zaal kiezen…</option>${rooms.map(x => `<option value="${esc(x.id)}" ${x.id === rid ? "selected" : ""}>${esc(x.name)}${excl.includes(x.id) ? " (niet bij dit arrangement)" : ""}</option>`).join("")}</select>${j ? `<button type="button" class="rq-x" data-proomdel="${j}" aria-label="Zaal weghalen" ${ro}>✕</button>` : ""}</span>`).join("")}</span>
+      <select class="rq-ops" data-pk="opstelling" aria-label="${esc(p.name)} opstelling" ${ro}><option value="">Opstelling…</option>${ops.map(x => `<option ${x === p.opstelling ? "selected" : ""}>${esc(x)}</option>`).join("")}</select>
+      <span class="rq-cap ${cap ? (n > cap ? "bad" : "ok") : ""}" data-cap title="Capaciteit van de zaal bij deze opstelling">${cap ? cap + (n > cap ? " ✕" : " ✓") : ""}</span>
+      <button type="button" class="rq-plus" data-proomadd title="Extra zaal toevoegen" aria-label="Extra zaal toevoegen" ${ro}>+</button>${p.custom ? del(i) : ""}</div>`;
+  }).join("");
+  return `<div class="panel rq-prog">
+    <div class="rq-ph"><h3>Programma</h3><span class="h-time">Tijd</span><span class="h-n">Aantal</span><span class="h-rooms">Zalen</span><span class="h-ops">Opstelling</span>${o.std ? `<button type="button" class="btn small" id="rq-std" ${ro}>Standaard tijden invullen</button>` : ""}</div>
+    ${d.program.length ? rows : `<p class="small muted">Kies eerst een soort event; dan verschijnen de gelegenheden hier.</p>`}
+    <div class="rq-addpart"><input id="rq-np" placeholder="vul titel in…" aria-label="Eigen gelegenheid" ${ro}><label class="check small">Diner: <input type="checkbox" id="rq-npd" ${ro}></label>
+      <div class="rq-add"><span class="rq-hook">↳</span><button type="button" class="btn small rq-addbtn" id="rq-npadd" ${ro}><b>+</b> Toevoegen</button></div></div>
+  </div>`;
+}
+function rqProdOptions(cat, cur) {
+  const ps = (S.settings.products || []).filter(p => p.name && (p.active !== false || p.id === cur) && p.category !== "Drankafkoop" && rqCatOf(p) === cat);
+  const c = cur && product(cur); if (c && !ps.includes(c)) ps.push(c);
+  const subs = [...new Set(ps.map(p => p.sub || ""))].sort((a, b) => a.localeCompare(b, "nl"));
+  const opt = p => `<option value="${esc(p.id)}" ${p.id === cur ? "selected" : ""}>${esc(p.name)}</option>`;
+  return subs.map(s => subs.length > 1 || s ? `<optgroup label="-- ${esc(s || "Overig")} --">${ps.filter(p => (p.sub || "") === s).map(opt).join("")}</optgroup>` : ps.map(opt).join("")).join("");
+}
+function rqAmtRow(it, r, k, ro, bx) {
+  const keys = r.who === "kids" ? ["kids", "priceKid", "dpK", "dtK"] : r.who === "qty" ? ["qty", "price", "dp", "dt"] : ["adults", "price", "dp", "dt"];
+  let n = "";
+  if (r.who === "hour") n = `<input type="time" data-ik="start" value="${esc(it.start || "")}" aria-label="Van" ${ro}><input type="time" data-ik="end" value="${esc(it.end || "")}" aria-label="Tot" ${ro}><span class="rq-hh" data-rh>${fmtH(r.n)} uur</span>`;
+  else if (r.who !== "free") n = `${r.who === "qty" ? "" : `<span class="rq-ic" title="${r.who === "kids" ? "Kinderen" : "Volwassenen"}">${rqIcon(r.who)}</span>`}<input type="number" min="0" step="any" data-ik="${keys[0]}" value="${Math.round(r.n * 100) / 100}" aria-label="${r.who === "kids" ? "Aantal kinderen" : r.who === "qty" ? "Aantal" : "Aantal volwassenen"}" ${ro}>`;
+  return `<div class="rq-ar" data-row="${k}"><span class="rq-arw">${k ? "↳" : "→"}</span><span class="c-n">${n}</span>
+    <span class="c-pr">${r.who === "free" ? "€" : "× €"}<input type="number" step="0.01" data-ik="${keys[1]}" value="${rqVal(it[keys[1]] ?? (keys[1] === "priceKid" ? it.price : ""))}" aria-label="${r.who === "free" ? "Bedrag" : "Stukprijs"}" ${ro}></span>
+    <span class="c-dp">${r.who === "free" ? "" : `- €<input type="number" step="0.01" min="0" data-ik="${keys[2]}" value="${rqVal(it[keys[2]])}" aria-label="Stukskorting" ${ro}><span data-rd>= ${fmtN(r.n * r.dp)}</span>`}</span>
+    <span class="c-dt">- €<input type="number" step="0.01" min="0" data-ik="${keys[3]}" value="${rqVal(it[keys[3]])}" aria-label="Totaalkorting" ${ro}></span>
+    <span class="c-tot" data-rt>= ${fmtN(r.net)} €</span><span class="c-ex" data-rx>${fmtN(rqEx(r.net, bx))} €</span></div>`;
+}
+function rqItemHtml(d, it, i, ro) {
+  const on = rqOnParts(d), rows = rqItemRows(d, it), bx = rqItemBx(it), opts = it.productId || !(it.cat === "Speciale wensen" || it.cat === "Zalen" || it.desc) ? rqProdOptions(it.cat, it.productId) : "";
+  const free = !it.productId && (it.cat === "Speciale wensen" || it.cat === "Zalen" || !!it.desc || !opts);
+  const prod = free ? `<input data-ik="desc" value="${esc(it.desc || "")}" placeholder="Omschrijving" aria-label="Omschrijving" ${ro}>`
+    : `<select data-ik="productId" aria-label="Product" ${ro}><option value="">Kies een product…</option>${opts}</select>`;
+  const part = `<select data-ik="part" aria-label="Gelegenheid" ${ro}><option value="">Algemeen</option>${on.map(p => `<option ${p.name === it.part ? "selected" : ""}>${esc(p.name)}</option>`).join("")}${it.part && !on.some(p => p.name === it.part) ? `<option selected>${esc(it.part)}</option>` : ""}</select>`;
+  const extra = free ? `<span class="rq-free">${btwSelect(it, `data-ik="btw" aria-label="Btw" ${ro}`)}<select data-ik="ptype" aria-label="Prijstype" ${ro}>${Object.entries(RQ_PTYPES).map(([k, l]) => `<option value="${k}" ${k === it.ptype ? "selected" : ""}>${l}</option>`).join("")}</select></span>` : "";
+  return `<div class="rq-it${it.optional ? " opt" : ""}" data-ii="${i}"><div class="rq-itl">${prod}${part}<input type="time" class="rq-tm" data-ik="time" value="${esc(it.time || "")}" aria-label="Tijd" ${ro}>${extra}${it.optional ? `<span class="chip c0">optioneel</span>` : ""}</div>
+    <div class="rq-amts">${rows.map((r, k) => rqAmtRow(it, r, k, ro, bx)).join("")}</div><button type="button" class="rq-x red" data-idel="${i}" title="Regel verwijderen" aria-label="Regel verwijderen" ${ro}>✕</button></div>`;
+}
+function rqDrinkHtml(d, ro) {
+  const on = rqOnParts(d), cfg = daCfg(d.eventType);
+  if (!on.length) return `<p class="small muted">Zet in het programma een gelegenheid aan om drankafkoop te kiezen.</p>`;
+  let h = "", any = false;
+  for (const p of on) {
+    const dd = (d.drinks || {})[p.name] || {};
+    const pks = RQ_PK.filter(([pk]) => daPrice(d.eventType, p.name, pk) != null || dd[pk]?.on);
+    if (!pks.length) continue;
+    any = true;
+    h += `<div class="rq-dp" data-dpart="${esc(p.name)}"><div class="rq-dtitle"><b>${esc(p.name)}</b><span class="rq-tbx"><span>${esc(p.start || "--:--")}</span><i>→</i><span>${esc(p.end || "--:--")}</span></span><span class="rq-h"><b data-dh>${fmtH(rqHours(p))}</b> uur</span>${!h ? `<span class="rq-pppu">(p.p.p.u)</span>` : ""}</div>`;
+    for (const [pk] of pks) {
+      const x = dd[pk], c = cfg[pk], n = pk === "kids" ? rqNum(p.kids) : rqNum(p.adults), amt = x?.on ? n * rqHours(p) * rqNum(x.price) : 0;
+      h += `<div class="rq-drow" data-dpk="${pk}"><span class="rq-ddesc">${esc(x?.desc || c.omschrijving)}</span><label class="rq-sw"><input type="checkbox" data-dk="on" ${x?.on ? "checked" : ""} aria-label="${esc(p.name)}: ${esc(c.omschrijving)}" ${ro}><span></span></label>
+        ${x?.on ? `<span class="rq-dn"><b data-dn>${n}</b> ${pk === "kids" ? "kind." : "volw."}</span><span class="c-pr">x €<input type="number" step="0.01" min="0" data-dk="price" value="${rqVal(x.price)}" aria-label="Prijs p.p.p.u." ${ro}></span><span class="rq-eq">=</span><span class="c-tot" data-dt>${fmtN(amt)} €</span><span class="c-ex" data-dx>${fmtN(rqEx(amt, rqBx(x.hi ?? c.btwHigh)))} €</span>` : ""}</div>`;
+    }
+    h += `</div>`;
+  }
+  if (!any) return `<p class="small muted">Bij deze gelegenheden is geen drankafkoop ingesteld (zie Instellingen › Drankjes › afkoop).</p>`;
+  const sub = rqDrinkRows(d).reduce((t, x) => t + x.amt, 0);
+  return h + `<div class="rq-ddisc"><b>Korting op drankjes afkoop</b><span class="rq-eq">=</span><b class="tealc" data-dsub>${fmtN(sub)} €</b><span class="c-dt">- €<input type="number" step="0.01" min="0" id="rq-ddisc" value="${rqVal(d.drinkDisc || "")}" aria-label="Korting op drankjes afkoop" ${ro}></span><span class="rq-eq">=</span><b data-dnet>${fmtN(sub - Math.min(rqNum(d.drinkDisc), sub))} €</b></div>`;
+}
+function rqOptHtml(d, ro) {
+  const cats = [...(d.items.some(it => it.cat === "Zalen") ? ["Zalen"] : []), ...RQ_CATS, "Speciale wensen"];
+  const dinerKids = rqOnParts(d).filter(p => p.diner || /diner/i.test(p.name)).reduce((t, p) => t + rqNum(p.kids), 0);
+  const block = c => {
+    const its = d.items.map((it, i) => ({ it, i })).filter(x => (x.it.cat || "Speciale wensen") === c);
+    return `<div class="rq-cat" data-cat="${esc(c)}"><div class="rq-ct">${rqIcon(c)}<span>${esc(c)}</span></div>
+      ${c === "Drankjes" ? rqDrinkHtml(d, ro) : ""}
+      ${its.map(x => rqItemHtml(d, x.it, x.i, ro)).join("")}
+      ${c === "Diner" ? `<div class="small rq-kidseat">Kinderen die mee-eten met volwassenen: <input type="number" min="0" max="${dinerKids}" id="rq-kidseat" value="${rqVal(d.kidsEat)}" aria-label="Kinderen die mee-eten met volwassenen" ${ro}> <span class="muted">(max <span class="tealc">${dinerKids}</span>)</span></div>` : ""}
+      <div class="rq-add"><span class="rq-hook">↳</span><button type="button" class="btn small rq-addbtn" data-rqadd="${esc(c)}" ${ro}><b>+</b> Toevoegen</button></div></div>`;
+  };
+  return `<div class="rq-opts"><div class="rq-oh"><h3>Opties</h3><span class="c-part">Gelegenheid</span><span class="c-time">Tijd</span><span class="c-n">Aantal</span><span class="c-pr">Stukprijs</span><span class="c-dp or">Stukskorting</span><span class="c-dt or">Totaalkorting</span><span class="c-tot">Totaalprijs</span><span class="c-ex">(ex.vat)</span></div>
+    <div class="panel rq-optp">${cats.map(block).join("")}</div></div>`;
+}
+function rqTotCells(d) {
+  const T = rqTotTable(rqLines(d)), out = {}, put = (k, o) => { out[k + ":ex"] = eur(o.ex); out[k + ":b9"] = eur(o.b9); out[k + ":b21"] = eur(o.b21); out[k + ":sub"] = eur(o.sub); out[k + ":disc"] = eur(o.disc); out[k + ":tot"] = eur(o.tot); };
+  RQ_TOTCATS.forEach(k => put(k, T.c[k])); put("Subtotaal", T.subtotal); put("Incl", T.incl); put("Leveranciers", T.c.Leveranciers); put("MEWS", { ex: 0, b9: 0, b21: 0, sub: 0, disc: 0, tot: 0 }); put("Factuur", T.fact);
+  out["Korting"] = "-" + eur(-T.c._tot.tot).replace("€ ", "€");
+  return out;
+}
+function rqTotHtml(d, ro) {
+  const C = rqTotCells(d), cols = ["ex", "b9", "b21", "sub", "disc", "tot"];
+  const tr = (k, label, cls = "") => `<tr class="${cls}"><td>${label}</td>${cols.map(c => `<td class="r ${c === "disc" ? "or" : ""}" data-tc="${esc(k)}:${c}">${C[k + ":" + c]}</td>`).join("")}</tr>`;
+  return `<div class="rq-tots"><h3>Totalen</h3><div class="panel tbl-wrap"><table class="rq-tt"><thead><tr><th>Categorie:</th><th class="r">EX.BTW</th><th class="r">9% BTW</th><th class="r">21% BTW</th><th class="r">SUBTOTALEN</th><th class="r or">KORTINGEN</th><th class="r">TOTALEN</th></tr></thead><tbody>
+    ${RQ_TOTCATS.map(k => tr(k, esc(k), "cat")).join("")}
+    ${tr("Subtotaal", "<b>Subtotaal</b>", "sum")}
+    <tr class="disc"><td>Korting op totaal</td><td colspan="3"></td><td class="r" colspan="2"><div class="rq-dtot"><label>-% <input type="number" step="0.01" min="0" max="100" id="rq-dpct" value="${rqVal(d.discPct || "")}" placeholder="0.00" aria-label="Korting op totaal in procent" ${ro}></label><label>-€ <input type="number" step="0.01" min="0" id="rq-deur" value="${rqVal(d.discEur || "")}" placeholder="0.00" aria-label="Korting op totaal in euro" ${ro}></label></div></td><td class="r"><b data-tc="Korting">${C.Korting}</b></td></tr>
+    ${tr("Incl", "<b>Subtotaal inclusief kortingen</b>", "sum")}${tr("Leveranciers", "Leveranciers", "sep")}${tr("MEWS", "MEWS", "sep")}${tr("Factuur", "<b>Totaal Factuur</b>", "sum sep")}
+  </tbody></table></div></div>`;
+}
+// Stap "Standaard tijden invullen" (Restau): vraagt het aantal gasten en zet de gelegenheden op de standaardtijden.
+function rqStdTimes(d, done) {
+  const t = rqType(d); if (!t) { toast("Kies eerst een soort event"); return; }
+  $("#modal-root").innerHTML = `<div class="scrim" id="scrim"><form class="modal" id="std-form" aria-label="Standaard tijden invullen" style="max-width:460px">
+    <div class="row spread"><h2>Weet u het zeker?</h2><button type="button" class="btn ghost" id="std-x" aria-label="Sluiten">✕</button></div>
+    <p style="margin:0">Indien u reeds tijden heeft ingevuld, zullen deze worden overschreven door de standaardtijden. Zo ja, hoeveel gasten verwacht u ongeveer?</p>
+    <div class="fields"><label class="f"><span>Volwassenen</span><input type="number" min="0" id="std-a" value="100"></label><label class="f"><span>Kinderen</span><input type="number" min="0" id="std-k" value="20"></label></div>
+    <div class="row spread"><button type="button" class="btn" id="std-no">Annuleren</button><button type="submit" class="btn primary">Ja</button></div></form></div>`;
+  document.body.style.overflow = "hidden";
+  $("#std-x").onclick = $("#std-no").onclick = closeModal;
+  $("#std-form").onsubmit = e => {
+    e.preventDefault(); const A = +$("#std-a").value || 0, K = +$("#std-k").value || 0;
+    rqEnsure(d);
+    for (const tp of t.parts || []) { const p = d.program.find(x => x.name === tp.name); if (!p) continue; Object.assign(p, { on: tp.on !== false, start: tp.start || "", end: tp.end || "", adults: A, kids: K }); }
+    closeModal(); done();
+  };
+}
+// Alle bewerkingen in de editor via één luisteraar op het hoofdelement. ctx: { rerender(), onChange() }
+function rqWire(d, root, ctx) {
+  if (!root || S.readOnly) return;
+  const rerender = () => ctx.rerender();
+  const refresh = () => {
+    root.querySelectorAll(".rq-it[data-ii]").forEach(el => {
+      const it = d.items[+el.dataset.ii]; if (!it) return;
+      const bx = rqItemBx(it);
+      rqItemRows(d, it).forEach((r, k) => {
+        const row = el.querySelector(`[data-row="${k}"]`); if (!row) return;
+        const nIn = row.querySelector('[data-ik="adults"],[data-ik="kids"]'); if (nIn && it.follow !== false && document.activeElement !== nIn) nIn.value = Math.round(r.n * 100) / 100;
+        const set = (s, v) => { const x = row.querySelector(s); if (x) x.textContent = v; };
+        set("[data-rt]", `= ${fmtN(r.net)} €`); set("[data-rx]", `${fmtN(rqEx(r.net, bx))} €`); set("[data-rd]", `= ${fmtN(r.n * r.dp)}`); set("[data-rh]", `${fmtH(r.n)} uur`);
+      });
+    });
+    root.querySelectorAll(".rq-dp[data-dpart]").forEach(el => {
+      const p = rqPartOf(d, el.dataset.dpart); if (!p) return;
+      const hh = el.querySelector("[data-dh]"); if (hh) hh.textContent = fmtH(rqHours(p));
+      const tb = el.querySelectorAll(".rq-tbx span"); if (tb.length === 2) { tb[0].textContent = p.start || "--:--"; tb[1].textContent = p.end || "--:--"; }
+      el.querySelectorAll(".rq-drow[data-dpk]").forEach(row => {
+        const pk = row.dataset.dpk, x = (d.drinks[p.name] || {})[pk]; if (!x || !x.on) return;
+        const n = pk === "kids" ? rqNum(p.kids) : rqNum(p.adults), amt = n * rqHours(p) * rqNum(x.price), c = daCfg(d.eventType)[pk];
+        const set = (s, v) => { const z = row.querySelector(s); if (z) z.textContent = v; };
+        set("[data-dn]", n); set("[data-dt]", `${fmtN(amt)} €`); set("[data-dx]", `${fmtN(rqEx(amt, rqBx(x.hi ?? c.btwHigh)))} €`);
+      });
+    });
+    const sub = rqDrinkRows(d).reduce((t, x) => t + x.amt, 0);
+    const ds = root.querySelector("[data-dsub]"); if (ds) ds.textContent = `${fmtN(sub)} €`;
+    const dn = root.querySelector("[data-dnet]"); if (dn) dn.textContent = `${fmtN(sub - Math.min(rqNum(d.drinkDisc), sub))} €`;
+    root.querySelectorAll(".rq-pr[data-pi]").forEach(el => {
+      const p = d.program[+el.dataset.pi], c = el.querySelector("[data-cap]"); if (!p || !c) return;
+      const cap = rqCap(p), n = rqNum(p.adults) + rqNum(p.kids); c.className = "rq-cap " + (cap ? (n > cap ? "bad" : "ok") : ""); c.textContent = cap ? cap + (n > cap ? " ✕" : " ✓") : "";
+    });
+    const C = rqTotCells(d); root.querySelectorAll("[data-tc]").forEach(el => { if (C[el.dataset.tc] != null) el.textContent = C[el.dataset.tc]; });
+    if (ctx.onChange) ctx.onChange();
+  };
+  const numOrEmpty = v => v === "" ? "" : +v;
+  const onInput = (e, isChange) => {
+    const el = e.target;
+    const pr = el.closest(".rq-pr[data-pi]"), itEl = el.closest(".rq-it[data-ii]"), dr = el.closest(".rq-drow[data-dpk]");
+    if (pr && (el.dataset.pk || el.dataset.proom != null)) {
+      const p = d.program[+pr.dataset.pi]; if (!p) return;
+      if (el.dataset.proom != null) { p.rooms[+el.dataset.proom] = el.value; refresh(); return; }
+      const k = el.dataset.pk;
+      if (k === "on") {
+        if (!isChange) return;
+        p.on = el.checked;
+        if (p.on && !p.start) { const tp = (rqType(d)?.parts || []).find(x => x.name === p.name), last = rqOnParts(d).filter(x => x !== p && x.end).pop(); p.start = tp?.start || last?.end || ""; p.end = tp?.end || ""; }
+        if (p.on && p.adults === "") { const other = rqOnParts(d).find(x => x !== p && x.adults !== ""); p.adults = other ? other.adults : (+ctx.persons?.() || ""); p.kids = other ? other.kids : ""; }
+        if (p.on && !p.rooms.some(Boolean)) { const other = rqOnParts(d).find(x => x !== p && x.rooms.some(Boolean)); if (other) p.rooms = other.rooms.slice(); else if (ctx.room?.()) p.rooms = [ctx.room()]; }
+        rerender(); return;
+      }
+      p[k] = k === "adults" || k === "kids" ? numOrEmpty(el.value) : el.value; refresh(); return;
+    }
+    if (itEl && el.dataset.ik) {
+      const it = d.items[+itEl.dataset.ii]; if (!it) return;
+      const k = el.dataset.ik;
+      if (k === "productId") {
+        if (!isChange) return;
+        const pr2 = product(el.value);
+        it.productId = el.value;
+        if (pr2) { Object.assign(it, { desc: pr2.name, ptype: rqPtype(pr2), price: +pr2.price || 0, priceKid: pr2.priceChild != null && pr2.priceChild !== "" ? +pr2.priceChild : +pr2.price || 0, btw: +pr2.btw || 0 }); if (isMix(pr2)) it.btwHigh = +pr2.btwHigh; else delete it.btwHigh; if (it.ptype === "piece" && !rqNum(it.qty)) it.qty = 1; if (it.ptype === "kids") it.priceKid = +pr2.price || 0; }
+        rerender(); return;
+      }
+      if (k === "part") { if (!isChange) return; it.part = el.value; const p = rqPartOf(d, it.part); if (p) it.time = p.start || it.time; rerender(); return; }
+      if (k === "ptype") { if (!isChange) return; it.ptype = el.value; if (it.ptype === "piece" && !rqNum(it.qty)) it.qty = 1; rerender(); return; }
+      if (k === "btw") { if (!isChange) return; if (el.value === "mix") { it.btw = 21; if (!isMix(it)) it.btwHigh = 75; } else { it.btw = +el.value; delete it.btwHigh; } rerender(); return; }
+      if (k === "adults" || k === "kids") {
+        if (it.follow !== false) { const rows = rqItemRows(d, it); it.adults = rows.find(r => r.who === "adults")?.n ?? it.adults ?? 0; it.kids = rows.find(r => r.who === "kids")?.n ?? it.kids ?? 0; it.follow = false; }
+        it[k] = rqNum(el.value); refresh(); return;
+      }
+      if (k === "desc" || k === "time" || k === "start" || k === "end") { it[k] = el.value; refresh(); return; }
+      it[k] = numOrEmpty(el.value); refresh(); return;
+    }
+    if (dr && el.dataset.dk) {
+      const part = dr.closest("[data-dpart]").dataset.dpart, pk = dr.dataset.dpk;
+      d.drinks[part] = d.drinks[part] || {};
+      const x = d.drinks[part][pk] = d.drinks[part][pk] || {};
+      if (el.dataset.dk === "on") { if (!isChange) return; x.on = el.checked; if (x.price == null || x.price === "") x.price = daPrice(d.eventType, part, pk) ?? 0; if (x.hi == null) x.hi = daCfg(d.eventType)[pk].btwHigh; rerender(); return; }
+      x.price = numOrEmpty(el.value); refresh(); return;
+    }
+    if (el.id === "rq-ddisc") { d.drinkDisc = numOrEmpty(el.value); refresh(); return; }
+    if (el.id === "rq-dpct") { d.discPct = numOrEmpty(el.value); refresh(); return; }
+    if (el.id === "rq-deur") { d.discEur = numOrEmpty(el.value); refresh(); return; }
+    if (el.id === "rq-kidseat") { d.kidsEat = numOrEmpty(el.value); if (ctx.onChange) ctx.onChange(); }
+  };
+  root.addEventListener("input", e => onInput(e, false));
+  root.addEventListener("change", e => onInput(e, true));
+  root.addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b || !root.contains(b)) return;
+    const pr = b.closest(".rq-pr[data-pi]"), p = pr && d.program[+pr.dataset.pi];
+    if (b.hasAttribute("data-proomadd") && p) { p.rooms.push(""); rerender(); }
+    else if (b.dataset.proomdel != null && p) { p.rooms.splice(+b.dataset.proomdel, 1); if (!p.rooms.length) p.rooms.push(""); rerender(); }
+    else if (b.dataset.pdel != null) { const q = d.program[+b.dataset.pdel]; if (!q) return; d.program.splice(+b.dataset.pdel, 1); delete d.drinks[q.name]; d.items.forEach(it => { if (it.part === q.name) it.part = ""; }); rerender(); }
+    else if (b.id === "rq-npadd") {
+      const name = $("#rq-np").value.trim(); if (!name) { toast("Vul eerst een titel in"); return; }
+      if (d.program.some(x => x.name === name)) { toast("Deze gelegenheid bestaat al"); return; }
+      const last = rqOnParts(d).filter(x => x.end).pop();
+      d.program.push(rqNewPart(name, { on: true, custom: true, diner: $("#rq-npd").checked, start: last?.end || "", adults: last ? last.adults : "", kids: last ? last.kids : "", rooms: last ? last.rooms.slice() : [""] }));
+      rerender();
+    }
+    else if (b.id === "rq-std") rqStdTimes(d, rerender);
+    else if (b.dataset.rqadd) {
+      const c = b.dataset.rqadd, on0 = rqOnParts(d), p0 = on0.find(x => x.name.toLowerCase() === c.toLowerCase() || (c === "Diner" && x.diner)) || on0[0];
+      d.items.push({ id: uid(), cat: c, productId: "", desc: "", part: p0 && c !== "Leveranciers" ? p0.name : "", time: p0 && c !== "Leveranciers" ? p0.start : "", ptype: c === "Speciale wensen" || c === "Zalen" || c === "Leveranciers" ? "piece" : "adults", follow: true, qty: 1, price: "", btw: c === "Drankjes" || c === "Muziek" || c === "Extra mogelijkheden" || c === "Leveranciers" ? 21 : 9 });
+      rerender();
+    }
+    else if (b.dataset.idel != null) { d.items.splice(+b.dataset.idel, 1); rerender(); }
+  });
+}
+
+/* ---------- Offerte bewerken (Restau: Wijzigen) ---------- */
+const rqTypeSelect = (id, cur, ro, req) => `<span class="rq-typesel"><span class="rq-tic">${typeIcon(cur)}</span><select id="${id}" aria-label="Soort event" ${ro}>${req ? "" : `<option value="">Kies een event…</option>`}${eventTypes().map(t => `<option value="${esc(t.id)}" ${t.id === cur ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select></span>`;
+const rqArrOptions = cur => `<option value="">Op maat</option>${S.settings.arrangementen.filter(a => a.rq).map(a => `<option value="${esc(a.id)}" ${a.id === cur ? "selected" : ""}>${esc(a.name)}${a.eventType ? " · " + esc(typeName(a.eventType)) : ""}${a.intern ? " (intern)" : ""}</option>`).join("")}`;
+vQuote = function (q0) {
+  if (!draft || draft.id !== q0.id) draft = structuredClone(q0);
+  const q = rqUpgrade(draft);
+  q.lines = rqLines(q);
+  const t = totals(q.lines), ro = S.readOnly ? "disabled" : "";
+  const res = q.reservationId && S.reservations.get(q.reservationId), span = rqSpan(q), warn = rqArrWarn(q);
+  return `
+  <section class="stack" id="rq-q">
+    <div class="row spread">
+      <div class="row"><button class="btn" id="q-back">‹ Alle offertes</button><h2>Offerte ${esc(q.number)}</h2>${statusChip(q.status)}</div>
+      <div class="row">
+        <button class="btn" id="q-copy">Kopieer tekst</button>
+        <button class="btn" id="q-dl">Download (html)</button>
+        <button class="btn primary" id="q-save" ${ro}>Opslaan</button>
+      </div>
+    </div>
+    <div class="panel stack">
+      <div class="fields">
+        <label class="f"><span>Klant of organisatie${q.customerId && S.customers.has(q.customerId) ? ` · <a href="#" id="q-cust">klantkaart</a>` : ""}</span><input id="qf-customer" list="cust-dl" autocomplete="off" value="${esc(q.customer)}" ${ro}>${custDatalist()}</label>
+        <label class="f"><span>Contactpersoon</span><input id="qf-contact" value="${esc(q.contact)}" ${ro}></label>
+        <label class="f"><span>E-mail</span><input id="qf-email" value="${esc(q.email)}" ${ro}></label>
+        <label class="f"><span>Telefoon</span><input id="qf-phone" value="${esc(q.phone)}" ${ro}></label>
+      </div>
+      <div class="fields">
+        <label class="f"><span>Offertedatum</span><input type="date" id="qf-date" value="${esc(q.date)}" ${ro}></label>
+        <label class="f"><span>Geldig tot</span><input type="date" id="qf-validUntil" value="${esc(q.validUntil)}" ${ro}></label>
+        ${managerSelect("qf-manager", q.manager, ro)}
+        <label class="f"><span>Status</span><select id="qf-status" ${ro}>${["concept", "verstuurd", "geaccepteerd", "afgewezen"].map(s => `<option ${s === q.status ? "selected" : ""}>${s}</option>`).join("")}</select></label>
+        ${q.status === "afgewezen" ? `<label class="f"><span>Reden van afwijzen</span><select id="qf-declineReason" ${ro}>${[...new Set(["", ...(S.settings.locatie?.afwijsredenen || []), q.declineReason || ""])].map(x => `<option value="${esc(x)}" ${x === (q.declineReason || "") ? "selected" : ""}>${x || "–"}</option>`).join("")}</select></label>` : ""}
+        <label class="f"><span>Reservering</span><span style="padding:7px 0">${res ? `<a href="#" id="q-res">${esc(shortDate(res.date))} · ${esc(roomName(res.roomId))}</a>` : "niet gekoppeld"}</span></label>
+      </div>
+    </div>
+    <div class="panel stack rq-evg"><h3>Eventgegevens</h3>
+      <div class="fields">
+        <label class="f"><span>Event</span>${rqTypeSelect("qf-eventType", q.eventType, ro)}</label>
+        <label class="f"><span>Datum</span><input type="date" id="qf-eventDate" value="${esc(q.eventDate)}" ${ro}></label>
+        <label class="f"><span>Arrangement</span><select id="rq-arr" ${ro}>${rqArrOptions(q.arrangementId)}</select></label>
+        <label class="f"><span>Tijden</span>${span ? `<span class="rq-times" id="rq-times">${esc(q.eventTime || "")}</span>` : `<input id="qf-eventTime" value="${esc(q.eventTime)}" placeholder="bijv. 20:00–00:30" ${ro}>`}</label>
+      </div>
+      ${span ? "" : `<div class="fields"><label class="f"><span>Ruimte</span><select id="qf-roomId" ${ro}><option value="">–</option>${S.settings.rooms.map(x => `<option value="${esc(x.id)}" ${x.id === q.roomId ? "selected" : ""}>${esc(x.name)}</option>`).join("")}</select></label><label class="f"><span>Personen</span><input type="number" id="qf-persons" value="${esc(q.persons)}" ${ro}></label><span class="small muted" style="align-self:end">Zet in het programma een gelegenheid aan; dan volgen tijden, zaal en aantal daaruit.</span></div>`}
+      ${warn.length ? `<div class="warnbox warn">${warn.map(esc).join("<br>")}</div>` : ""}
+    </div>
+    ${rqProgHtml(q, ro, { std: 1, excl: arr(q.arrangementId)?.uitgeslotenZalen || [] })}
+    ${rqOptHtml(q, ro)}
+    ${rqTotHtml(q, ro)}
+    <div class="panel stack">
+      <div class="tot" id="q-tot">${totHtml(t, q)}</div>
+      <div class="fields">
+        <label class="f"><span>Aanbetaling (%)</span><input type="number" min="0" max="100" id="qf-depositPct" value="${esc(q.depositPct ?? 30)}" ${ro}></label>
+        <label class="check small" style="align-self:end"><input type="checkbox" id="qf-depositPaid" ${q.depositPaid ? "checked" : ""} ${ro}> Aanbetaling ontvangen</label>
+        <label class="check small" style="align-self:end"><input type="checkbox" id="qf-finalPaid" ${q.finalPaid ? "checked" : ""} ${ro}> Eindafrekening betaald</label>
+      </div>
+      <label class="f"><span>Opmerkingen op de offerte</span><textarea id="qf-notes" ${ro}>${esc(q.notes)}</textarea></label>
+      <div class="row spread"><span></span><span id="q-delwrap" class="row"><button class="btn danger" id="q-del" ${ro}>Offerte verwijderen</button><span id="q-delc" hidden class="row"><span class="small">Zeker weten?</span><button class="btn danger" id="q-del2">Ja, verwijder</button></span></span></div>
+    </div>
+  </section>`;
+};
+function rqConfirmArr(a, onYes, onNo) {
+  $("#modal-root").innerHTML = `<div class="scrim" id="scrim"><div class="modal" role="dialog" aria-label="Arrangement veranderen" style="max-width:520px">
+    <div class="row spread"><h2>Arrangement veranderen</h2><button type="button" class="btn ghost" id="ca-x" aria-label="Sluiten">✕</button></div>
+    <p style="margin:0"><b>LET OP!</b> Indien er reeds wijzigingen in de offerte zijn gemaakt zullen deze worden overschreven door het gekozen arrangement. Alle waarden van de offerte zullen komen te vervallen. Dit houdt ook in dat de status van de offerte kan wijzigen. Weet u zeker dat u dit arrangement wilt selecteren?</p>
+    <p class="small muted" style="margin:0">Gekozen: <b>${esc(a.name)}</b>${a.eventType ? " · " + esc(typeName(a.eventType)) : ""}</p>
+    <div class="row spread"><button type="button" class="btn" id="ca-no">Annuleren</button><button type="button" class="btn primary" id="ca-yes">Ja</button></div></div></div>`;
+  document.body.style.overflow = "hidden";
+  const no = () => { closeModal(); onNo(); };
+  $("#ca-x").onclick = $("#ca-no").onclick = no;
+  $("#ca-yes").onclick = () => { closeModal(); onYes(); };
+}
+{
+  const base = after.off;
+  after.off = () => {
+    const q0 = S.quoteOpen && S.quotes.get(S.quoteOpen);
+    if (!q0 || !draft || draft.id !== q0.id) return base();
+    const q = draft, root = $("#rq-q");
+    const HEAD = ["customer", "contact", "email", "phone", "eventDate", "eventTime", "roomId", "persons", "date", "validUntil", "status", "notes", "declineReason", "manager"];
+    const syncHead = () => {
+      HEAD.forEach(k => { const el = $("#qf-" + k); if (el) q[k] = el.value; });
+      q.depositPct = +$("#qf-depositPct").value || 0; q.depositPaid = $("#qf-depositPaid").checked; q.finalPaid = $("#qf-finalPaid").checked;
+    };
+    const onChange = () => { q.lines = rqLines(q); rqDerive(q); const tm = $("#rq-times"); if (tm) tm.textContent = q.eventTime || ""; $("#q-tot").innerHTML = totHtml(totals(q.lines), q); };
+    const rerender = () => { syncHead(); render(); };
+    HEAD.concat(["depositPct", "depositPaid", "finalPaid"]).forEach(k => { const el = $("#qf-" + k); if (el) { el.addEventListener("input", () => { syncHead(); onChange(); }); el.addEventListener("change", () => { syncHead(); onChange(); }); } });
+    const qs = $("#qf-status"); if (qs) qs.addEventListener("change", rerender);
+    const ed = $("#qf-eventDate"); if (ed) ed.addEventListener("change", rerender);
+    const et = $("#qf-eventType"); if (et) et.onchange = () => { syncHead(); rqTypeChange(q, et.value); render(); };
+    const ar = $("#rq-arr"); if (ar) ar.onchange = () => {
+      const a = arr(ar.value);
+      if (!a) { q.arrangementId = ""; q.arrangementName = ""; rerender(); return; }
+      rqConfirmArr(a, () => { syncHead(); const res = q.reservationId && S.reservations.get(q.reservationId); rqApplyArr(q, a, rqSpan(q)?.room || q.roomId || res?.roomId || ""); rqDerive(q); render(); const w = rqArrWarn(q); toast(w.length ? w[0] : `Arrangement ${a.name} staat in de offerte`); }, () => { ar.value = q.arrangementId || ""; });
+    };
+    rqWire(q, root, { rerender, onChange, persons: () => q.persons, room: () => q.roomId });
+    $("#q-back").onclick = () => { S.quoteOpen = null; draft = null; render(); };
+    wireCustomerPicker("qf", id => q.customerId = id);
+    const qc = $("#q-cust"); if (qc) qc.onclick = e => { e.preventDefault(); S.custOpen = q.customerId; setView("klant"); };
+    $("#q-save").onclick = async () => {
+      syncHead(); q.lines = rqLines(q); rqDerive(q);
+      const before = S.quotes.get(q.id)?.status; q.customerId = await ensureCustomer(q);
+      const body = { ...q, updatedAt: new Date().toISOString() }; delete body.id;
+      if (!(await write("quotes/" + q.id, body))) return;
+      const r = q.reservationId && S.reservations.get(q.reservationId), patch = r && rqResPatch(q);
+      if (patch) { await write("reservations/" + r.id, { ...patch, updatedAt: new Date().toISOString() }, "update"); }
+      await logQuoteStatus(q, before); toast("Offerte opgeslagen"); await syncProductTasks(q);
+    };
+    const rl = $("#q-res"); if (rl) rl.onclick = e => { e.preventDefault(); openRes(S.reservations.get(q.reservationId)); };
+    $("#q-del").onclick = () => { $("#q-delc").hidden = false; $("#q-del").hidden = true; };
+    $("#q-del2").onclick = async () => {
+      if (await write("quotes/" + q.id, null, "delete")) {
+        const r = q.reservationId && S.reservations.get(q.reservationId);
+        if (r && r.quoteId === q.id) await write("reservations/" + r.id, { quoteId: "" }, "update");
+        S.quoteOpen = null; draft = null; render(); toast("Offerte verwijderd");
+      }
+    };
+    $("#q-copy").onclick = async () => {
+      syncHead(); q.lines = rqLines(q); const txt = quoteText(q);
+      try { await navigator.clipboard.writeText(txt); toast("Offertetekst gekopieerd"); }
+      catch (e) { const ta = document.createElement("textarea"); ta.value = txt; ta.style.minHeight = "240px"; $("#q-tot").after(ta); ta.select(); toast("Selecteer en kopieer de tekst hieronder"); }
+    };
+    $("#q-dl").onclick = async () => {
+      syncHead(); q.lines = rqLines(q);
+      let dl = null; try { dl = await window.claude?.use?.("downloads"); } catch (e) {}
+      if (!dl) { toast("Downloaden is hier niet beschikbaar. Gebruik ‘Kopieer tekst’."); return; }
+      try { await dl.save({ filename: `offerte-${q.number}.html`, data: quoteHtml(q) }); }
+      catch (e) { if (e?.code !== "declined") toast("Downloaden lukte niet"); }
+    };
+  };
+}
+// Nieuwe offerte vanuit een reservering: programma uit de dagindeling, arrangement als sjabloon.
+{
+  const base = newQuoteFromRes;
+  newQuoteFromRes = function (r) {
+    const q = base(r), a = arr(r.arrangementId), rm = room(r.roomId);
+    Object.assign(q, { rq: 1, eventType: r.eventType || "", program: rqProgFromRes(r), items: [], drinks: {} });
+    if (a && a.rq) {
+      const resProg = q.program, hasDag = (r.dagindeling || []).length;
+      rqApplyArr(q, a, r.roomId || "");
+      if (hasDag) { q.program = resProg; rqEnsure(q); }
+      else if (+r.persons) for (const p of rqOnParts(q)) { p.adults = +r.persons; p.kids = 0; }
+    }
+    if (rm && +rm.rent) q.items.push({ id: uid(), cat: "Zalen", desc: `Huur ${rm.name}`, part: "", time: "", ptype: "free", price: +rm.rent, btw: 21 });
+    rqEnsure(q); q.lines = rqLines(q); rqDerive(q);
+    return q;
+  };
+}
+
+/* ---------- Offerte zoals de klant hem ziet (Restau: tabblad Offerte) ---------- */
+// o: { incl, sort: "tijden"|"categorie", interactive, customer }
+function rqViewHtml(q0, o = {}) {
+  const q = q0.rq ? q0 : rqUpgrade(structuredClone(q0)), lines = rqLines(q), incl = o.incl !== false, sort = o.sort === "categorie" ? "categorie" : "tijden";
+  const amt = l => { const t = l.qty * l.price; return incl ? t : rqEx(t, l); };
+  const nm = S.settings.locatie?.naam || "HC Tilburg Horeca";
+  const rows = [], seen = new Map();
+  for (const l of lines.filter(x => !x.optional && x.rqCat !== "_tot")) {
+    if (l.itemId && seen.has(l.itemId)) { const r = seen.get(l.itemId); r.total += amt(l); if (l.who === "kids") { r.nK = l.qty; r.pK = l.unitPrice; } else { r.nA = l.qty; r.pA = l.unitPrice; } continue; }
+    const r = { bx: l, time: l.time || "", desc: l.rqDesc || (l.itemId ? (q.items.find(i => i.id === l.itemId)?.desc || product(l.productId)?.name || l.desc) : l.desc), part: l.part || "", cat: rqCatOfLine(l), total: amt(l), drink: !!l.drink, disc: !!l.disc, who: l.who,
+      nA: l.who === "adults" ? l.qty : null, nK: l.who === "kids" ? l.qty : null, pA: l.who === "adults" ? l.unitPrice : null, pK: l.who === "kids" ? l.unitPrice : null, n: l.who === "qty" || l.who === "hour" ? l.qty : null, p: l.unitPrice ?? l.price, hourly: l.who === "hour" };
+    if (l.itemId) seen.set(l.itemId, r);
+    rows.push(r);
+  }
+  const pf = (r, x) => fmtN(incl ? x : rqEx(x, r.bx));
+  const nTxt = r => r.drink ? (r.nA != null ? `${fmtN(r.nA, 0)} volw.` : `${fmtN(r.nK, 0)} kind.`) : r.nA != null || r.nK != null ? [r.nA != null ? `${fmtN(r.nA, 0)} volw.` : "", r.nK != null ? `${fmtN(r.nK, 0)} kind.` : ""].filter(Boolean).join(" | ") : r.n != null ? (r.hourly ? `${fmtH(r.n)} uur` : fmtN(r.n, r.n % 1 ? 2 : 0)) : "";
+  const pTxt = r => r.drink || r.disc ? "" : r.pA != null || r.pK != null ? [r.pA, r.pK].filter(x => x != null).map(x => pf(r, x)).join(" | ") : r.p != null && r.n != null ? pf(r, r.p) : "";
+  const line = (r, tcls = "") => `<tr><td class="rqv-t ${tcls}">${esc(r.time || "")}</td><td>${esc(r.desc)}</td><td>${esc(nTxt(r))}</td><td class="r small">${esc(pTxt(r))}</td><td class="r rqv-a">${fmtN(r.total)} euro</td></tr>`;
+  const subRow = v => `<tr class="rqv-sub"><td></td><td></td><td></td><td></td><td class="r"><b>${fmtN(v)} euro</b></td></tr><tr class="rqv-gap"><td colspan="5"></td></tr>`;
+  const on = rqOnParts(q).slice().sort((a, b) => (a.start || "").localeCompare(b.start || "") || 0);
+  // Volgorde in de dag: een gelegenheid na middernacht hoort achteraan.
+  const s0 = on.length ? toMin(on[0].start) ?? 0 : 0, rel = t => { const m = toMin(t); return m == null ? 9999 : m < s0 - 120 ? m + 1440 : m; };
+  on.sort((a, b) => rel(a.start) - rel(b.start));
+  let body = "";
+  if (sort === "tijden") {
+    const alg = rows.filter(r => !r.part || !on.some(p => p.name === r.part));
+    body += `<tr class="rqv-h"><td></td><td class="muted">Algemeen</td><td></td><td></td><td></td></tr>${alg.map(r => line(r)).join("")}${subRow(alg.reduce((t, r) => t + r.total, 0))}`;
+    for (const p of on) {
+      const rs = rows.filter(r => r.part === p.name).sort((a, b) => (b.drink - a.drink) || rel(a.time) - rel(b.time));
+      body += `<tr class="rqv-p"><td class="rqv-t g">${esc(p.start || "")}</td><td>${esc(p.name)}<br><span class="muted">${esc((p.rooms || []).filter(Boolean).map(roomName).join(", "))}</span></td><td>${rqNum(p.adults)} volw. | ${rqNum(p.kids)} kind.</td><td></td><td></td></tr>
+        ${rs.map(r => line(r, r.drink ? "" : "g2")).join("")}<tr><td class="rqv-t g">${esc(p.end || "")}</td><td>Einde</td><td></td><td></td><td></td></tr>${subRow(rs.reduce((t, r) => t + r.total, 0))}`;
+    }
+  } else {
+    for (const c of [...RQ_TOTCATS, "Leveranciers"]) {
+      const rs = rows.filter(r => r.cat === c); if (!rs.length) continue;
+      rs.sort((a, b) => rel(on.find(p => p.name === a.part)?.start) - rel(on.find(p => p.name === b.part)?.start) || rel(a.time) - rel(b.time));
+      body += `<tr class="rqv-p"><td class="rqv-t">${rqIcon(c)}</td><td><b>${esc(c)}</b></td><td></td><td></td><td></td></tr>${rs.map(r => line(r)).join("")}${subRow(rs.reduce((t, r) => t + r.total, 0))}`;
+    }
+  }
+  const T = rqTotTable(lines), lev = incl ? T.c.Leveranciers.tot : T.c.Leveranciers.ex, eig = incl ? T.incl.tot : T.incl.ex, tdisc = incl ? T.c._tot.tot : T.c._tot.ex;
+  const dayTxt = q.eventDate ? `${DAYS[parseISO(q.eventDate).getDay()].replace(/^./, c => c.toUpperCase())} ${q.eventDate.split("-").reverse().join("-")}` : "";
+  let foot = `${Math.abs(tdisc) > 0.004 ? `<tr><td></td><td>Korting op totaal</td><td></td><td></td><td class="r">${fmtN(tdisc)} euro</td></tr>` : ""}
+    <tr class="rqv-tot"><td></td><td><b>Totaal ${esc(nm)}</b> <span class="g">${esc(dayTxt)}</span></td><td></td><td></td><td class="r rqv-a"><b>${fmtN(eig)} euro</b></td></tr>
+    <tr class="rqv-tot"><td></td><td><b>Totaal leveranciers</b></td><td></td><td></td><td class="r rqv-a"><b>${fmtN(lev)} euro</b></td></tr>
+    <tr><td></td><td><b>Totaal ${esc(nm)}</b></td><td></td><td></td><td class="r rqv-a"><b>${fmtN(eig + lev)} euro</b></td></tr>`;
+  let box = "";
+  if (!o.customer) {
+    const tt = totals(lines);
+    box = `<div class="rqv-box"><div><span>Totaal factuur exclusief BTW</span><b>${fmtN(tt.excl)} euro</b></div>${Object.keys(tt.btw).filter(r => +r).sort((a, b) => a - b).map(r => `<div><span>Btw ${r}%</span><b>${fmtN(tt.btw[r])} euro</b></div>`).join("")}<div class="tealc"><span><b>Totaal factuur inclusief BTW</b></span><b>${fmtN(tt.incl)} euro</b></div></div>`;
+    if (typeof finTerms === "function" && q0.id && S.quotes.has(q0.id)) {
+      const terms = finTerms(q0).filter(x => x.paid && x.key !== "eind"), paid = terms.reduce((t, x) => t + x.amount, 0);
+      box += `${terms.map(x => `<div class="rqv-pay"><span>${esc(x.label)} ${esc(nm)}</span><span>-${fmtN(x.amount)} euro</span></div>`).join("")}<div class="rqv-rest"><span>Nog te ontvangen / betalen</span><b>${fmtN(tt.incl - paid)} euro</b></div>`;
+    }
+  }
+  const head = `<div class="rqv-head">${o.title ? `<h3 class="g">${esc(o.title)}</h3>` : ""}
+    <div class="rqv-arr"><span>Arrangement:</span><div class="rqv-arrbox">${esc(q.arrangementName || arr(q.arrangementId)?.name || "Op maat")}</div></div>
+    ${o.interactive ? `<div class="rqv-ctl"><span>Sorteer op: <label><input type="radio" name="rqv-sort" value="tijden" ${sort === "tijden" ? "checked" : ""}> TIJDEN</label> <label><input type="radio" name="rqv-sort" value="categorie" ${sort === "categorie" ? "checked" : ""}> CATEGORIE</label></span>
+      <label class="rqv-inc"><span class="${incl ? "muted" : ""}">Exc. BTW</span><span class="rq-sw sm"><input type="checkbox" id="rqv-incl" ${incl ? "checked" : ""} aria-label="Inclusief btw"><span></span></span><span class="${incl ? "tealc" : "muted"}">Inc. BTW</span></label></div>` : ""}</div>`;
+  return `<div class="rqv">${head}<div class="tbl-wrap"><table class="rqv-tbl"><thead><tr><th style="width:56px"></th><th>Algemeen</th><th>Aantal</th><th class="r">Stuksprijs</th><th class="r">Totaal</th></tr></thead><tbody>${body}${foot}</tbody></table></div>${box}</div>`;
+}
+// Dagindeling met categorie-iconen (Restau: linkerkolom van het tabblad Offerte)
+function rqDagHtml(q0) {
+  const q = q0.rq ? q0 : rqUpgrade(structuredClone(q0)), on = rqOnParts(q); if (!on.length) return "";
+  const ICS = ["Hapjes", "Diner", "Drankjes", "Extra mogelijkheden", "Decoratie pakket", "Muziek"];
+  const has = (p, c) => q.items.some(it => it.part === p.name && (it.cat === c || (c === "Decoratie pakket" && it.cat === "Decoratie los"))) || (c === "Drankjes" && Object.values((q.drinks || {})[p.name] || {}).some(x => x && x.on));
+  return `<div class="rqv-dag"><b>Dagindeling</b><div class="tbl-wrap"><table>${on.map(p => `<tr><td class="num">${esc(p.start)}–${esc(p.end)}</td><td>${esc(p.name)}</td><td class="num">${rqNum(p.adults)} volw.</td><td class="num">${rqNum(p.kids)} kind.</td><td>${esc((p.rooms || []).filter(Boolean).map(roomName).join(", ") || "–")}</td><td class="rqv-ics">${ICS.map(c => `<span class="${has(p, c) ? "on" : ""}" title="${esc(c)}">${rqIcon(c)}</span>`).join("")}</td></tr>`).join("")}</table></div></div>`;
+}
+// Klantversie (download en e-mail): de regels als Restau, met eigen opmaak.
+const RQV_CSS = `.rqv-tbl{width:100%;border-collapse:collapse;margin:14px 0}.rqv-tbl th{color:#555;font-weight:600;text-align:left;border-bottom:1px solid #e5621c;padding:6px}.rqv-tbl td{padding:3px 6px;vertical-align:top;border:0}.rqv-tbl .r{text-align:right}.rqv-t{color:#2e9a2e;white-space:nowrap}.rqv-p td{padding-top:12px}.rqv-p .rqv-t,.rqv-t.g{font-weight:700;color:#139413}.rqv-sub td{border-top:1px solid #f0b48f;color:#1b7d88}.rqv-gap td{height:14px}.rqv-a{color:#1b7d88;white-space:nowrap}.rqv-tot td{padding-top:10px}.g{color:#139413}.small{font-size:.85em}.muted{color:#8a8a8a}.rqv-arr{display:flex;gap:10px;align-items:center}.rqv-arrbox{border:1px solid #ccc;border-radius:4px;padding:6px 14px;min-width:220px}.rqv-tbl svg{width:16px;height:16px}`;
+function rqQuoteBody(q) { return `<style>${RQV_CSS}</style>${rqViewHtml(q, { customer: true, incl: true, sort: "tijden" })}`; }
+
+// Eventdossier, tabblad Offerte: de offerte zoals Restau hem toont, onder de notities.
+DOSSIER_TABS.offerte = {
+  html: r => {
+    let h = dOverview(r); const q = evQuote(r);
+    const i = h.indexOf("<div><b>Op de offerte</b>");
+    if (i >= 0) { const j = h.indexOf("</table></div>", i); if (j > i) h = h.slice(0, i) + h.slice(j + "</table></div>".length); }
+    if (!q) return h;
+    const d = q.eventDate ? q.eventDate.split("-").reverse().join("-") : "";
+    return h + `<div class="evgrid rqv-grid" style="margin-top:16px"><div>${rqDagHtml(q)}</div><div>${rqViewHtml(q, { interactive: true, incl: S.rqvIncl !== false, sort: S.rqvSort, title: d ? "Offerte voor " + d : "Offerte" })}</div></div>`;
+  },
+  after: (r, upd) => {
+    dOverviewWire(r, upd);
+    document.querySelectorAll('input[name="rqv-sort"]').forEach(x => x.onchange = () => { S.rqvSort = x.value; render(); });
+    const inc = $("#rqv-incl"); if (inc) inc.onchange = () => { S.rqvIncl = inc.checked; render(); };
+  },
+};
+
+/* ---------- Instellingen › Arrangementen (lijst en "Arrangement opmaken") ---------- */
+let arDraft = null;
+const arTypes = () => eventTypes();
+function rqPhotoBox(id, url, ro, label = "Upload hier een foto") {
+  return `<div class="rq-photo" data-photo="${esc(id)}">${safeImg(url) ? `<img src="${esc(url)}" alt=""><button type="button" class="btn small" data-photodel ${ro}>Foto weghalen</button>` : `<label class="rq-up">${esc(label)}<input type="file" accept="image/jpeg,image/png,image/webp" data-photoup hidden ${ro}></label>`}</div>`;
+}
+// Foto kiezen: in de webversie naar de opslag, anders verkleind in de gegevens zelf.
+async function rqPhotoFile(file, key) {
+  if (!file) return "";
+  if (typeof window.hctFotoUpload === "function") { const u = await window.hctFotoUpload(file, key); if (safeImg(u)) return u; throw new Error("upload"); }
+  const img = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = bad; i.src = URL.createObjectURL(file); });
+  const sc = Math.min(1, 640 / Math.max(img.width, img.height)), c = document.createElement("canvas");
+  c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+  return c.toDataURL("image/jpeg", 0.78);
+}
+function rqPhotoWire(root, get, set) {
+  root.querySelectorAll("[data-photo]").forEach(box => {
+    const k = box.dataset.photo, up = box.querySelector("[data-photoup]"), del = box.querySelector("[data-photodel]");
+    if (del) del.onclick = () => { set(k, ""); render(); };
+    if (up) up.onchange = async () => {
+      const f = up.files && up.files[0]; if (!f) return;
+      if (f.size > 5 * 1024 * 1024) { toast("Deze foto is groter dan 5 MB. Verklein hem eerst."); return; }
+      toast("Foto verwerken…");
+      try { set(k, await rqPhotoFile(f, k)); toast("Foto staat erin. Klik op Opslaan."); render(); } catch (e) { toast("De foto lukt nu niet. Probeer een andere jpg of png."); }
+    };
+  });
+}
+function vArrList() {
+  const types = S.arTypes || [], ro = S.readOnly ? "disabled" : "";
+  const list = S.settings.arrangementen.filter(a => a.rq && (!types.length || types.includes(a.eventType)));
+  return `<section class="stack">
+    <div class="row spread"><h2>Arrangementen</h2><button class="btn orange" id="ar-new" ${ro}>⊕ Arrangement toevoegen</button></div>
+    <div class="panel stack ar-list">
+      <div><div class="small muted">Filter op type event:</div><div class="qtypes">${arTypes().map(t => `<button type="button" data-artype="${esc(t.id)}" aria-pressed="${types.includes(t.id)}" title="${esc(t.name)}">${typeIcon(t.id)}${esc(t.name)}</button>`).join("")}</div></div>
+      ${list.length ? list.map(a => `<div class="ar-row"><span class="ar-name">${esc(a.name || "(zonder naam)")}${a.intern ? ` <span class="chip c0">intern</span>` : ""}</span><span class="ar-type">${typeIcon(a.eventType)}<span>${esc(typeName(a.eventType) || "Geen soort")}</span></span><button type="button" class="btn teal" data-arwijzig="${esc(a.id)}">⟳ Wijzig</button></div>`).join("")
+        : `<p class="empty">${types.length ? "Geen arrangementen voor deze soort event." : "Nog geen arrangementen."}</p>`}
+    </div>
+  </section>`;
+}
+function afterArrList() {
+  document.querySelectorAll("[data-artype]").forEach(b => b.onclick = () => { const t = b.dataset.artype, cur = S.arTypes || []; S.arTypes = cur.includes(t) ? cur.filter(x => x !== t) : [...cur, t]; render(); });
+  document.querySelectorAll("[data-arwijzig]").forEach(b => b.onclick = () => { S.arOpen = b.dataset.arwijzig; arDraft = null; render(); window.scrollTo(0, 0); });
+  const nw = $("#ar-new"); if (nw) nw.onclick = () => {
+    $("#modal-root").innerHTML = `<div class="scrim" id="scrim"><form class="modal" id="arn-form" aria-label="Arrangement opmaken" style="max-width:520px">
+      <div class="row spread"><h2>Arrangement opmaken</h2><button type="button" class="btn ghost" id="arn-x" aria-label="Sluiten">✕</button></div>
+      <label class="f"><span>Naam Arrangement</span><input id="arn-name" required></label>
+      <label class="f"><span>Kies een event</span>${rqTypeSelect("arn-type", "", "", false)}</label>
+      <div class="row spread"><button type="button" class="btn" id="arn-no">Cancel</button><button type="submit" class="btn primary">Arrangement maken</button></div></form></div>`;
+    document.body.style.overflow = "hidden";
+    $("#arn-x").onclick = $("#arn-no").onclick = closeModal;
+    $("#arn-type").onchange = e => { $("#arn-form .rq-tic").innerHTML = typeIcon(e.target.value); };
+    setTimeout(() => $("#arn-name")?.focus(), 20);
+    $("#arn-form").onsubmit = async e => {
+      e.preventDefault();
+      const name = $("#arn-name").value.trim(), type = $("#arn-type").value;
+      if (!name || !type) { toast("Vul een naam in en kies een event"); return; }
+      const a = rqEnsure({ id: uid(), name, eventType: type, omschrijving: "", foto: "", intern: false, mogelijkOp: [], maxPerDag: "", uitgeslotenZalen: [], program: [], items: [], drinks: {}, createdAt: new Date().toISOString() });
+      if (await rqSaveSettings({ arrangementen: [a, ...S.settings.arrangementen] })) { closeModal(); S.arOpen = a.id; arDraft = null; render(); }
+    };
+  };
+}
+function vArrEdit() {
+  const a0 = arr(S.arOpen); if (!a0) { S.arOpen = null; return vArrList(); }
+  if (!arDraft || arDraft.id !== a0.id) arDraft = rqEnsure(structuredClone(a0));
+  const a = arDraft, ro = S.readOnly ? "disabled" : "", rooms = S.settings.rooms, ex = a.uitgeslotenZalen || [];
+  const days = (a.mogelijkOp || []).slice().sort();
+  return `<section class="stack ar-ed" id="ar-ed">
+    <div class="row spread"><div><h2 class="tealh">Arrangement opmaken</h2><a href="#" id="ar-back" class="small">⇠ Alle arrangementen</a></div>
+      <div class="row"><button class="btn" id="ar-copy" ${ro}>⧉ kopieer</button><button class="btn teal" id="ar-save" ${ro}>Opslaan</button></div></div>
+    <div class="ar-top">
+      <div class="panel ar-alg">
+        <label class="f"><span class="orh">Naam Arrangement:</span><input id="ar-name" value="${esc(a.name)}" ${ro}></label>
+        <label class="f"><span class="orh">Kies een event</span>${rqTypeSelect("ar-type", a.eventType, ro, true)}</label>
+        <label class="f ar-om"><span class="orh">Omschrijving:</span><textarea id="ar-omschrijving" rows="6" placeholder="Dit ziet de gast bij het arrangement" ${ro}>${esc(a.omschrijving || "")}</textarea></label>
+        <div class="f"><span class="orh">Foto</span>${rqPhotoBox("arfoto", a.foto, ro)}<label class="check small" style="margin-top:10px"><input type="checkbox" id="ar-intern" ${a.intern ? "checked" : ""} ${ro}> Arrangement alleen voor intern gebruik</label></div>
+      </div>
+      <div class="panel ar-mog"><span class="ar-cal">${rqIcon("cal")}</span><b class="tealc">Mogelijk op:</b>
+        <span class="small">${days.length ? `${days.length} ${days.length === 1 ? "dag" : "dagen"} geselecteerd<br><span class="muted">${days.slice(0, 4).map(shortDate).join(", ")}${days.length > 4 ? " …" : ""}</span>` : `<span class="muted">Alle dagen</span>`}</span>
+        <button type="button" class="btn small" id="ar-days" ${ro}>Selecteer dagen ›</button></div>
+    </div>
+    ${rqProgHtml(a, ro, { std: 1, excl: ex })}
+    <div class="panel stack"><b class="tealc">Maximaal aantal personen die dit arrangement maximaal per dag mogen boeken:</b>
+      <div class="row"><input type="number" min="0" id="ar-max" value="${esc(a.maxPerDag ?? "")}" style="max-width:180px" ${ro}><button class="btn teal" id="ar-max-save" ${ro}>Opslaan</button></div></div>
+    <div class="panel stack"><b class="tealc">Selecteer zalen die NIET gekozen mogen worden voor dit arrangement:</b>
+      ${ex.length ? `<div class="row wrap">${ex.map(id => `<span class="chip c3">${esc(roomName(id))} <button type="button" class="rq-x" data-exdel="${esc(id)}" aria-label="Weer toestaan" ${ro}>✕</button></span>`).join("")}</div>` : ""}
+      <div class="row"><select id="ar-exsel" style="max-width:240px" ${ro}><option value=""></option>${rooms.filter(r => !ex.includes(r.id)).map(r => `<option value="${esc(r.id)}">${esc(r.name)}</option>`).join("")}</select></div>
+      <div class="rq-add"><span class="rq-hook">↳</span><button type="button" class="btn small rq-addbtn" id="ar-exadd" ${ro}><b>+</b> Toevoegen</button></div></div>
+    ${rqOptHtml(a, ro)}
+    ${rqTotHtml(a, ro)}
+    <div class="row"><button class="btn ar-del" id="ar-del" ${ro}>✕ Verwijderen</button><span id="ar-delc" hidden class="row"><span class="small">Weet u zeker dat u dit arrangement wilt verwijderen? Offertes en feesten waarbij dit arrangement al gekozen is, zullen intact blijven.</span><button class="btn danger" id="ar-del2">Ja, verwijderen</button></span></div>
+  </section>`;
+}
+function arPickDays(a, done) {
+  let yr = +(((a.mogelijkOp || []).slice().sort()[0] || todayISO).slice(0, 4));
+  if (yr < new Date().getFullYear()) yr = new Date().getFullYear();
+  const sel = new Set(a.mogelijkOp || []);
+  $("#modal-root").innerHTML = `<div class="scrim" id="scrim"><div class="modal ar-days" role="dialog" aria-label="Selecteer arrangement dagen" style="max-width:980px">
+    <div class="row spread"><h2>Selecteer arrangement dagen</h2><button type="button" class="btn ghost" id="ad-x" aria-label="Sluiten">✕</button></div>
+    <div class="row spread"><div class="row"><button type="button" class="btn" id="ad-prev" aria-label="Vorig jaar">‹</button><b id="ad-yr"></b><button type="button" class="btn" id="ad-next" aria-label="Volgend jaar">›</button></div><b class="tealc" id="ad-n"></b></div>
+    <div class="row wrap small"><button type="button" class="btn small" data-adq="all">alle dagen</button><button type="button" class="btn small" data-adq="none">de-selecteer alle dagen</button><button type="button" class="btn small" data-adq="weekend">weekend</button><button type="button" class="btn small" data-adq="week">weekdagen</button></div>
+    <div class="ad-grid" id="ad-grid"></div>
+    <div class="row spread"><span class="small muted">Geen dagen geselecteerd = het arrangement kan altijd.</span><button type="button" class="btn primary" id="ad-save">Opslaan</button></div></div></div>`;
+  document.body.style.overflow = "hidden";
+  const yearDays = () => { const out = []; for (let d = new Date(yr, 0, 1); d.getFullYear() === yr; d.setDate(d.getDate() + 1)) out.push(iso(d)); return out; };
+  const draw = () => {
+    $("#ad-yr").textContent = yr; $("#ad-n").textContent = `${sel.size} ${sel.size === 1 ? "dag" : "dagen"} geselecteerd`;
+    $("#ad-grid").innerHTML = MONTHS.map((m, mi) => {
+      const first = new Date(yr, mi, 1), lead = (first.getDay() + 6) % 7, n = new Date(yr, mi + 1, 0).getDate();
+      return `<div class="ad-m"><b>${m}</b><div class="ad-d">${DAYS_SHORT.map(x => `<i>${x}</i>`).join("")}${"<span></span>".repeat(lead)}${Array.from({ length: n }, (_, i) => { const ds = `${yr}-${pad(mi + 1)}-${pad(i + 1)}`; return `<button type="button" data-ad="${ds}" class="${sel.has(ds) ? "on" : ""}" aria-pressed="${sel.has(ds)}">${i + 1}</button>`; }).join("")}</div></div>`;
+    }).join("");
+  };
+  draw();
+  $("#ad-x").onclick = closeModal;
+  $("#ad-prev").onclick = () => { yr--; draw(); }; $("#ad-next").onclick = () => { yr++; draw(); };
+  $("#ad-grid").onclick = e => { const b = e.target.closest("[data-ad]"); if (!b) return; const ds = b.dataset.ad; sel.has(ds) ? sel.delete(ds) : sel.add(ds); b.classList.toggle("on"); b.setAttribute("aria-pressed", sel.has(ds)); $("#ad-n").textContent = `${sel.size} ${sel.size === 1 ? "dag" : "dagen"} geselecteerd`; };
+  document.querySelectorAll("[data-adq]").forEach(b => b.onclick = () => {
+    const q = b.dataset.adq, ds = yearDays();
+    if (q === "none") ds.forEach(x => sel.delete(x));
+    else ds.filter(x => { const w = parseISO(x).getDay(); return q === "all" || (q === "weekend" ? w === 0 || w === 6 : w >= 1 && w <= 5); }).forEach(x => sel.add(x));
+    draw();
+  });
+  $("#ad-save").onclick = () => { a.mogelijkOp = [...sel].sort(); closeModal(); done(); };
+}
+function afterArrEdit() {
+  const a = arDraft, root = $("#ar-ed"); if (!a || !root) return;
+  const syncHead = () => {
+    const v = id => $("#" + id);
+    if (v("ar-name")) a.name = v("ar-name").value.trim();
+    if (v("ar-omschrijving")) a.omschrijving = v("ar-omschrijving").value;
+    if (v("ar-intern")) a.intern = v("ar-intern").checked;
+    if (v("ar-max")) a.maxPerDag = v("ar-max").value === "" ? "" : +v("ar-max").value;
+  };
+  const rerender = () => { syncHead(); render(); };
+  const save = async (msg = "Arrangement opgeslagen") => {
+    syncHead(); if (!a.name) { toast("Geef het arrangement een naam"); return false; }
+    const body = JSON.parse(JSON.stringify({ ...a, updatedAt: new Date().toISOString() }));
+    return rqSaveSettings({ arrangementen: S.settings.arrangementen.map(x => x.id === a.id ? body : x) }, msg);
+  };
+  $("#ar-back").onclick = e => { e.preventDefault(); S.arOpen = null; arDraft = null; render(); };
+  const et = $("#ar-type"); if (et) et.onchange = () => { syncHead(); rqTypeChange(a, et.value); render(); };
+  rqWire(a, root, { rerender, persons: () => "", room: () => "" });
+  rqPhotoWire(root, () => a.foto, (k, u) => { syncHead(); a.foto = u; });
+  if (S.readOnly) return;
+  $("#ar-save").onclick = () => save();
+  $("#ar-max-save").onclick = () => save("Maximum per dag opgeslagen");
+  $("#ar-days").onclick = () => { syncHead(); arPickDays(a, async () => { await save("Dagen opgeslagen"); render(); }); };
+  $("#ar-exadd").onclick = () => { const v = $("#ar-exsel").value; if (!v) { toast("Kies eerst een zaal"); return; } syncHead(); a.uitgeslotenZalen = [...new Set([...(a.uitgeslotenZalen || []), v])]; render(); };
+  root.querySelectorAll("[data-exdel]").forEach(b => b.onclick = () => { syncHead(); a.uitgeslotenZalen = (a.uitgeslotenZalen || []).filter(x => x !== b.dataset.exdel); render(); });
+  $("#ar-copy").onclick = async () => {
+    syncHead();
+    const c = JSON.parse(JSON.stringify({ ...a, id: uid(), createdAt: new Date().toISOString() })); delete c.restauId;
+    c.items.forEach(it => it.id = uid());
+    if (await rqSaveSettings({ arrangementen: [c, ...S.settings.arrangementen] }, "Het arrangement is gekopieerd en kunt u terugvinden in de arrangementen-lijst")) render();
+  };
+  $("#ar-del").onclick = () => { $("#ar-delc").hidden = false; $("#ar-del").hidden = true; };
+  $("#ar-del2").onclick = async () => { if (await rqSaveSettings({ arrangementen: S.settings.arrangementen.filter(x => x.id !== a.id) }, "Arrangement verwijderd")) { S.arOpen = null; arDraft = null; render(); } };
+}
+{
+  const fv = VIEWS.inst, fa = after.inst;
+  VIEWS.inst = () => S.instTab === "arrangementen" ? (S.arOpen ? vArrEdit() : vArrList()) : fv();
+  after.inst = () => S.instTab === "arrangementen" ? (S.arOpen && arDraft ? afterArrEdit() : afterArrList()) : fa();
+  const sv = setView;
+  setView = function (v) { if (v !== "inst" || S.instTab !== "arrangementen") { S.arOpen = null; arDraft = null; } sv(v); };
+}
+// Reserveringsformulier: arrangementen met soort tonen (dezelfde naam komt per soort terug).
+function arrPriceLabel(a) { return a.rq ? `${arrLabel(a)} · ${eur(rqArrPP(a))} p.p.` : `${a.name} · ${eur(arrPrice(a))} p.p.`; }
+
+/* ---------- Instellingen › Drankjes › afkoop (per soort feest) ---------- */
+let daDraft = null;
+function vDrankafkoop() {
+  const types = eventTypes(), cur = types.some(t => t.id === S.daType) ? S.daType : types[0]?.id, t = eventType(cur), ro = S.readOnly ? "disabled" : "";
+  if (!daDraft) daDraft = structuredClone(S.settings.drankafkoop || {});
+  const cfgOf = pk => { const st = (daDraft[cur] || {})[pk] || {}, def = daCfg(cur)[pk]; return { ...def, ...st, prices: { ...(st.prices || {}) } }; };
+  const parts = (t?.parts || []).map(p => p.name);
+  const priceIn = (pk, part) => { const c = cfgOf(pk), v = c.prices[part], dv = daDefPrice(cur, part, pk); const val = v === undefined ? (dv ?? "") : v ?? ""; return `<input type="number" step="0.05" min="0" data-dap="${pk}" data-part="${esc(part)}" value="${esc(val)}" aria-label="${esc(part)} prijs p.p. per uur" ${ro}>`; };
+  const hiSel = pk => { const v = +cfgOf(pk).btwHigh; return `<select data-dahi="${pk}" aria-label="Aandeel btw hoog" ${ro}>${Array.from({ length: 21 }, (_, i) => i * 5).concat([v]).filter((x, i, a) => a.indexOf(x) === i).sort((a, b) => a - b).map(x => `<option value="${x}" ${x === v ? "selected" : ""}>${x}%</option>`).join("")}</select>`; };
+  const col = pk => `<div class="da-col"><h3 class="orh">${pk === "kids" ? "kinderen drankafkoop" : RQ_PK.find(x => x[0] === pk)[1]}</h3><span class="small"><b>Omschrijving</b></span><textarea data-dadesc="${pk}" rows="3" aria-label="Omschrijving" ${ro}>${esc(cfgOf(pk).omschrijving)}</textarea>${rqPhotoBox("da:" + cur + ":" + pk, cfgOf(pk).foto, ro, "Upload hier een foto")}</div>`;
+  const grid = pks => `<div class="da-grid" style="--n:${pks.length}"><div class="da-lab"></div>${pks.map(col).join("")}
+    <div class="da-lab"><b class="small">Aandeel BTW hoog</b></div>${pks.map(pk => `<div class="da-c">${hiSel(pk)}</div>`).join("")}
+    <div class="da-lab"><b class="small">Gelegenheden</b></div>${pks.map(() => `<div class="da-c"><span class="da-tri"></span></div>`).join("")}
+    ${parts.map(p => `<div class="da-lab da-row">${esc(p)}</div>${pks.map(pk => `<div class="da-c da-row">${priceIn(pk, p)}</div>`).join("")}`).join("")}</div>`;
+  return `<section class="stack da">
+    <div class="row spread"><h2>Drankjes › afkoop</h2><button class="btn teal" id="da-save" ${ro}>Opslaan</button></div>
+    <div class="panel da-types"><div class="qtypes">${types.map(x => `<button type="button" data-datype="${esc(x.id)}" aria-pressed="${x.id === cur}" title="${esc(x.name)}">${typeIcon(x.id)}${esc(x.name)}</button>`).join("")}</div><div class="da-tname">${esc(t?.name || "")} ${typeIcon(cur)}</div></div>
+    <p class="small muted" style="margin:0">Prijzen per persoon per uur, per gelegenheid. Leeg = dit pakket is bij die gelegenheid niet te kiezen. Aandeel btw hoog = het deel van het bedrag tegen 21%, de rest tegen 9%. In een offerte kies je per gelegenheid welke pakketten aan staan; bedrag = personen × uren × prijs.</p>
+    <div class="panel tbl-wrap">${grid(["p1", "p2", "p3"])}</div>
+    <div class="panel tbl-wrap">${grid(["kids"])}</div>
+  </section>`;
+}
+function afterDrankafkoop() {
+  const types = eventTypes(), cur = types.some(t => t.id === S.daType) ? S.daType : types[0]?.id, root = $("section.da"); if (!root) return;
+  const slot = pk => { daDraft[cur] = daDraft[cur] || {}; return daDraft[cur][pk] = daDraft[cur][pk] || {}; };
+  root.querySelectorAll("[data-datype]").forEach(b => b.onclick = () => { S.daType = b.dataset.datype; render(); });
+  root.addEventListener("input", e => {
+    const el = e.target;
+    if (el.dataset.dap) { const s = slot(el.dataset.dap); s.prices = s.prices || {}; s.prices[el.dataset.part] = el.value === "" ? "" : +el.value; }
+    if (el.dataset.dadesc) slot(el.dataset.dadesc).omschrijving = el.value;
+  });
+  root.addEventListener("change", e => { const el = e.target; if (el.dataset.dahi) slot(el.dataset.dahi).btwHigh = +el.value; });
+  rqPhotoWire(root, null, (k, u) => { const [, , pk] = k.split(":"); slot(pk).foto = u; });
+  const sv = $("#da-save"); if (sv) sv.onclick = async () => { if (await rqSaveSettings({ drankafkoop: daDraft }, "Drankafkoop opgeslagen")) { daDraft = null; render(); } };
+}
+VIEWS.drankafkoop = () => vDrankafkoop();
+after.drankafkoop = () => afterDrankafkoop();
+
+/* ---------- Instellingen › Drankjes › prijslijst (nacalculatie, los van de producten) ---------- */
+const DL_CATS = ["Bieren", "Alcoholvrij", "Koffie & Thee", "Frisdranken", "Wijnen", "Gedistilleerd binnenland", "Gedistilleerd buitenland", "Dranken BTW hoog"];
+let dlDraft = null;
+function vDrankprijs() {
+  if (!dlDraft) dlDraft = structuredClone(S.settings.drankPrijslijst || []);
+  const ro = S.readOnly ? "disabled" : "";
+  return `<section class="stack dl">
+    <div class="row spread"><h2>Drankjes › prijslijst</h2><div class="row"><button class="btn orange" id="dl-add" ${ro}>⊕ Drankje toevoegen</button><button class="btn teal" id="dl-save" ${ro}>Opslaan</button></div></div>
+    <p class="small muted" style="margin:0">De prijslijst voor de nacalculatie: wat er los gedronken is. Los van de producten in de offerte.</p>
+    <div class="panel tbl-wrap"><table class="lines"><thead><tr><th>Drankje</th><th style="width:220px">Categorie</th><th style="width:110px">Eenheid</th><th style="width:120px" class="r">Prijs (€)</th><th style="width:44px"></th></tr></thead><tbody>
+      ${dlDraft.map((x, i) => `<tr data-dl="${i}"><td><input data-k="name" value="${esc(x.name)}" aria-label="Drankje" ${ro}></td><td><select data-k="cat" aria-label="Categorie" ${ro}>${[...new Set([...DL_CATS, x.cat].filter(Boolean))].map(c => `<option ${c === x.cat ? "selected" : ""}>${esc(c)}</option>`).join("")}</select></td><td><select data-k="unit" aria-label="Eenheid" ${ro}>${["Glas", "Fles"].map(u => `<option ${u === x.unit ? "selected" : ""}>${u}</option>`).join("")}</select></td><td><input type="number" step="0.05" min="0" data-k="price" value="${esc(x.price)}" style="text-align:right" aria-label="Prijs" ${ro}></td><td><button class="btn ghost" data-dldel="${i}" aria-label="Verwijderen" ${ro}>🗑</button></td></tr>`).join("")}
+    </tbody></table></div></section>`;
+}
+function afterDrankprijs() {
+  const sync = () => document.querySelectorAll("tr[data-dl]").forEach(tr => { const x = dlDraft[+tr.dataset.dl]; tr.querySelectorAll("[data-k]").forEach(i => x[i.dataset.k] = i.dataset.k === "price" ? (i.value === "" ? "" : +i.value) : i.value); });
+  document.querySelectorAll("tr[data-dl] [data-k]").forEach(el => el.addEventListener("input", sync));
+  const add = $("#dl-add"); if (add) add.onclick = () => { sync(); dlDraft.push({ id: uid(), name: "", cat: DL_CATS[0], unit: "Glas", price: "" }); render(); };
+  document.querySelectorAll("[data-dldel]").forEach(b => b.onclick = () => { sync(); dlDraft.splice(+b.dataset.dldel, 1); render(); });
+  const sv = $("#dl-save"); if (sv) sv.onclick = async () => { sync(); if (await rqSaveSettings({ drankPrijslijst: dlDraft.filter(x => x.name.trim()) }, "Prijslijst opgeslagen")) { dlDraft = null; render(); } };
+}
+VIEWS.drankprijs = () => vDrankprijs();
+after.drankprijs = () => afterDrankprijs();
+{ const sv = setView; setView = function (v) { if (v !== "drankafkoop") daDraft = null; if (v !== "drankprijs") dlDraft = null; sv(v); }; }
+
+// Menu Instellingen: Drankjes › afkoop en › prijslijst onder Arrangementen
+(() => {
+  const inst = MENU.find(m => m.id === "inst"), desc = inst && Object.getOwnPropertyDescriptor(inst, "items");
+  const add = its => { const i = its.findIndex(it => it.v === "inst" && it.set && it.set.instTab === "arrangementen"); its.splice(i < 0 ? its.length : i + 1, 0, { l: "Drankjes › afkoop", v: "drankafkoop" }, { l: "Drankjes › prijslijst", v: "drankprijs" }); return its; };
+  if (desc && desc.get) Object.defineProperty(inst, "items", { configurable: true, get: () => add(desc.get()) });
+  else if (inst) add(inst.items);
+})();
+
+document.head.insertAdjacentHTML("beforeend", `<style id="rq-style">
+.tealc { color: var(--teal); } .orh { color: var(--orange) !important; font-weight: 400 !important; font-size: 1.02rem; } .tealh { color: var(--teal); } .or { color: var(--orange); }
+.btn.orange { background: var(--orange); border-color: var(--orange); color: #fff; } .btn.teal { background: linear-gradient(var(--teal), var(--teal-d)); border-color: var(--teal-d); color: #fff; }
+.btn.small { padding: 3px 9px; font-size: .8rem; }
+.rq-ic svg, .rq-ct svg, .rq-tic svg, .ar-type svg, .ar-cal svg, .rqv-ics svg, .da-tname svg { width: 18px; height: 18px; vertical-align: -4px; }
+/* schakelaar groen ✓ / rood ✕ zoals Restau */
+.rq-sw { position: relative; display: inline-block; width: 52px; height: 26px; flex: none; cursor: pointer; }
+.rq-sw input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; z-index: 1; }
+.rq-sw > span { position: absolute; inset: 0; border-radius: 13px; background: #e2536b; border: 2px solid #b8374e; transition: background .15s; }
+.rq-sw > span::before { content: "✕"; position: absolute; right: 7px; top: 1px; color: #7d1a2c; font-size: 13px; }
+.rq-sw > span::after { content: ""; position: absolute; left: 2px; top: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: left .15s; }
+.rq-sw input:checked + span { background: #5cc35c; border-color: #2f8a2f; }
+.rq-sw input:checked + span::before { content: "✓"; left: 7px; right: auto; color: #1f6b1f; }
+.rq-sw input:checked + span::after { left: 28px; }
+.rq-sw input:focus-visible + span { outline: 2px solid var(--teal); outline-offset: 2px; }
+.rq-sw.sm { width: 40px; height: 20px; } .rq-sw.sm > span::before { display: none; } .rq-sw.sm > span::after { width: 12px; height: 12px; } .rq-sw.sm input:checked + span { background: var(--teal); border-color: var(--teal-d); } .rq-sw.sm input:checked + span::after { left: 22px; }
+.rq-x { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 2px 5px; font-size: .9rem; } .rq-x.red { color: #e0261b; border: 1px solid #f3b3ae; border-radius: 2px; width: 22px; height: 22px; padding: 0; line-height: 1; }
+.rq-plus { border: 1px solid var(--orange); color: var(--orange); background: var(--surface); width: 20px; height: 20px; padding: 0; line-height: 1; cursor: pointer; border-radius: 2px; }
+.rq-add { display: flex; align-items: center; gap: 6px; margin-top: 6px; } .rq-hook { color: var(--muted); font-size: 1.1rem; }
+.rq-addbtn b { color: var(--orange); }
+#rq-q, #ar-ed, section.da, section.dl, .rq-tots, .rq-opts, .rqv-grid > div, .rqv { min-width: 0; max-width: 100%; }
+/* Programma */
+.rq-prog { display: flex; flex-direction: column; gap: 4px; }
+.rq-ph, .rq-pr { display: flex; align-items: center; gap: 10px; }
+.rq-ph { margin-bottom: 8px; font-size: .84rem; color: var(--muted); } .rq-ph h3 { flex: 0 0 236px; } .rq-ph #rq-std { margin-left: auto; }
+.rq-ph .h-time { flex: 0 0 204px; } .rq-ph .h-n { flex: 0 0 176px; } .rq-ph .h-rooms { flex: 1 1 160px; } .rq-ph .h-ops { flex: 0 0 150px; }
+.rq-pr { min-height: 38px; padding: 3px 0; } .rq-pn { flex: 0 0 170px; font-size: 1.02rem; }
+.rq-time { flex: 0 0 204px; display: flex; align-items: center; gap: 4px; } .rq-time input { width: 90px; background: #6b6b6b; color: #fff; border-color: #6b6b6b; font-weight: 600; padding: 3px 4px; }
+.rq-arrow { color: var(--teal); }
+.rq-n { flex: 0 0 176px; display: flex; align-items: center; gap: 5px; } .rq-n input { width: 56px; padding: 3px 5px; }
+.rq-rooms { flex: 1 1 160px; display: flex; flex-direction: column; gap: 3px; min-width: 0; } .rq-room { display: flex; gap: 3px; align-items: center; } .rq-room select { min-width: 0; }
+.rq-ops { flex: 0 0 150px; width: 150px; } .rq-cap { flex: 0 0 52px; font-size: .84rem; color: var(--muted); } .rq-cap.ok { color: #2f8a2f; } .rq-cap.bad { color: #e0261b; font-weight: 600; }
+.rq-addpart { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: 12px; } .rq-addpart > input { max-width: 200px; } .rq-addpart .rq-add { flex-basis: 100%; }
+/* Opties */
+.rq-oh { display: flex; align-items: flex-end; gap: 6px; padding: 0 16px 6px; font-size: .84rem; color: var(--fg); }
+.rq-oh h3 { flex: 0 0 236px; } .rq-oh .c-part { flex: 0 0 132px; } .rq-oh .c-time { flex: 0 0 90px; }
+.rq-optp { display: flex; flex-direction: column; padding: 0 16px; }
+.rq-cat { padding: 14px 0; border-bottom: 1px solid var(--line); } .rq-cat:last-child { border-bottom: 0; }
+.rq-ct { display: flex; align-items: center; gap: 8px; color: var(--teal); margin-bottom: 8px; } .rq-ct svg { width: 22px; height: 22px; }
+.rq-it { display: flex; align-items: flex-start; gap: 6px; padding: 4px 0; }
+.rq-it.opt { opacity: .75; }
+.rq-itl { flex: 0 0 484px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; } .rq-itl > select, .rq-itl > input[data-ik="desc"] { flex: 0 0 236px; width: 236px; } .rq-itl select[data-ik="part"] { flex: 0 0 132px; width: 132px; }
+.rq-tm { flex: 0 0 88px; width: 88px; background: #6b6b6b; color: #fff; border-color: #6b6b6b; font-weight: 600; padding: 3px 4px; }
+.rq-free { display: flex; gap: 4px; } .rq-free select { width: auto; }
+.rq-amts { flex: 1 1 auto; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.rq-ar, .rq-oh > .c-n, .rq-oh > .c-pr, .rq-oh > .c-dp, .rq-oh > .c-dt, .rq-oh > .c-tot, .rq-oh > .c-ex { white-space: nowrap; }
+.rq-ar { display: flex; align-items: center; gap: 6px; font-size: .84rem; color: var(--muted); }
+.rq-arw { flex: 0 0 18px; color: var(--teal); } .rq-ar .c-n { flex: 0 0 104px; display: flex; gap: 4px; align-items: center; } .rq-ar .c-n input { width: 58px; text-align: right; padding: 2px 4px; }
+.rq-ar .c-n input[type=time] { width: 80px; } .rq-hh { color: var(--teal); }
+.c-pr { flex: 0 0 92px; } .c-dp { flex: 0 0 132px; color: var(--orange); } .c-dt { flex: 0 0 92px; color: var(--orange); } .c-tot { flex: 0 0 92px; text-align: right; color: var(--fg); font-weight: 600; } .c-ex { flex: 0 0 72px; text-align: right; color: #bdbdbd; font-size: .8rem; }
+.rq-oh .c-n { flex: 0 0 104px; margin-left: 24px; } .rq-oh .c-tot { font-weight: 700; }
+.c-pr input { width: 64px; text-align: right; padding: 2px 4px; } .c-dp input, .c-dt input { width: 56px; text-align: right; padding: 2px 4px; border-color: #f6c8ad; }
+.c-dp span { margin-left: 3px; }
+.rq-kidseat { margin-top: 8px; } .rq-kidseat input { width: 60px; display: inline-block; padding: 2px 4px; }
+/* Drankafkoop in de offerte */
+.rq-dp { margin: 4px 0 10px; } .rq-dtitle { display: flex; align-items: center; gap: 14px; margin: 8px 0 6px; } .rq-dtitle b { flex: 0 0 360px; }
+.rq-tbx { display: inline-flex; align-items: center; gap: 4px; } .rq-tbx span { background: #6b6b6b; color: #fff; font-weight: 600; padding: 2px 8px; font-size: .84rem; } .rq-tbx i { color: var(--teal); font-style: normal; }
+.rq-h { color: var(--teal); font-size: .86rem; } .rq-pppu { font-weight: 600; font-size: .82rem; margin-left: 40px; }
+.rq-drow { display: flex; align-items: center; gap: 10px; padding: 3px 0; font-size: .86rem; }
+.rq-ddesc { flex: 0 0 250px; color: var(--fg); } .rq-dn { flex: 0 0 200px; text-align: right; color: var(--teal); } .rq-dn b { font-weight: 400; } .rq-eq { color: var(--muted); }
+.rq-drow .c-tot { flex: 0 0 140px; } .rq-drow .c-pr { margin-left: 30px; }
+.rq-ddisc { display: flex; align-items: center; gap: 10px; margin: 10px 0; padding-top: 10px; font-size: .9rem; } .rq-ddisc > b:first-child { flex: 0 0 520px; }
+/* Totalen */
+.rq-tots > h3 { margin: 4px 0 6px; font-size: 1.15rem; }
+.rq-tt { width: 100%; border-collapse: collapse; min-width: 720px; } .rq-tt th { font-size: .74rem; color: var(--muted); font-weight: 400; padding: 8px; text-align: left; } .rq-tt th:first-child { font-size: 1rem; color: var(--fg); font-weight: 600; }
+.rq-tt td { padding: 7px 8px; border: 0; white-space: nowrap; } .rq-tt tr.cat td.r { color: #b5b5b5; } .rq-tt td.or, .rq-tt th.or { color: var(--orange); }
+.rq-tt tr.sum td { border-top: 1px solid var(--line); padding-top: 14px; padding-bottom: 14px; } .rq-tt tr.sep td:not(:first-child) { border-top: 1px solid var(--line); }
+.rq-tt tr.disc td { background: var(--orange-soft); color: var(--orange); } .rq-dtot { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; } .rq-dtot label { display: flex; gap: 6px; align-items: center; color: var(--fg); font-weight: 600; } .rq-dtot input { width: 80px; text-align: right; padding: 2px 4px; border-color: #f6c8ad; }
+.rq-times { display: block; padding: 7px 0; font-weight: 600; } .rq-typesel { display: flex; align-items: center; gap: 6px; } .rq-typesel select { flex: 1; min-width: 0; }
+/* Arrangementen */
+.ar-row { display: flex; align-items: center; gap: 12px; border: 1px solid var(--line); background: var(--surface); padding: 14px 12px 14px 22px; }
+.ar-name { flex: 1 1 40%; font-size: 1.05rem; } .ar-type { flex: 1 1 30%; display: flex; gap: 8px; align-items: center; font-size: .84rem; } .ar-type svg { width: 26px; height: 26px; }
+.ar-list { background: var(--sunk); }
+.ar-top { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; }
+.ar-alg { display: grid; grid-template-columns: 1.6fr 1fr; gap: 14px 22px; background: var(--sunk); } .ar-mog { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: var(--sunk); text-align: center; }
+.ar-cal svg { width: 70px; height: 70px; color: var(--teal); stroke-width: 1.4; }
+.rq-photo img { width: 100%; max-width: 280px; max-height: 180px; object-fit: cover; display: block; border-radius: 2px; margin-bottom: 6px; }
+.rq-up { display: inline-grid; place-items: center; width: 112px; height: 76px; border: 1px solid #c9c9c9; background: var(--surface); color: var(--teal); font-size: .84rem; text-align: center; cursor: pointer; padding: 6px; }
+.btn.ar-del { background: linear-gradient(#e0261b, #b3170f); border-color: #9c140d; color: #fff; font-size: 1.1rem; padding: 10px 22px; }
+.ad-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; } .ad-m b { display: block; text-transform: capitalize; color: var(--teal); margin-bottom: 4px; }
+.ad-d { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; font-size: .74rem; text-align: center; } .ad-d i { color: var(--muted); font-style: normal; }
+.ad-d button { border: 1px solid var(--line); background: var(--surface); padding: 2px 0; cursor: pointer; font-size: .74rem; } .ad-d button.on { background: var(--teal); color: #fff; border-color: var(--teal); }
+/* Drankafkoop-instellingen */
+.da-types { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; } .da-tname { font-size: 2rem; color: var(--muted); display: flex; gap: 8px; align-items: center; } .da-tname svg { width: 40px; height: 40px; }
+.da-grid { display: grid; grid-template-columns: 170px repeat(var(--n), minmax(200px, 1fr)); gap: 8px 14px; min-width: calc(170px + var(--n) * 214px); align-items: center; }
+.da-col { display: flex; flex-direction: column; gap: 6px; align-self: start; } .da-col h3 { margin: 0; font-size: 1.3rem; }
+.da-c { text-align: center; } .da-c input, .da-c select { width: 90px; text-align: center; margin: 0 auto; }
+.da-row { border-bottom: 1px solid var(--line); padding: 8px 0; align-self: stretch; display: flex; align-items: center; } .da-c.da-row { justify-content: center; }
+.da-tri { display: inline-block; width: 0; height: 0; border-left: 60px solid transparent; border-right: 60px solid transparent; border-top: 60px solid var(--sunk); }
+/* Offerteweergave */
+.rqv-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); }
+.rqv-head { display: flex; flex-direction: column; gap: 10px; } .rqv-head h3.g { color: #139413; }
+.rqv-arr { display: flex; gap: 12px; align-items: center; } .rqv-arrbox { border: 1px solid var(--line); border-radius: 4px; padding: 8px 16px; min-width: 240px; flex: 1; max-width: 520px; }
+.rqv-ctl input[type=radio] { width: auto; margin: 0 4px 0 0; vertical-align: -2px; } .rqv-ctl label { display: inline-flex; align-items: center; } .rqv-tbl td:nth-child(3) { white-space: nowrap; } .rqv-dag td.num { white-space: nowrap; }
+.rqv-ctl { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: .86rem; } .rqv-ctl label { margin-left: 8px; } .rqv-inc { display: flex; gap: 8px; align-items: center; font-weight: 600; }
+.rqv-tbl { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: .88rem; } .rqv-tbl th { text-align: left; font-weight: 600; padding: 6px; border-bottom: 1px solid var(--orange); }
+.rqv-tbl td { padding: 3px 6px; border: 0; vertical-align: top; } .rqv-tbl .r { text-align: right; } .rqv-t { color: #2e9a2e; white-space: nowrap; } .rqv-t.g { font-weight: 700; color: #139413; } .g { color: #139413; }
+.rqv-p td { padding-top: 14px; } .rqv-sub td { border-top: 1px solid #f0b48f; color: var(--teal); } .rqv-gap td { height: 12px; } .rqv-a { color: var(--teal); white-space: nowrap; } .rqv-tot td { padding-top: 12px; }
+.rqv-box { border: 1px solid var(--line); padding: 12px 16px; margin: 12px 0; display: flex; flex-direction: column; gap: 3px; font-size: .9rem; } .rqv-box div, .rqv-pay, .rqv-rest { display: flex; justify-content: space-between; gap: 12px; }
+.rqv-pay { color: #2e9a2e; font-size: .9rem; padding: 0 16px; } .rqv-rest { font-size: 1.1rem; color: var(--muted); padding: 12px 16px; } .rqv-rest b { color: var(--fg); }
+.rqv-dag table { width: 100%; border-collapse: collapse; font-size: .84rem; margin-top: 6px; } .rqv-dag td { padding: 5px 4px; border-bottom: 1px solid var(--line); }
+.rqv-ics { white-space: nowrap; } .rqv-ics span { color: #d0d0d0; margin-right: 2px; } .rqv-ics span.on { color: var(--teal); }
+@media (max-width: 760px) {
+  .rq-ph .h-time, .rq-ph .h-n, .rq-ph .h-rooms, .rq-ph .h-ops { display: none; } .rq-ph { flex-wrap: wrap; } .rq-ph h3 { flex: 1 1 auto; }
+  .rq-pr { flex-wrap: wrap; gap: 6px 8px; border-bottom: 1px solid var(--line); padding: 6px 0; } .rq-pn { flex: 1 1 auto; }
+  .rq-time, .rq-n { flex: 1 1 auto; } .rq-rooms { flex: 1 1 100%; } .rq-ops { flex: 1 1 140px; width: auto; }
+  .rq-oh { display: none; } .rq-optp { padding: 0 10px; }
+  .rq-it { flex-wrap: wrap; border-bottom: 1px dashed var(--line); padding-bottom: 8px; } .rq-itl { flex: 1 1 100%; } .rq-itl > select, .rq-itl > input[data-ik="desc"] { flex: 1 1 100%; width: 100%; } .rq-itl select[data-ik="part"] { flex: 1 1 auto; }
+  .rq-ar { flex-wrap: wrap; gap: 4px 8px; } .rq-ar .c-n, .c-pr, .c-dp, .c-dt, .c-tot, .c-ex { flex: 0 0 auto; }
+  .rq-dtitle { flex-wrap: wrap; } .rq-dtitle b { flex: 1 1 100%; } .rq-pppu { margin-left: 0; }
+  .rq-drow { flex-wrap: wrap; } .rq-ddesc { flex: 1 1 calc(100% - 70px); } .rq-dn { flex: 0 0 auto; text-align: left; } .rq-drow .c-pr { margin-left: 0; } .rq-drow .c-tot { flex: 0 0 auto; }
+  .rq-ddisc { flex-wrap: wrap; } .rq-ddisc > b:first-child { flex: 1 1 100%; }
+  .ar-top, .ar-alg { grid-template-columns: 1fr; } .ar-row { flex-wrap: wrap; padding: 10px; } .ar-name { flex: 1 1 100%; }
+  .ad-grid { grid-template-columns: 1fr 1fr; } .rqv-grid { grid-template-columns: 1fr; } .rqv-arrbox { min-width: 0; }
+}
+</style>`);
+/* ---------- einde offerte zoals Restau ---------- */
 
 boot();
 })();
