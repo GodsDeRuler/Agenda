@@ -7895,6 +7895,138 @@ document.head.insertAdjacentHTML("beforeend", `<style id="rq8-style">
 .rq-ups { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 4px 0 0 24px; }
 @media (max-width: 760px) { .pf-fotos { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 </style>`);
+/* ---------- Zalen › prijzen (Restau): per soort feest en zaal geen kosten, vaste dagprijs of dagdelen per weekdag, plus prijs per datum ---------- */
+const ZP_MODES = { geen: "Geen kosten", vast: "Vaste dagprijs", dagdelen: "Dagdelen (tijden)" };
+const ZP_DAYS = [0, 1, 2, 3, 4, 5, 6];
+let zpDraft = null;
+const zpCfg = (typeId, roomId, src = S.settings.zaalPrijzen) => { const t = (src || {})[typeId] || {}, r = (t.rooms || {})[roomId] || {}; return { mode: r.mode || "geen", vast: r.vast ?? "", tijden: Array.isArray(r.tijden) && r.tijden.length === 3 ? r.tijden : ["10:00", "16:00", "20:00"], dagdelen: r.dagdelen || {}, perDatum: r.perDatum || {} }; };
+// Zaalhuur voor één zaal op een datum en tijd: prijs per datum gaat voor, anders vaste dagprijs of de dagdelen die het event raakt.
+function zpPrice(typeId, roomId, date, start, end) {
+  const c = zpCfg(typeId, roomId);
+  if (date && c.perDatum[date] !== undefined && c.perDatum[date] !== "") return { amount: +c.perDatum[date], txt: "prijs per datum" };
+  if (c.mode === "vast") return c.vast === "" ? null : { amount: +c.vast, txt: "vaste dagprijs" };
+  if (c.mode !== "dagdelen" || !date) return null;
+  const wd = parseISO(date).getDay(), row = c.dagdelen[wd] || [], b = c.tijden.map(toMin), s = toMin(start || "00:00") ?? 0; let e = toMin(end || "23:59") ?? 1439; if (e <= s) e += 1440;
+  const segs = [[0, b[0]], [b[0], b[1]], [b[1], b[2]], [b[2], 2880]], names = [`tot ${c.tijden[0]}`, `${c.tijden[0]}–${c.tijden[1]}`, `${c.tijden[1]}–${c.tijden[2]}`, `na ${c.tijden[2]}`];
+  let amt = 0; const used = [];
+  segs.forEach(([a, z], i) => { if (s < z && a < e && +row[i]) { amt += +row[i]; used.push(names[i]); } });
+  return used.length ? { amount: amt, txt: used.join(" + ") } : null;
+}
+// Zaalhuur-regels voor een offerte (alle dagen): per zaal per dag één regel in het blok Zalen.
+function zpItems(q) {
+  const out = [];
+  for (const dd of (q.days && q.days.length ? rqDays(q) : [q])) {
+    const on = rqOnParts(dd), date = dd.eventDate, byRoom = {};
+    for (const p of on) for (const rid of (p.rooms || []).filter(Boolean)) { const x = byRoom[rid] = byRoom[rid] || { start: p.start, end: p.end, part: p.name }; if ((p.start || "") < (x.start || "")) x.start = p.start; x.end = p.end || x.end; }
+    for (const [rid, x] of Object.entries(byRoom)) { const pr = zpPrice(q.eventType, rid, date, x.start, x.end); if (pr) out.push({ day: dd, rid, item: { id: uid(), cat: "Zalen", productId: "", desc: `Zaalhuur ${roomName(rid)} (${pr.txt})`, part: "", time: x.start || "", ptype: "free", follow: true, qty: 1, price: pr.amount, btw: 21, zaalhuur: rid } }); }
+  }
+  return out;
+}
+function zpApply(q) {
+  const list = zpItems(q); let n = 0;
+  for (const dd of (q.days && q.days.length ? rqDays(q) : [q])) dd.items = dd.items.filter(it => !it.zaalhuur);
+  for (const x of list) { x.day.items.unshift(x.item); n++; }
+  return n;
+}
+VIEWS.zaalprijzen = () => {
+  if (!zpDraft) zpDraft = structuredClone(S.settings.zaalPrijzen || {});
+  const ro = S.readOnly ? "disabled" : "", types = eventTypes(), tid = types.some(t => t.id === S.zpType) ? S.zpType : types[0]?.id, t = eventType(tid), T = zpDraft[tid] = zpDraft[tid] || {};
+  const card = rm => {
+    const c = zpCfg(tid, rm.id, zpDraft), ph = typeof roomPhotos === "function" ? roomPhotos(rm)[0] : null, nd = Object.keys(c.perDatum).filter(k => c.perDatum[k] !== "").length;
+    const right = c.mode === "geen" ? `<div class="zp-none"><span class="small muted">Geen kosten</span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg></div>`
+      : c.mode === "vast" ? `<label class="f zp-vast"><span>Vaste dagprijs (€, incl. btw)</span><input type="number" step="0.01" min="0" data-zpvast value="${esc(c.vast)}" ${ro}></label>`
+      : `<div class="tbl-wrap"><table class="zp-dd"><thead><tr><th></th><th class="c" colspan="2">Prijs tot<br><input type="time" data-zpt="0" value="${esc(c.tijden[0])}" ${ro}></th><th class="c" colspan="2">Prijs tussen<br><input type="time" data-zpt="1" value="${esc(c.tijden[1])}" ${ro}></th><th class="c" colspan="2">Prijs na<br><input type="time" data-zpt="2" value="${esc(c.tijden[2])}" ${ro}></th><th></th></tr></thead><tbody>
+        ${[1, 2, 3, 4, 5, 6, 0].map(wd => `<tr><td>${DAYS[wd].replace(/^./, x => x.toUpperCase())}</td>${[0, 1, 2, 3].map(i => `<td><input type="number" min="0" step="0.01" data-zpd="${wd}:${i}" value="${esc((c.dagdelen[wd] || [])[i] ?? "")}" aria-label="${DAYS[wd]} dagdeel ${i + 1}" ${ro}></td>${i < 3 ? `<td class="c muted">+</td>` : ""}`).join("")}<td class="muted">Euro</td></tr>`).join("")}</tbody></table></div>`;
+    return `<div class="zp-card" data-zpr="${esc(rm.id)}"><div class="zp-left"><h3>${esc(rm.name)}</h3><select data-zpmode aria-label="Prijs ${esc(rm.name)}" ${ro}>${Object.entries(ZP_MODES).map(([k, l]) => `<option value="${k}" ${k === c.mode ? "selected" : ""}>${l}</option>`).join("")}</select>
+      ${ph ? `<img src="${esc(ph.url)}" alt="">` : ""}<button type="button" class="btn small" data-zpdate ${ro}>Prijs per datum ›${nd ? ` <span class="chip c2">${nd}</span>` : ""}</button></div><div class="zp-right">${right}</div></div>`;
+  };
+  return `<section class="stack" id="zp"><div class="row spread"><h2>Zalen › prijzen</h2><button class="btn primary" id="zp-save" ${ro}>Opslaan</button></div>
+    <div class="sf-types" role="tablist" aria-label="Soort feest">${types.map(x => `<button type="button" data-zpt-type="${esc(x.id)}" aria-selected="${x.id === tid}"><span class="sf-ti">${typeIcon(x.id)}</span>${esc(x.name)}</button>`).join("")}</div>
+    <div class="panel"><textarea id="zp-tekst" rows="2" placeholder="Wat wilt u de klant vertellen over de huurprijs?" ${ro}>${esc(T.tekst || "")}</textarea></div>
+    <div class="panel stack"><div class="row spread"><span class="small muted">De zaalhuur komt in de offerte met de knop “Zaalhuur berekenen” in het blok Zalen, en vanzelf bij een nieuwe offerte.</span><h2 class="zp-title">${esc(t?.name || "")} <span class="sf-ti">${typeIcon(tid)}</span></h2></div>
+      ${(S.settings.rooms || []).map(card).join("")}</div></section>`;
+};
+function zpDateModal(tid, rid) {
+  const T = zpDraft[tid] = zpDraft[tid] || {}; T.rooms = T.rooms || {}; const R = T.rooms[rid] = T.rooms[rid] || {}; R.perDatum = R.perDatum || {};
+  let ym = S.zpMonth || todayISO.slice(0, 7);
+  const draw = () => {
+    const [y, m] = ym.split("-").map(Number), first = new Date(y, m - 1, 1), off = (first.getDay() + 6) % 7, n = new Date(y, m, 0).getDate();
+    const cells = Array.from({ length: off }, () => `<div></div>`).concat(Array.from({ length: n }, (_, i) => { const ds = `${ym}-${String(i + 1).padStart(2, "0")}`; return `<label class="zp-day"><span>${i + 1}</span><input type="number" min="0" step="0.01" data-zpdd="${ds}" value="${esc(R.perDatum[ds] ?? "")}" aria-label="Prijs op ${ds}"></label>`; }));
+    $("#zpd-body").innerHTML = `<div class="row spread"><button type="button" class="btn" id="zpd-prev">‹</button><b>${MONTHS[m - 1]} ${y}</b><button type="button" class="btn" id="zpd-next">›</button></div>
+      <div class="zp-cal">${DAYS_SHORT.map(d => `<b>${d}</b>`).join("")}${cells.join("")}</div>`;
+    $("#zpd-body").querySelectorAll("[data-zpdd]").forEach(i => i.oninput = () => { if (i.value === "") delete R.perDatum[i.dataset.zpdd]; else R.perDatum[i.dataset.zpdd] = +i.value; });
+    $("#zpd-prev").onclick = () => { const d = parseISO(ym + "-01"); d.setMonth(d.getMonth() - 1); ym = iso(d).slice(0, 7); S.zpMonth = ym; draw(); };
+    $("#zpd-next").onclick = () => { const d = parseISO(ym + "-01"); d.setMonth(d.getMonth() + 1); ym = iso(d).slice(0, 7); S.zpMonth = ym; draw(); };
+  };
+  $("#modal-root").innerHTML = `<div class="scrim" id="scrim"><div class="modal stack" role="dialog" aria-label="Prijs per datum" style="max-width:640px">
+    <div class="row spread"><h2>Prijs per datum · ${esc(roomName(rid))}</h2><button type="button" class="btn ghost" id="zpd-x" aria-label="Sluiten">✕</button></div>
+    <p class="small muted" style="margin:0">Een prijs op een dag gaat voor de vaste dagprijs en de dagdelen. Leeg = de gewone prijs.</p><div id="zpd-body"></div>
+    <div class="row spread"><span></span><button type="button" class="btn primary" id="zpd-ok">Klaar</button></div></div></div>`;
+  document.body.style.overflow = "hidden"; draw();
+  $("#zpd-x").onclick = $("#zpd-ok").onclick = () => { closeModal(); render(); };
+}
+after.zaalprijzen = () => {
+  const types = eventTypes(), tid = types.some(t => t.id === S.zpType) ? S.zpType : types[0]?.id, T = zpDraft[tid] = zpDraft[tid] || {};
+  const R = rid => { T.rooms = T.rooms || {}; return T.rooms[rid] = T.rooms[rid] || {}; };
+  document.querySelectorAll("[data-zpt-type]").forEach(b => b.onclick = () => { S.zpType = b.dataset.zptType; render(); });
+  $("#zp-tekst").oninput = e => { T.tekst = e.target.value; };
+  document.querySelectorAll("[data-zpr]").forEach(card => {
+    const rid = card.dataset.zpr, r = R(rid), c = zpCfg(tid, rid, zpDraft);
+    card.querySelector("[data-zpmode]").onchange = e => { r.mode = e.target.value; render(); };
+    const v = card.querySelector("[data-zpvast]"); if (v) v.oninput = () => { r.vast = v.value === "" ? "" : +v.value; };
+    card.querySelectorAll("[data-zpt]").forEach(i => i.oninput = () => { r.tijden = c.tijden.slice(); card.querySelectorAll("[data-zpt]").forEach(x => r.tijden[+x.dataset.zpt] = x.value); });
+    card.querySelectorAll("[data-zpd]").forEach(i => i.oninput = () => { const [wd, k] = i.dataset.zpd.split(":").map(Number); r.dagdelen = r.dagdelen || {}; const row = r.dagdelen[wd] = (r.dagdelen[wd] || ["", "", "", ""]).slice(); row[k] = i.value === "" ? "" : +i.value; r.dagdelen[wd] = row; });
+    card.querySelector("[data-zpdate]").onclick = () => zpDateModal(tid, rid);
+  });
+  $("#zp-save").onclick = async () => { if (await rqSaveSettings({ zaalPrijzen: zpDraft }, "Zaalprijzen opgeslagen")) { zpDraft = null; render(); } };
+};
+delete SOON.zaalprijzen;
+{ const sv = setView; setView = function (v) { if (v !== "zaalprijzen") zpDraft = null; sv(v); }; }
+(() => {
+  const inst = MENU.find(m => m.id === "inst"), desc = inst && Object.getOwnPropertyDescriptor(inst, "items");
+  const add = its => { const j = its.findIndex(it => it.v === "zalenmanage"); its.splice(j < 0 ? its.length : j, 0, { l: "Zalen › prijzen", v: "zaalprijzen" }); return its; };
+  if (desc && desc.get) Object.defineProperty(inst, "items", { configurable: true, get: () => add(desc.get()) });
+  else if (inst) add(inst.items);
+})();
+// Offerte: knop "Zaalhuur berekenen" in het blok Zalen; nieuwe offerte krijgt de zaalhuur vanzelf.
+{
+  const base = rqOptHtml;
+  rqOptHtml = function (d, ro) {
+    const h = base(d, ro), q = rqRoot(d);
+    if (!q.number || !S.settings.zaalPrijzen) return h;
+    const tx = ((S.settings.zaalPrijzen || {})[q.eventType] || {}).tekst;
+    return h.replace(`data-rqadd="Zalen" ${ro}><b>+</b> Vaste dagprijs</button>`, `data-rqadd="Zalen" ${ro}><b>+</b> Vaste dagprijs</button><button type="button" class="btn small" id="rq-zaalhuur" ${ro}>Zaalhuur berekenen</button>${tx ? `<span class="small muted">${esc(tx)}</span>` : ""}`);
+  };
+}
+{
+  const base = rqWire;
+  rqWire = function (d, root, ctx) {
+    base(d, root, ctx);
+    if (!root || S.readOnly) return;
+    root.addEventListener("click", e => { if (!e.target.closest("#rq-zaalhuur")) return; const q = rqRoot(d), n = zpApply(q); ctx.rerender(); toast(n ? `Zaalhuur voor ${n} ${n === 1 ? "zaal" : "zalen"} berekend` : "Geen zaalhuur ingesteld voor deze soort feest en zalen (Instellingen › Zalen › prijzen)"); });
+  };
+}
+{
+  const base = newQuoteFromRes;
+  newQuoteFromRes = function (r) {
+    const q = base(r);
+    if (zpItems(q).length) { q.items = q.items.filter(it => !(it.cat === "Zalen" && /^Huur /.test(it.desc || ""))); zpApply(q); q.lines = rqLines(q); }
+    return q;
+  };
+}
+document.head.insertAdjacentHTML("beforeend", `<style id="rq9-style">
+.zp-card { display: grid; grid-template-columns: 240px 1fr; gap: 16px; background: var(--bg2, #f6f6f6); border: 1px solid var(--line, #ddd); border-radius: 4px; padding: 14px; }
+.zp-left { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; } .zp-left h3 { margin: 0; } .zp-left img { width: 100%; max-width: 220px; border-radius: 3px; }
+.zp-right { min-width: 0; display: flex; align-items: center; justify-content: center; }
+.zp-none { display: flex; flex-direction: column; align-items: center; gap: 6px; } .zp-none svg { width: 120px; height: 120px; fill: none; stroke: #aaa; stroke-width: 2; }
+.zp-dd { background: #fff; } .zp-dd input[type=number] { width: 80px; } .zp-dd input[type=time] { width: 124px; } .zp-dd .c { text-align: center; }
+.zp-title { color: #9a9a9a; font-size: 2rem; margin: 0; display: flex; gap: 8px; align-items: center; } .zp-title svg { width: 30px; height: 30px; }
+#zp-tekst { width: 100%; max-width: 560px; }
+.zp-cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; } .zp-cal > b { text-align: center; font-size: .8rem; color: #888; }
+.zp-day { display: flex; flex-direction: column; border: 1px solid var(--line, #ddd); border-radius: 4px; padding: 2px 4px; font-size: .8rem; } .zp-day input { width: 100%; padding: 2px 4px; }
+#zp { min-width: 0; }
+@media (max-width: 760px) { .zp-card { grid-template-columns: 1fr; } .zp-title { font-size: 1.4rem; } }
+</style>`);
 /* ---------- einde offerte zoals Restau ---------- */
 
 /* ---------- Rapporten (naar voorbeeld van Restau: openstaand, facturen, aanbetalingen, arrangementen, event count, omzet bedrijven) ---------- */
