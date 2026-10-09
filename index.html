@@ -388,6 +388,22 @@ td.r, th.r { text-align: right; font-variant-numeric: tabular-nums; }
 .pcat-h { margin: 6px 0 0; }
 .psub { grid-column: 1 / -1; margin: 4px 0 -2px; }
 @media (prefers-reduced-motion: no-preference) { .day, .btn { transition: border-color .12s; } }
+/* Nacalculatie */
+.nc-step { display: inline-flex; gap: 4px; align-items: center; }
+.nc-step input { width: 64px; text-align: center; padding: 4px; }
+.nc-step .btn { padding: 2px 9px; min-width: 30px; }
+.nc-tbl tr.nc-on td { background: var(--teal-soft); }
+.nc-tbl td { vertical-align: middle; }
+/* Factuurdetail */
+.fd-inv { padding: 0; }
+.fd-inv > summary { display: grid; grid-template-columns: 110px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 14px; cursor: pointer; list-style: none; }
+.fd-inv > summary::-webkit-details-marker { display: none; }
+.fd-inv > summary::before { content: none; }
+.fd-inv[open] > summary { border-bottom: 1px solid var(--line); }
+.fd-inv > .tbl-wrap, .fd-inv > .row { padding: 8px 14px; }
+.fd-tbl { width: 100%; }
+tr.fd-sub td { font-weight: 600; border-top: 1px solid var(--line); }
+@media (max-width: 600px) { .fd-inv > summary { grid-template-columns: 1fr auto; } .fd-inv > summary > .num:first-child { grid-column: 1 / -1; } }
 /* Klanten extra */
 .cx-top { flex-wrap: wrap; gap: 6px; }
 .cx-tag { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 3px 10px; font: inherit; font-size: .82rem; cursor: pointer; color: var(--fg); }
@@ -4377,10 +4393,10 @@ const apptTime = k => (k.at || "").length > 10 ? k.at.slice(11, 16) : "";
 const apptCust = k => S.customers.get(k.customerId);
 const apptOn = date => apptAll().filter(k => apptDate(k) === date && apptStatus(k) !== "afgewezen").sort((a, b) => (a.at || "").localeCompare(b.at || ""));
 const apptChip = k => { const s = apptStatus(k); return `<span class="chip ${s === "bevestigd" ? "c1" : s === "aangevraagd" ? "c2" : s === "afgewezen" ? "c3" : "c0"}">${esc(s)}</span>`; };
-const apptLabel = k => `${k.apptType || "Afspraak"}${apptCust(k) ? " · " + apptCust(k).name : ""}`;
+const apptLabel = k => `${k.title || k.apptType || "Afspraak"}${apptCust(k) ? " · " + apptCust(k).name : ""}`;
 function apptLines(date) {
   const as = apptOn(date);
-  return as.length ? [`<div class="ln a">${as.length === 1 ? `${esc(apptTime(as[0]))} ${esc(as[0].apptType || "Afspraak")}` : as.length + " afspraken"}</div>`] : [];
+  return as.length ? [`<div class="ln a" data-apptday="${esc(date)}" title="${esc(as.map(k => `${apptTime(k)} ${apptLabel(k)} (${apptStatus(k)})`).join("\n"))}">${as.length === 1 ? `${esc(apptTime(as[0]))} ${esc(as[0].title || as[0].apptType || "Afspraak")}` : as.length + " afspraken"}</div>`] : [];
 }
 // Rij "Afspraken" onder de ruimtes in de dag-agenda
 function apptRow(d, pos, gridL, nowLine) {
@@ -4394,7 +4410,7 @@ function apptRow(d, pos, gridL, nowLine) {
 /* Weergave Afspraken */
 function vAfspraken() {
   const f = S.apptFilter || "komend", zoek = (S.apptQuery || "").trim().toLowerCase(), all = apptAll();
-  const match = k => !zoek || [apptCust(k)?.name, k.text, k.apptType, k.manager].some(x => String(x || "").toLowerCase().includes(zoek));
+  const match = k => !zoek || [apptCust(k)?.name, k.title, k.text, k.apptType, k.manager].some(x => String(x || "").toLowerCase().includes(zoek));
   const lists = {
     komend: all.filter(k => apptDate(k) >= todayISO && apptStatus(k) !== "afgewezen"), aangevraagd: all.filter(k => apptStatus(k) === "aangevraagd"),
     bevestigd: all.filter(k => apptStatus(k) === "bevestigd" && apptDate(k) >= todayISO), geweest: all.filter(k => apptDate(k) < todayISO), alle: all,
@@ -4407,7 +4423,7 @@ function vAfspraken() {
   const rows = sel.map(k => {
     const d = apptDate(k), hdr = d !== last ? (last = d, `<tr class="fin-grp"><td colspan="6">${esc(longDate(d))}${d === todayISO ? " · vandaag" : ""}</td></tr>`) : "";
     const c = apptCust(k);
-    return hdr + `<tr class="click" data-appt="${esc(k.id)}"><td class="num" style="white-space:nowrap">${esc(apptTime(k) || "–")}${k.end ? "–" + esc(k.end) : ""}</td><td><b>${esc(k.apptType || "Afspraak")}</b>${k.roomId ? `<br><span class="muted small">${esc(roomName(k.roomId))}</span>` : ""}</td>
+    return hdr + `<tr class="click" data-appt="${esc(k.id)}"><td class="num" style="white-space:nowrap">${esc(apptTime(k) || "–")}${k.end ? "–" + esc(k.end) : ""}</td><td><b>${esc(k.title || k.apptType || "Afspraak")}</b>${k.title && k.apptType ? `<br><span class="muted small">${esc(k.apptType)}</span>` : ""}${k.roomId ? `<br><span class="muted small">${esc(roomName(k.roomId))}</span>` : ""}</td>
       <td>${c ? esc(c.name) : "–"}${k.text && k.text !== k.apptType ? `<br><span class="muted small">${esc(k.text)}</span>` : ""}</td><td class="small">${esc(k.manager || "")}</td><td>${apptChip(k)}</td>
       <td class="r" style="white-space:nowrap">${apptStatus(k) === "aangevraagd" ? `<button class="btn small" data-aok="${esc(k.id)}" ${ro}>Bevestigen</button> <button class="btn ghost small" data-ano="${esc(k.id)}" ${ro}>Afwijzen</button>` : ""}</td></tr>`;
   }).join("");
@@ -4435,6 +4451,7 @@ function apptOpen(k0) {
   $("#modal-root").innerHTML = `
   <div class="scrim" id="scrim"><form class="modal" id="ap-form" aria-label="Afspraak">${custDatalist()}
     <div class="row spread"><h2>${isNew ? "Nieuwe afspraak" : "Afspraak"}</h2><button type="button" class="btn ghost" id="ap-x" aria-label="Sluiten">✕</button></div>
+    <label class="f"><span>Titel</span><input id="ap-title" value="${esc(k.title || "")}" placeholder="bijv. Rondleiding voor de bruiloft in juni" ${ro}></label>
     <div class="fields">
       <label class="f"><span>Klant of organisatie${c0 ? ` · <a href="#" id="ap-card">klantkaart</a>` : ""}</span><input id="ap-customer" list="cust-dl" autocomplete="off" required value="${esc(c0 ? c0.name : k.customer || "")}" ${ro}></label>
       <label class="f"><span>Contactpersoon</span><input id="ap-contact" value="${esc(c0 ? c0.contact || "" : "")}" ${ro}></label>
@@ -4457,7 +4474,7 @@ function apptOpen(k0) {
     <label class="f"><span>Notities</span><textarea id="ap-notes" placeholder="bijv. wil de serre zien, neemt partner mee" ${ro}>${esc(k.text && k.text !== k.apptType ? k.text : "")}</textarea></label>
     <div class="row spread">
       <span class="row">${!isNew ? `<span class="row" id="ap-delwrap"><button type="button" class="btn danger" id="ap-del" ${ro}>Verwijderen</button><span id="ap-delc" hidden class="row"><span class="small">Zeker weten?</span><button type="button" class="btn danger" id="ap-del2">Ja, verwijder</button></span></span>` : ""}</span>
-      <span class="row">${apptStatus(k) === "aangevraagd" && !isNew ? `<button type="button" class="btn ghost" id="ap-no" ${ro}>Afwijzen</button><button type="button" class="btn" id="ap-ok" ${ro}>Bevestigen</button>` : ""}<button type="submit" class="btn primary" ${ro}>Opslaan</button></span>
+      <span class="row"><span class="row" id="ap-decide" ${apptStatus(k) === "aangevraagd" ? "" : "hidden"}><button type="button" class="btn ghost" id="ap-no" ${ro}>Afwijzen</button><button type="button" class="btn" id="ap-ok" ${ro}>Bevestigen</button></span><button type="submit" class="btn primary" ${ro}>Opslaan</button></span>
     </div>
   </form></div>`;
   document.body.style.overflow = "hidden";
@@ -4484,13 +4501,14 @@ function apptOpen(k0) {
     const id0 = await ensureCustomer({ customer, contact: $("#ap-contact").value.trim(), email: $("#ap-email").value.trim(), phone: $("#ap-phone").value.trim(), customerId: cid });
     if (!id0) { toast("Klant opslaan lukte niet"); return; }
     const d = $("#ap-date").value, st = $("#ap-start").value, now = new Date().toISOString();
-    const body = { customerId: id0, kind: "afspraak", at: st ? `${d}T${st}` : d, end: $("#ap-end").value, apptType: $("#ap-type").value, status: status || $("#ap-status").value, manager: $("#ap-manager").value,
+    const body = { customerId: id0, kind: "afspraak", at: st ? `${d}T${st}` : d, end: $("#ap-end").value, apptType: $("#ap-type").value, title: $("#ap-title").value.trim(), status: status || $("#ap-status").value, manager: $("#ap-manager").value,
       roomId: $("#ap-room").value, reservationId: $("#ap-res").value, text: $("#ap-notes").value.trim() || $("#ap-type").value, updatedAt: now };
     const id = k.id || uid();
     const ok = isNew ? await write("contacts/" + id, { ...body, followUp: "", followText: "", followDone: false, ref: null, createdAt: now }) : await write("contacts/" + id, body, "update");
     if (ok) { closeModal(); render(); toast(isNew ? "Afspraak gemaakt" : status === "bevestigd" ? "Afspraak bevestigd" : status === "afgewezen" ? "Afspraak afgewezen" : "Afspraak opgeslagen"); }
   };
   $("#ap-form").onsubmit = e => { e.preventDefault(); save(); };
+  $("#ap-status").addEventListener("change", e => { $("#ap-decide").hidden = e.target.value !== "aangevraagd"; });
   const ok = $("#ap-ok"); if (ok) ok.onclick = () => save("bevestigd");
   const no = $("#ap-no"); if (no) no.onclick = () => save("afgewezen");
   const del = $("#ap-del"); if (del) del.onclick = () => { $("#ap-delc").hidden = false; del.hidden = true; };
@@ -4580,34 +4598,64 @@ after.week = () => {
 function dbExportList(from, to, sts) {
   return [...S.reservations.values()].filter(r => r.date >= from && r.date <= to && sts.includes(r.status)).sort((a, b) => (a.date + (a.start || "")).localeCompare(b.date + (b.start || "")));
 }
+// De 7 onderdelen van Restau's draaiboek-export
+const DBX_PARTS = [["klant", "Notities van de klant"], ["intern", "Interne communicatie"], ["todo", "To-do's"], ["bediening", "Management en bediening"], ["keuken", "Keuken"], ["vragen", "Vragen"], ["lev", "Leveranciers"]];
+function dbxSheet(r, parts) {
+  const q = r.quoteId && S.quotes.get(r.quoteId), on = k => parts.includes(k), nl = t => esc(t).replace(/\n/g, "<br>");
+  const lines = q ? (q.lines || []).filter(l => (l.desc || l.price) && !l.optional && !l.disc) : [];
+  const items = q ? [...(q.items || []), ...(q.days || []).flatMap(d => d.items || [])] : [];
+  const tp = typeof eventType === "function" && eventType(r.eventType);
+  let h = `<h1>${esc(r.customer || "")}</h1><p class="sub">${esc(longDate(r.date))}, ${esc(r.start || "")}–${esc(r.end || "")} · ${esc(roomName(r.roomId))}${r.persons ? " · " + esc(r.persons) + " personen" : ""}${tp ? " · " + esc(tp.name) : ""} · ${esc(r.status || "")}</p>
+    <p class="sub">Contact: ${esc([r.contact, r.phone, r.email].filter(Boolean).join(" · ") || "–")} · Accountmanager: ${esc(r.manager || "–")}</p>`;
+  if (on("klant")) { const t = [r.wishes && `<b>Speciale wensen</b><br>${nl(r.wishes)}`, r.dieet && `<b>Dieetwensen en allergieën</b><br>${nl(r.dieet)}`, q && q.notes && `<b>Op de offerte</b><br>${nl(q.notes)}`].filter(Boolean); h += `<h2>Notities van de klant</h2>${t.length ? t.map(x => `<p>${x}</p>`).join("") : "<p class=\"leeg\">Geen.</p>"}`; }
+  if (on("intern")) { const t = [r.notes && nl(r.notes), r.feedback && `<b>Terugkoppeling</b><br>${nl(r.feedback)}`].filter(Boolean); h += `<h2>Interne communicatie</h2>${t.length ? t.map(x => `<p>${x}</p>`).join("") : "<p class=\"leeg\">Geen.</p>"}`; }
+  if (on("todo")) { const ts = (r.tasks || []).slice().sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999")); const stl = t => typeof taskState === "function" && typeof TASK_STATES === "object" ? (TASK_STATES[taskState(t)] || [""])[0] : t.done ? "klaar" : "open"; h += `<h2>To-do's</h2>${ts.length ? `<table>${ts.map(t => `<tr><td style="width:22px">${t.done ? "☑" : "☐"}</td><td>${esc(t.text || "")}</td><td>${t.due ? esc(shortDate(t.due)) : ""}</td><td>${esc(stl(t))}</td><td>${esc(t.manager || "")}</td></tr>`).join("")}</table>` : "<p class=\"leeg\">Geen to-do's.</p>"}`; }
+  if (on("bediening")) {
+    const prog = (r.program || []).slice().sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+    const ds = typeof dagSheet === "function" ? dagSheet(r) : "";
+    h += `<h2>Management en bediening</h2>${(on("vragen") ? ds.replace(/<h2>Vragen<\/h2><table>[\s\S]*?<\/table>/, "") : ds).replace(/<(\/?)h2>/g, "<$1h3>")}${prog.length ? `<h3>Draaiboek</h3><table>${prog.map(p => `<tr><td class="k">${esc(p.time || "")}</td><td>${esc(p.text || "")}</td></tr>`).join("")}</table>` : ""}
+      ${lines.length ? `<h3>Wat we verzorgen</h3><table>${lines.map(l => `<tr><td class="k">${esc(l.time || "")}</td><td style="width:60px">${esc(l.qty)}×</td><td>${esc(l.desc)}</td></tr>`).join("")}</table>` : ""}`;
+  }
+  if (on("keuken")) {
+    const k = lines.filter(l => !l.drink && l.rqCat !== "Drankjes" && l.category !== "Drankafkoop" && l.rqCat !== "Zalen");
+    h += `<h2>Keuken</h2>${r.dieet ? `<div class="box">${nl(r.dieet)}</div>` : ""}${k.length ? `<table>${k.map(l => { const p = product(l.productId); return `<tr><td class="k">${esc(l.time || "")}</td><td style="width:60px">${esc(l.qty)}×</td><td>${esc(l.desc)}${p && p.kitchenNote ? `<br><i>${esc(p.kitchenNote)}</i>` : ""}${p && p.menu ? `<br><span class="sub">${nl(p.menu)}</span>` : ""}</td></tr>`; }).join("")}</table>` : "<p class=\"leeg\">Niets voor de keuken.</p>"}`;
+  }
+  if (on("vragen") && typeof vrFor === "function") { const vs = vrFor(r), a = r.answers || {}; h += `<h2>Vragen</h2>${vs.length ? `<table>${vs.map(v => `<tr><td class="k">${esc(v.text)}</td><td>${String(a[v.id] ?? "").trim() ? esc(a[v.id]) : "<i>nog niet bekend</i>"}</td></tr>`).join("")}</table>` : "<p class=\"leeg\">Geen vragen.</p>"}`; }
+  if (on("lev")) { const ls = items.filter(i => i.cat === "Leveranciers" || (i.wens && i.wens.leverancier)); h += `<h2>Leveranciers</h2>${ls.length ? `<table>${ls.map(i => `<tr><td class="k">${esc(i.time || i.part || "")}</td><td>${esc(i.desc || product(i.productId)?.name || "")}</td><td>${esc((i.wens && i.wens.leverancier) || "")}</td></tr>`).join("")}</table>` : "<p class=\"leeg\">Geen leveranciers.</p>"}`; }
+  return h;
+}
 function dbExportOpen() {
-  const st = { from: todayISO, to: addDays(todayISO, 6), sts: ["bevestigd", "optie"] };
+  const st = { from: todayISO, to: addDays(todayISO, 6), sts: ["bevestigd", "optie"], parts: DBX_PARTS.map(p => p[0]), type: "" };
   const draw = () => {
-    const list = dbExportList(st.from, st.to, st.sts);
+    const list = dbExportList(st.from, st.to, st.sts).filter(r => !st.type || r.eventType === st.type);
+    const types = typeof eventTypes === "function" ? eventTypes() : [];
     $("#modal-root").innerHTML = `
   <div class="scrim" id="scrim"><form class="modal" id="dbx-form" aria-label="Draaiboeken exporteren">
     <div class="row spread"><h2>Draaiboeken exporteren</h2><button type="button" class="btn ghost" id="dbx-x" aria-label="Sluiten">✕</button></div>
-    <p class="small muted" style="margin:0">Alle partysheets (draaiboek, dagindeling, vragen, keukenbon en notities) van een periode in één bestand, één event per pagina. Open het bestand en print het.</p>
+    <p class="small muted" style="margin:0">De draaiboeken van een periode in één bestand, één event per pagina. Kies welke onderdelen meegaan, open het bestand en print het.</p>
+    <div><b class="small">Onderdelen</b><div class="row dbx-parts">${DBX_PARTS.map(([k, l]) => `<label class="check small"><input type="checkbox" data-dbxp="${k}" ${st.parts.includes(k) ? "checked" : ""}> ${l}</label>`).join("")}</div></div>
     <div class="fields">
       <label class="f"><span>Van</span><input type="date" id="dbx-from" value="${st.from}"></label>
       <label class="f"><span>Tot en met</span><input type="date" id="dbx-to" value="${st.to}"></label>
+      <label class="f"><span>Soort feest</span><select id="dbx-type"><option value="">Alle soorten</option>${types.map(t => `<option value="${esc(t.id)}" ${t.id === st.type ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select></label>
     </div>
     <div class="row">${["bevestigd", "optie", "aanvraag", "afgerond"].map(x => `<label class="check small"><input type="checkbox" data-dbxs="${x}" ${st.sts.includes(x) ? "checked" : ""}> ${x}</label>`).join("")}</div>
     <div class="row small"><button type="button" class="btn ghost" data-dbxq="0">Vandaag</button><button type="button" class="btn ghost" data-dbxq="w">Deze week</button><button type="button" class="btn ghost" data-dbxq="7">Komende 7 dagen</button><button type="button" class="btn ghost" data-dbxq="30">Komende 30 dagen</button></div>
-    <div class="panel tbl-wrap" style="max-height:260px;overflow:auto">${list.length ? `<table><tbody>${list.map(r => `<tr><td class="num" style="white-space:nowrap">${esc(shortDate(r.date))} ${esc(r.start || "")}</td><td><b>${esc(r.customer || "")}</b><br><span class="muted small">${esc(roomName(r.roomId))} · ${esc(r.persons || "?")} p.</span></td><td><span class="chip">${esc(r.status)}</span></td></tr>`).join("")}</tbody></table>` : `<p class="empty">Geen events in deze periode.</p>`}</div>
-    <div class="row spread"><span class="small muted">${list.length} ${list.length === 1 ? "event" : "events"}</span><button type="submit" class="btn primary" ${list.length ? "" : "disabled"}>Downloaden</button></div>
+    <div class="panel tbl-wrap" style="max-height:240px;overflow:auto">${list.length ? `<table><tbody>${list.map(r => `<tr><td class="num" style="white-space:nowrap">${esc(shortDate(r.date))} ${esc(r.start || "")}</td><td><b>${esc(r.customer || "")}</b><br><span class="muted small">${esc(roomName(r.roomId))} · ${esc(r.persons || "?")} p.</span></td><td><span class="chip">${esc(r.status)}</span></td></tr>`).join("")}</tbody></table>` : `<p class="empty">Geen events in deze periode.</p>`}</div>
+    <div class="row spread"><span class="small muted">${list.length} ${list.length === 1 ? "event" : "events"}</span><button type="submit" class="btn primary" ${list.length && st.parts.length ? "" : "disabled"}>Downloaden</button></div>
   </form></div>`;
     $("#dbx-x").onclick = closeModal;
     $("#scrim").addEventListener("mousedown", e => { if (e.target.id === "scrim") closeModal(); });
     $("#dbx-from").onchange = e => { st.from = e.target.value || todayISO; if (st.to < st.from) st.to = st.from; draw(); };
     $("#dbx-to").onchange = e => { st.to = e.target.value || st.from; if (st.to < st.from) st.from = st.to; draw(); };
+    $("#dbx-type").onchange = e => { st.type = e.target.value; draw(); };
     document.querySelectorAll("[data-dbxs]").forEach(c => c.onchange = () => { st.sts = [...document.querySelectorAll("[data-dbxs]:checked")].map(x => x.dataset.dbxs); draw(); });
+    document.querySelectorAll("[data-dbxp]").forEach(c => c.onchange = () => { st.parts = [...document.querySelectorAll("[data-dbxp]:checked")].map(x => x.dataset.dbxp); draw(); });
     document.querySelectorAll("[data-dbxq]").forEach(b => b.onclick = () => { const k = b.dataset.dbxq; if (k === "w") { st.from = weekStartOf(todayISO); st.to = addDays(st.from, 6); } else { st.from = todayISO; st.to = addDays(todayISO, +k); } draw(); });
     $("#dbx-form").onsubmit = e => {
       e.preventDefault();
-      const docs = list.map(r => partySheet(r)), style = (docs[0].match(/<style>[\s\S]*?<\/style>/) || [""])[0];
-      const bodies = docs.map(d => d.replace(/^[\s\S]*?<body>/, "").replace(/<\/body>\s*<\/html>\s*$/, ""));
-      const html = `<!doctype html><html lang="nl"><head><meta charset="utf-8"><title>Draaiboeken ${esc(shortDate(st.from))} t/m ${esc(shortDate(st.to))}</title>${style}<style>.dbx-ev{break-after:page;page-break-after:always}.dbx-ev:last-child{break-after:auto;page-break-after:auto}@media screen{.dbx-ev+.dbx-ev{border-top:3px dashed #ccc;padding-top:24px;margin-top:32px}}</style></head><body>${bodies.map(b => `<section class="dbx-ev">${b}</section>`).join("")}</body></html>`;
+      const css = `body{font-family:"Open Sans",Arial,sans-serif;font-size:13px;color:#3b3b3b;max-width:780px;margin:24px auto;padding:0 20px;line-height:1.45}h1{color:#e5621c;font-size:1.5rem;margin:0 0 4px}h2{color:#1b7d88;font-size:1.05rem;margin:18px 0 6px;border-bottom:1px solid #e3e3e3;padding-bottom:3px}h3{font-size:.95rem;margin:12px 0 4px}table{width:100%;border-collapse:collapse}td,th{padding:5px 6px;border-bottom:1px solid #eee;text-align:left;vertical-align:top}.k{width:150px;color:#8a8a8a}.sub{color:#777;margin:0 0 2px}.leeg{color:#999;font-style:italic}.box{border:2px solid #b3352b;padding:6px 10px;border-radius:4px;margin-bottom:6px}.dbx-ev{break-after:page;page-break-after:always}.dbx-ev:last-child{break-after:auto;page-break-after:auto}@media screen{.dbx-ev+.dbx-ev{border-top:3px dashed #ccc;padding-top:20px;margin-top:28px}}`;
+      const html = `<!doctype html><html lang="nl"><head><meta charset="utf-8"><title>Draaiboeken ${esc(shortDate(st.from))} t/m ${esc(shortDate(st.to))}</title><style>${css}</style></head><body>${list.map(r => `<section class="dbx-ev">${dbxSheet(r, st.parts)}</section>`).join("")}</body></html>`;
       saveFile(`draaiboeken-${st.from}-tm-${st.to}.html`, html, "text/html");
     };
   };
@@ -4617,6 +4665,16 @@ MENU_ACTS.draaiboeken = () => dbExportOpen();
 (() => { const off = MENU.find(m => m.id === "off"); if (off && !off.items.some(i => i.act === "draaiboeken")) { const i = off.items.findIndex(x => x.v === "res" && x.set && x.set.resFilter === "alle"); off.items.splice(i < 0 ? off.items.length : i + 1, 0, { l: "Draaiboeken exporteren", act: "draaiboeken" }); } })();
 
 /* Haakjes in bestaande onderdelen */
+const _afterAgendaAppt = after.agenda;
+after.agenda = function () {
+  _afterAgendaAppt && _afterAgendaAppt.apply(this, arguments);
+  const nb = $("#m-new"); if (nb && !$("#m-appt")) { nb.insertAdjacentHTML("beforebegin", `<button class="btn" id="m-appt" ${S.readOnly ? "disabled" : ""}>Afspraak maken</button>`); $("#m-appt").onclick = () => apptOpen({ date: (S.month || todayISO.slice(0, 7)) === todayISO.slice(0, 7) ? todayISO : S.month + "-01" }); }
+  document.querySelectorAll(".ln.a[data-apptday]").forEach(el => el.addEventListener("click", e => {
+    e.stopPropagation(); e.preventDefault();
+    const as = apptOn(el.dataset.apptday);
+    if (as.length === 1) apptOpen(as[0]); else { S.day = el.dataset.apptday; setView("dag"); }
+  }));
+};
 const _afterDagAppt = after.dag;
 after.dag = () => {
   _afterDagAppt();
@@ -8979,6 +9037,170 @@ obOpen = function (id) {
 })();
 /* ---------- einde automatische e-mails ---------- */
 
+/* ---------- Factuurdetail per grootboekrekening (naar voorbeeld van Restau /facturenDetail) ---------- */
+/* Plakken in horeca-agenda.html binnen de IIFE, vóór de regel `boot();` (ná de financiënmodule). Zie factuurdetail-integratie.md.
+   Alleen lezen. Een factuur is een deel (termijn) van de offerte: elke offerteregel telt mee naar rato van factuurbedrag / offertebedrag. */
+const fdItem = (q, id) => id ? [...(q.items || []), ...(q.days || []).flatMap(d => d.items || [])].find(i => i.id === id) || null : null;
+function fdLineInfo(q, l) {
+  const p = l.productId ? product(l.productId) : null, it = fdItem(q, l.itemId), w = it && it.wens;
+  if (l.disc) return { gb: l.rqCat === "_tot" ? "Korting op totaal" : "Korting drankafkoop", kp: "" };
+  if (l.drink || l.category === "Drankafkoop") return { gb: "Drankafkoop", kp: p?.kostenplaats || "" };
+  return { gb: (p && p.grootboek) || (w && w.grootboek) || "", kp: (p && p.kostenplaats) || (w && w.kostenplaats) || "" };
+}
+// Detailregels van één factuur: grootboek, kostenplaats, product, aantal, btw-tarief, ex, btw, incl.
+function fdRows(inv) {
+  const q = inv.quoteId && S.quotes.get(inv.quoteId), invTot = totals(inv.lines).incl, out = [];
+  const push = (gb, kp, desc, qty, rate, incl) => { const excl = incl / (1 + rate / 100); out.push({ gb: gb || "(geen grootboek)", kp, desc, qty, rate, incl, excl, btw: incl - excl }); };
+  const lines = q ? (q.lines || []).filter(l => !l.optional && (l.desc || +l.price)) : [], qTot = totals(lines).incl;
+  if (!q || Math.abs(qTot) < 0.005) {
+    for (const l of inv.lines || []) { const t = (+l.qty || 0) * (+l.price || 0); for (const [rate, a] of isMix(l) ? [[21, t * l.btwHigh / 100], [9, t * (100 - l.btwHigh) / 100]] : [[+l.btw || 0, t]]) push("", "", l.desc || "", +l.qty || 0, rate, a); }
+    return out;
+  }
+  const f = invTot / qTot;
+  for (const l of lines) {
+    const t = (+l.qty || 0) * (+l.price || 0), info = fdLineInfo(q, l);
+    for (const [rate, a] of isMix(l) ? [[21, t * l.btwHigh / 100], [9, t * (100 - l.btwHigh) / 100]] : [[+l.btw || 0, t]])
+      push(info.gb, info.kp, l.desc + (isMix(l) ? ` (${rate}%-deel)` : ""), +l.qty || 0, rate, a * f);
+  }
+  return out;
+}
+// Deel van de offerte dat deze factuur dekt (aanbetaling 30% = 0,3); 1 bij een eindfactuur van de hele offerte.
+const fdShare = inv => { const q = inv.quoteId && S.quotes.get(inv.quoteId), qt = q ? totals((q.lines || []).filter(l => !l.optional && (l.desc || +l.price))).incl : 0; return Math.abs(qt) < 0.005 ? 1 : totals(inv.lines).incl / qt; };
+const fdPct = inv => { const f = fdShare(inv); return Math.abs(f - 1) < 0.0005 ? "" : String(Math.round(f * 1000) / 10).replace(".", ",") + "%"; };
+const fdCompany = inv => { const c = inv.customerId && S.customers.get(inv.customerId), co = c && c.companyId && S.companies && S.companies.get(c.companyId); return co ? co.name || "" : c && (c.type === "bedrijf") ? c.name : ""; };
+function fdPeriod() {
+  const k = S.fdPer || "jaar", y = todayISO.slice(0, 4), m = todayISO.slice(0, 7), pm = (d => d.toISOString().slice(0, 7))(new Date(+y, +m.slice(5) - 2, 15));
+  const P = { maand: ["Deze maand", m + "-01", m + "-31"], vorige: ["Vorige maand", pm + "-01", pm + "-31"], kwartaal: ["Dit kwartaal", `${y}-${String(Math.floor((+m.slice(5) - 1) / 3) * 3 + 1).padStart(2, "0")}-01`, todayISO], jaar: ["Dit jaar", y + "-01-01", y + "-12-31"], vorigjaar: ["Vorig jaar", (y - 1) + "-01-01", (y - 1) + "-12-31"], alles: ["Alles", "0000", "9999"] };
+  return { k, P, from: P[k][1], to: P[k][2], label: P[k][0] };
+}
+function fdList() {
+  const per = fdPeriod(), t = S.fdType || "";
+  return finInvoices().filter(i => (i.date || "") >= per.from && (i.date || "") <= per.to && (!t || i.type === t)).sort((a, b) => String(a.number).localeCompare(String(b.number)));
+}
+function vFactuurdetail() {
+  const per = fdPeriod(), list = fdList(), all = list.map(inv => ({ inv, rows: fdRows(inv) }));
+  const g = new Map();
+  for (const { rows } of all) for (const r of rows) { const k = r.gb + "|" + r.rate, a = g.get(k) || { gb: r.gb, rate: r.rate, excl: 0, btw: 0, incl: 0 }; a.excl += r.excl; a.btw += r.btw; a.incl += r.incl; g.set(k, a); }
+  const sum = [...g.values()].sort((a, b) => a.gb.localeCompare(b.gb, "nl") || b.rate - a.rate), T = sum.reduce((s, a) => ({ excl: s.excl + a.excl, btw: s.btw + a.btw, incl: s.incl + a.incl }), { excl: 0, btw: 0, incl: 0 });
+  const m = v => `<td class="r" style="white-space:nowrap">${eur(v)}</td>`;
+  const detail = rows => { const gs = [...new Set(rows.map(r => r.gb))].sort((a, b) => a.localeCompare(b, "nl")); return `<table class="fd-tbl"><thead><tr><th>Grootboek / product</th><th class="r">Aantal</th><th class="r">Btw</th><th class="r">Excl.</th><th class="r">Btw-bedrag</th><th class="r">Incl.</th></tr></thead><tbody>${gs.map(gb => { const xs = rows.filter(r => r.gb === gb), s = xs.reduce((a, r) => ({ excl: a.excl + r.excl, btw: a.btw + r.btw, incl: a.incl + r.incl }), { excl: 0, btw: 0, incl: 0 }); return `<tr class="fin-grp"><td colspan="6">${esc(gb)}</td></tr>${xs.map(r => `<tr><td>${esc(r.desc)}${r.kp ? `<br><span class="muted small">kostenplaats ${esc(r.kp)}</span>` : ""}</td><td class="r">${String(r.qty).replace(".", ",")}</td><td class="r">${r.rate}%</td>${m(r.excl)}${m(r.btw)}${m(r.incl)}</tr>`).join("")}<tr class="fd-sub"><td colspan="3">Subtotaal ${esc(gb)}</td>${m(s.excl)}${m(s.btw)}${m(s.incl)}</tr>`; }).join("")}</tbody></table>`; };
+  return `<section class="stack">
+    <div class="row spread"><h2>Factuurdetail</h2><div class="row">
+      <select id="fd-per" style="width:auto" aria-label="Periode">${Object.entries(per.P).map(([k, [l]]) => `<option value="${k}" ${k === per.k ? "selected" : ""}>${l}</option>`).join("")}</select>
+      <select id="fd-type" style="width:auto" aria-label="Soort factuur"><option value="">Alle facturen</option>${Object.entries(FIN_TYPES).map(([k, l]) => `<option value="${k}" ${k === S.fdType ? "selected" : ""}>${l}</option>`).join("")}</select>
+      <button class="btn" id="fd-csv">Downloaden</button></div></div>
+    <p class="small muted" style="margin:0">Per factuur de producten per grootboekrekening, op factuurdatum. Een aanbetaling of 2e betaling is een deel van de offerte: het aantal is dat van de offerte, de bedragen tellen mee naar rato. Drankafkoop staat apart, gesplitst in het 21%- en 9%-deel. Grootboek en kostenplaats komen van het product of van de speciale wens.</p>
+    ${list.length ? `<h3>Totaal per grootboekrekening (${esc(per.label.toLowerCase())})</h3><div class="panel tbl-wrap"><table><thead><tr><th>Grootboek</th><th class="r">Btw</th><th class="r">Excl.</th><th class="r">Btw-bedrag</th><th class="r">Incl.</th></tr></thead><tbody>
+      ${sum.map(a => `<tr><td>${esc(a.gb)}</td><td class="r">${a.rate}%</td>${m(a.excl)}${m(a.btw)}${m(a.incl)}</tr>`).join("")}<tr class="sx-tot"><td>Eindtotaal</td><td></td>${m(T.excl)}${m(T.btw)}${m(T.incl)}</tr></tbody></table></div>
+    <h3>Per factuur</h3>
+    <div class="stack" style="gap:8px">${all.map(({ inv, rows }) => { const s = totals(inv.lines); return `<details class="panel fd-inv"><summary><span class="num"><b>${esc(inv.number || "")}</b></span><span>${esc(inv.customer || "")}${fdCompany(inv) && fdCompany(inv) !== inv.customer ? ` · ${esc(fdCompany(inv))}` : ""}<br><span class="muted small">${esc(FIN_TYPES[inv.type] || inv.type || "")} · factuur ${inv.date ? esc(shortDate(inv.date)) : "–"}${inv.eventDate ? " · event " + esc(shortDate(inv.eventDate)) : ""}${inv.quoteNumber ? " · offerte " + esc(inv.quoteNumber) : ""}${fdPct(inv) ? ` · ${fdPct(inv)} van de offerte` : ""}</span></span><span class="r num" style="white-space:nowrap">${eur(s.excl)} excl.<br><b>${eur(s.incl)}</b></span></summary><div class="tbl-wrap">${detail(rows)}</div><div class="row" style="justify-content:flex-end"><button type="button" class="btn ghost" data-fdopen="${esc(inv.id)}">Factuur openen</button></div></details>`; }).join("")}</div>`
+      : `<p class="empty">Geen facturen in deze periode.</p>`}
+  </section>`;
+}
+after.factuurdetail = () => {
+  $("#fd-per").onchange = e => { S.fdPer = e.target.value; render(); };
+  $("#fd-type").onchange = e => { S.fdType = e.target.value; render(); };
+  document.querySelectorAll("[data-fdopen]").forEach(b => b.onclick = () => finOpenInvoice(b.dataset.fdopen));
+  $("#fd-csv").onclick = () => {
+    const list = fdList(); if (!list.length) { toast("Geen facturen om te downloaden"); return; }
+    const num = x => (Math.round((+x || 0) * 100) / 100).toFixed(2).replace(".", ","), cell = c => /[;"\n]/.test(String(c ?? "")) ? `"${String(c).replace(/"/g, '""')}"` : String(c ?? "");
+    const rows = [["Factuurnummer", "Project (offerte)", "Eventdatum", "Factuurdatum", "Naam", "Contactpersoon", "Bedrijf", "Type", "Grootboek", "Kostenplaats", "Product", "Aantal", "Deel van offerte", "Btw-tarief", "Excl. btw", "Btw", "Incl. btw"]];
+    for (const inv of list) for (const r of fdRows(inv)) rows.push([inv.number || "", inv.quoteNumber || "", inv.eventDate || "", inv.date || "", inv.customer || "", inv.contact || "", fdCompany(inv), FIN_TYPES[inv.type] || inv.type || "", r.gb, r.kp, r.desc, String(r.qty).replace(".", ","), fdPct(inv) || "100%", r.rate + "%", num(r.excl), num(r.btw), num(r.incl)]);
+    saveFile(`factuurdetail-${fdPeriod().k}-${todayISO}.csv`, "﻿" + rows.map(r => r.map(cell).join(";")).join("\r\n"), "text/csv");
+  };
+};
+VIEWS.factuurdetail = () => vFactuurdetail();
+(() => { const fin = MENU.find(m => m.id === "fin"); if (!fin || fin.items.some(i => i.v === "factuurdetail")) return; const i = fin.items.findIndex(x => x.v === "facturen"); fin.items.splice(i < 0 ? fin.items.length : i + 1, 0, { l: "Factuurdetail", v: "factuurdetail" }); })();
+/* ---------- Nacalculatie per event: wat er werkelijk is gedronken tegenover de drankafkoop (naar voorbeeld van Restau) ---------- */
+/* Plakken in horeca-agenda.html binnen de IIFE, vóór de regel `boot();` (ná het eventdossier). Zie nacalc-integratie.md.
+   Tabblad "Nacalculatie" in het eventdossier (DOSSIER_TABS.nacalc). Prijzen uit settings.drankPrijslijst [{ id, name, cat, unit: "Glas"|"Fles", price }].
+   Opslag op de reservering: nacalc = { items: [{ id, name, cat, unit, price, n }], note, at }. De prijzen worden mee bewaard, zodat een latere prijswijziging oude events niet verandert. */
+let ncDraft = null;
+const ncList = () => (S.settings.drankPrijslijst || []).filter(x => x && x.name);
+const ncNum = v => { const n = +String(v ?? "").replace(",", "."); return isFinite(n) && n > 0 ? n : 0; };
+// Drankafkoop op de offerte (incl. btw), met de korting op drankafkoop eraf
+function ncAfkoop(r) {
+  const q = r.quoteId && S.quotes.get(r.quoteId); if (!q) return { q: null, amt: 0, n: 0 };
+  const ls = (q.lines || []).filter(l => !l.optional && (l.drink || l.category === "Drankafkoop" || (l.disc && l.rqCat === "Drankjes")));
+  return { q, amt: ls.reduce((s, l) => s + (+l.qty || 0) * (+l.price || 0), 0), n: ls.filter(l => !l.disc).length };
+}
+function ncState(r) {
+  if (ncDraft && ncDraft.id === r.id) return ncDraft;
+  const saved = (r.nacalc && r.nacalc.items) || [], qty = {}, price = {};
+  for (const x of saved) { qty[x.id] = x.n; price[x.id] = x; }
+  ncDraft = { id: r.id, qty, saved: price, note: (r.nacalc && r.nacalc.note) || "", dirty: false };
+  return ncDraft;
+}
+// Regels: de huidige prijslijst, plus bewaarde regels die niet meer in de prijslijst staan; bewaarde prijs gaat voor
+function ncRows(r) {
+  const st = ncState(r), list = ncList(), ids = new Set(list.map(x => x.id));
+  const rows = list.map(x => st.saved[x.id] ? { ...x, price: st.saved[x.id].price, old: +st.saved[x.id].price !== +x.price ? +x.price : null } : x);
+  for (const x of Object.values(st.saved)) if (!ids.has(x.id)) rows.push({ ...x, gone: true });
+  return rows.map(x => ({ ...x, n: ncNum(st.qty[x.id]) }));
+}
+const ncTotal = rows => rows.reduce((s, x) => s + x.n * (+x.price || 0), 0);
+function dNacalc(r) {
+  const st = ncState(r), rows = ncRows(r), af = ncAfkoop(r), tot = ncTotal(rows), diff = tot - af.amt, ro = S.readOnly ? "disabled" : "";
+  const q = normName(S.ncQ || ""), only = !!S.ncOnly;
+  const shown = rows.filter(x => (!q || normName(x.name + " " + (x.cat || "")).includes(q)) && (!only || x.n));
+  const cats = [...new Set(shown.map(x => x.cat || "Overig"))];
+  const unitLab = u => u === "Fles" ? "fles" : "glas";
+  return `<div class="stack">
+    <div class="panel stats">
+      <div class="stat bar"><span class="eyebrow">Drankafkoop op offerte</span><b class="num">${af.q ? eur(af.amt) : "–"}</b><span class="muted small">${af.q ? (af.n ? `${af.n} regel${af.n === 1 ? "" : "s"} drankafkoop` : "geen drankafkoop") : "nog geen offerte"}</span></div>
+      <div class="stat pitch"><span class="eyebrow">Werkelijk gedronken</span><b class="num">${eur(tot)}</b><span class="muted small">${rows.filter(x => x.n).length} soorten volgens de prijslijst</span></div>
+      <div class="stat ${diff > 0.004 ? "club" : ""}"><span class="eyebrow">${af.amt ? (diff > 0.004 ? "Meer gedronken" : "Binnen de afkoop") : "Los af te rekenen"}</span><b class="num">${eur(af.amt ? Math.abs(diff) : tot)}</b><span class="muted small">${af.amt ? (diff > 0.004 ? "dan afgekocht: naar de eindafrekening" : "geen meerverbruik") : "geen drankafkoop op de offerte"}</span></div>
+    </div>
+    <div class="row">
+      <input id="nc-q" type="search" placeholder="Zoek drank" value="${esc(S.ncQ || "")}" style="width:auto;min-width:180px" aria-label="Zoek drank">
+      <label class="check small"><input type="checkbox" id="nc-only" ${only ? "checked" : ""}> Alleen ingevuld</label>
+      <span style="margin-left:auto" class="row"><button type="button" class="btn" id="nc-dl">Nacalculatie downloaden</button><button type="button" class="btn primary" id="nc-save" ${ro || (st.dirty ? "" : "disabled")}>Opslaan</button></span>
+    </div>
+    ${ncList().length ? `<div class="tbl-wrap"><table class="nc-tbl"><thead><tr><th>Drank</th><th class="r">Prijs</th><th class="r" style="width:120px">Aantal</th><th class="r">Totaal</th></tr></thead><tbody>
+      ${cats.map(c => `<tr class="fin-grp"><td colspan="4">${esc(c)}</td></tr>${shown.filter(x => (x.cat || "Overig") === c).map(x => `<tr${x.n ? ' class="nc-on"' : ""}><td>${esc(x.name)}${x.gone ? ` <span class="chip c0">niet meer in prijslijst</span>` : ""}</td><td class="r" style="white-space:nowrap">${eur(+x.price || 0)} <span class="muted small">per ${unitLab(x.unit)}</span>${x.old != null ? `<br><span class="muted small">nu ${eur(x.old)}</span>` : ""}</td>
+        <td class="r"><span class="nc-step"><button type="button" class="btn ghost" data-ncm="${esc(x.id)}" aria-label="Eén minder" ${ro}>−</button><input data-nc="${esc(x.id)}" type="number" min="0" step="1" inputmode="numeric" value="${x.n || ""}" aria-label="Aantal ${esc(x.name)}" ${ro}><button type="button" class="btn ghost" data-ncp="${esc(x.id)}" aria-label="Eén meer" ${ro}>+</button></span></td>
+        <td class="r" style="white-space:nowrap" data-nct="${esc(x.id)}">${x.n ? eur(x.n * (+x.price || 0)) : "–"}</td></tr>`).join("")}`).join("") || `<tr><td colspan="4"><p class="empty" style="margin:0">Niets gevonden.</p></td></tr>`}
+      <tr class="sx-tot"><td>Totaal gedronken</td><td></td><td></td><td class="r" id="nc-tot" style="white-space:nowrap">${eur(tot)}</td></tr></tbody></table></div>`
+      : `<p class="empty">De drankenprijslijst is nog leeg. Vul hem bij Instellingen (Drankjes → prijslijst).</p>`}
+    <label class="f"><span>Opmerking bij de nacalculatie</span><textarea id="nc-note" rows="3" placeholder="bijv. 2 flessen wijn mee naar huis, telling door bediening" ${ro}>${esc(st.note)}</textarea></label>
+    ${r.nacalc && r.nacalc.at ? `<p class="small muted" style="margin:0">Laatst opgeslagen ${esc(shortDate(r.nacalc.at.slice(0, 10)))} ${esc(r.nacalc.at.slice(11, 16))}.</p>` : ""}
+  </div>`;
+}
+function ncDoc(r) {
+  const rows = ncRows(r).filter(x => x.n), af = ncAfkoop(r), tot = ncTotal(rows), st = ncState(r);
+  const body = `<h1>Nacalculatie dranken</h1><p><b>${esc(r.customer || "")}</b> · ${esc(longDate(r.date))}, ${esc(r.start || "")}–${esc(r.end || "")} · ${esc(roomName(r.roomId))}${r.persons ? " · " + esc(r.persons) + " personen" : ""}</p>
+    <table><tr><th>Drank</th><th>Eenheid</th><th style="text-align:right">Aantal</th><th style="text-align:right">Prijs</th><th style="text-align:right">Totaal</th></tr>${rows.map(x => `<tr><td>${esc(x.name)}</td><td>${esc(x.unit || "Glas")}</td><td style="text-align:right">${x.n}</td><td style="text-align:right">${eur(+x.price)}</td><td style="text-align:right">${eur(x.n * x.price)}</td></tr>`).join("")}
+    <tr><td colspan="4"><b>Totaal gedronken</b></td><td style="text-align:right"><b>${eur(tot)}</b></td></tr>
+    ${af.amt ? `<tr><td colspan="4">Drankafkoop op de offerte${af.q ? " " + esc(af.q.number || "") : ""}</td><td style="text-align:right">${eur(af.amt)}</td></tr><tr><td colspan="4"><b>${tot - af.amt > 0.004 ? "Meer gedronken dan afgekocht" : "Binnen de afkoop"}</b></td><td style="text-align:right"><b>${eur(Math.max(0, tot - af.amt))}</b></td></tr>` : ""}</table>
+    ${st.note ? `<h2>Opmerking</h2><p>${esc(st.note).replace(/\n/g, "<br>")}</p>` : ""}`;
+  return typeof evDoc === "function" ? evDoc(`Nacalculatie ${r.customer || ""}`, body) : `<!doctype html><html lang="nl"><head><meta charset="utf-8"><title>Nacalculatie</title></head><body>${body}</body></html>`;
+}
+function dNacalcWire(r, upd) {
+  const st = ncState(r);
+  const refresh = () => {
+    const rows = ncRows(r), tot = ncTotal(rows); const t = $("#nc-tot"); if (t) t.textContent = eur(tot);
+    for (const x of rows) { const c = document.querySelector(`[data-nct="${CSS.escape(x.id)}"]`); if (c) { c.textContent = x.n ? eur(x.n * (+x.price || 0)) : "–"; c.closest("tr").classList.toggle("nc-on", !!x.n); } }
+    const b = $("#nc-save"); if (b && !S.readOnly) b.disabled = !st.dirty;
+  };
+  const setQ = (id, v) => { st.qty[id] = v === "" ? "" : Math.max(0, Math.round(ncNum(v))); st.dirty = true; };
+  document.querySelectorAll("[data-nc]").forEach(el => el.oninput = () => { setQ(el.dataset.nc, el.value); refresh(); });
+  document.querySelectorAll("[data-ncp],[data-ncm]").forEach(b => b.onclick = () => { const id = b.dataset.ncp || b.dataset.ncm, n = ncNum(st.qty[id]) + (b.dataset.ncp ? 1 : -1); setQ(id, Math.max(0, n) || ""); const el = document.querySelector(`[data-nc="${CSS.escape(id)}"]`); if (el) el.value = st.qty[id] || ""; refresh(); });
+  const note = $("#nc-note"); if (note) note.oninput = () => { st.note = note.value; st.dirty = true; refresh(); };
+  const qi = $("#nc-q"); if (qi) qi.oninput = () => { S.ncQ = qi.value; clearTimeout(qi._t); qi._t = setTimeout(() => { render(); const n = $("#nc-q"); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } }, 250); };
+  const on = $("#nc-only"); if (on) on.onchange = () => { S.ncOnly = on.checked; render(); };
+  $("#nc-dl").onclick = () => saveFile(`nacalculatie-${r.date}-${(r.customer || "event").replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.html`, ncDoc(r), "text/html");
+  const sv = $("#nc-save"); if (sv) sv.onclick = async () => {
+    const items = ncRows(r).filter(x => x.n).map(x => ({ id: x.id, name: x.name, cat: x.cat || "", unit: x.unit || "Glas", price: +x.price || 0, n: x.n }));
+    const nacalc = { items, note: st.note || "", at: new Date().toISOString(), total: Math.round(ncTotal(items) * 100) / 100 };
+    ncDraft = null;
+    await upd({ nacalc }, "Nacalculatie opgeslagen");
+  };
+}
+try {
+  if (typeof DOSSIER_TABS === "object") DOSSIER_TABS.nacalc = { l: "Nacalculatie", right: 1, html: dNacalc, after: dNacalcWire, cnt: r => r.date && r.date < todayISO && (r.status === "bevestigd" || r.status === "afgerond") && !(r.nacalc && r.nacalc.at) && ncAfkoop(r).n ? 1 : 0 };
+} catch (e) {}
+const _setViewNc = setView;
+setView = function (v) { if (v !== "event") ncDraft = null; _setViewNc(v); };
 boot();
 })();
 </script>
