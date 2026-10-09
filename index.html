@@ -1280,6 +1280,7 @@ after.koppeling = () => {
   };
 };
 
+const managerSelect = (id, cur, attrs = "") => { const ms = S.settings.locatie?.managers || []; return `<label class="f"><span>Accountmanager</span><select id="${id}" ${attrs}>${[...new Set(["", ...ms, cur || ""])].map(m => `<option value="${esc(m)}" ${m === (cur || "") ? "selected" : ""}>${m ? esc(m) : ms.length ? "Kies…" : "Zet namen bij Instellingen → Algemeen"}</option>`).join("")}</select></label>`; };
 function statusChip(s) {
   s = s || "optie";
   const cls = { aanvraag: "c0", optie: "c2", bevestigd: "c1", afgerond: "c1", betaald: "c1", geannuleerd: "c0", concept: "c0", verstuurd: "c2", geaccepteerd: "c1", afgewezen: "c3" }[s] || "c0";
@@ -1368,6 +1369,7 @@ function openRes(r0) {
       <label class="f"><span>Aantal personen</span><input id="rf-persons" type="number" min="0" inputmode="numeric" value="${esc(r.persons)}"></label>
       <label class="f"><span>Arrangement</span><select id="rf-arr"><option value="">Geen / op rekening</option>${arrs.map(a => `<option value="${esc(a.id)}" ${a.id === r.arrangementId ? "selected" : ""}>${esc(a.name)} · ${eur(arrPrice(a))} p.p.</option>`).join("")}</select></label>
       <label class="f"><span>Status</span><select id="rf-status">${STATUSES.map(s => `<option ${s === r.status ? "selected" : ""}>${s}</option>`).join("")}</select></label>
+      ${managerSelect("rf-manager", r.manager)}
       <label class="f"><span>Optie geldig tot</span><input type="date" id="rf-optieTot" value="${esc(r.optieTot || "")}"></label>
     </div>
     <div class="fields">
@@ -1401,7 +1403,7 @@ function openRes(r0) {
   const read = () => ({
     ...r, date: $("#rf-date").value, start: $("#rf-start").value, end: $("#rf-end").value, roomId: $("#rf-room").value,
     customer: $("#rf-customer").value.trim(), contact: $("#rf-contact").value.trim(), phone: $("#rf-phone").value.trim(), email: $("#rf-email").value.trim(),
-    persons: $("#rf-persons").value ? +$("#rf-persons").value : "", arrangementId: $("#rf-arr").value, status: $("#rf-status").value, notes: $("#rf-notes").value,
+    persons: $("#rf-persons").value ? +$("#rf-persons").value : "", arrangementId: $("#rf-arr").value, status: $("#rf-status").value, manager: $("#rf-manager").value, notes: $("#rf-notes").value,
     customerId: pickedCust, optieTot: $("#rf-optieTot").value, dieet: $("#rf-dieet").value, program: syncLists().prog, tasks: syncLists().tasks, ...dagRead(),
   });
   let pickedCust = r.customerId || "";
@@ -1543,7 +1545,7 @@ function newQuoteFromRes(r) {
   if (!lines.length) lines.push({ desc: "", qty: 1, price: 0, btw: 9 });
   const valid = new Date(); valid.setDate(valid.getDate() + 14);
   return {
-    id: uid(), number: nextQuoteNumber(), status: "concept", reservationId: r.id, customerId: r.customerId || "", depositPct: custDeposit(r.customerId),
+    id: uid(), number: nextQuoteNumber(), status: "concept", reservationId: r.id, customerId: r.customerId || "", depositPct: custDeposit(r.customerId), manager: r.manager || "",
     customer: r.customer || "", contact: r.contact || "", email: r.email || "", phone: r.phone || "",
     eventDate: r.date, eventTime: `${r.start}–${r.end}`, roomId: r.roomId, persons: r.persons || "",
     date: todayISO, validUntil: iso(valid), lines, notes: "", createdAt: new Date().toISOString(),
@@ -1580,8 +1582,8 @@ function vOff() {
     <div class="row spread"><h2>Offertes</h2><button class="btn primary" id="q-new" ${S.readOnly ? "disabled" : ""}>Nieuwe offerte</button></div>
     <div class="ptabs" role="group" aria-label="Soort offertes">${TABS.map(([k, l, f]) => `<button type="button" data-otab="${k}" aria-pressed="${k === tab[0]}">${l}<span class="muted">${all.filter(f).length}</span></button>`).join("")}</div>
     <div class="panel tbl-wrap">
-      ${list.length ? `<table><thead><tr><th>Nummer</th><th>Klant</th><th>Datum feest</th><th class="r">Totaal incl. btw</th><th>Status</th>${tab[0] === "optie" ? "<th>Optie</th>" : ""}${tab[0] === "afgewezen" ? "<th>Reden</th>" : ""}</tr></thead><tbody>
-      ${list.map(x => `<tr class="click" data-q="${esc(x.id)}"><td class="num"><b>${esc(x.number)}</b></td><td>${esc(x.customer)}</td><td class="num">${x.eventDate ? esc(shortDate(x.eventDate)) : ""}</td><td class="r">${eur(totals(x.lines).incl)}</td><td>${statusChip(x.status)}</td>${tab[0] === "optie" ? `<td class="small">${esc(optDays(x))}</td>` : ""}${tab[0] === "afgewezen" ? `<td class="small">${esc(x.declineReason || "")}</td>` : ""}</tr>`).join("")}
+      ${list.length ? `<table><thead><tr><th>Nummer</th><th>Klant</th><th>Datum feest</th><th class="r">Totaal incl. btw</th><th>Manager</th><th>Status</th>${tab[0] === "optie" ? "<th>Optie</th>" : ""}${tab[0] === "afgewezen" ? "<th>Reden</th>" : ""}</tr></thead><tbody>
+      ${list.map(x => `<tr class="click" data-q="${esc(x.id)}"><td class="num"><b>${esc(x.number)}</b></td><td>${esc(x.customer)}</td><td class="num">${x.eventDate ? esc(shortDate(x.eventDate)) : ""}</td><td class="r">${eur(totals(x.lines).incl)}</td><td class="small">${esc(x.manager || resOf(x)?.manager || "")}</td><td>${statusChip(x.status)}</td>${tab[0] === "optie" ? `<td class="small">${esc(optDays(x))}</td>` : ""}${tab[0] === "afgewezen" ? `<td class="small">${esc(x.declineReason || "")}</td>` : ""}</tr>`).join("")}
       </tbody></table>` : `<p class="empty">${all.length ? "Geen offertes in deze lijst." : "Nog geen offertes. Tip: maak een offerte vanuit een reservering, dan worden datum, ruimte, arrangement en aantal personen al ingevuld."}</p>`}
     </div>
   </section>`;
@@ -1615,6 +1617,7 @@ function vQuote(q) {
       <div class="fields">
         <label class="f"><span>Offertedatum</span><input type="date" id="qf-date" value="${esc(q.date)}" ${ro}></label>
         <label class="f"><span>Geldig tot</span><input type="date" id="qf-validUntil" value="${esc(q.validUntil)}" ${ro}></label>
+        ${managerSelect("qf-manager", q.manager, ro)}
         <label class="f"><span>Status</span><select id="qf-status" ${ro}>${["concept", "verstuurd", "geaccepteerd", "afgewezen"].map(s => `<option ${s === q.status ? "selected" : ""}>${s}</option>`).join("")}</select></label>
         ${q.status === "afgewezen" ? `<label class="f"><span>Reden van afwijzen</span><select id="qf-declineReason" ${ro}>${[...new Set(["", ...(S.settings.locatie?.afwijsredenen || []), q.declineReason || ""])].map(x => `<option value="${esc(x)}" ${x === (q.declineReason || "") ? "selected" : ""}>${x || "–"}</option>`).join("")}</select></label>` : ""}
         <label class="f"><span>Reservering</span><span style="padding:7px 0">${res ? `<a href="#" id="q-res">${esc(shortDate(res.date))} · ${esc(roomName(res.roomId))}</a>` : "niet gekoppeld"}</span></label>
@@ -1692,7 +1695,7 @@ after.off = () => {
   if (!draft || draft.id !== q0.id) draft = structuredClone(q0);
   const q = draft;
   const sync = () => {
-    ["customer", "contact", "email", "phone", "eventDate", "eventTime", "roomId", "persons", "date", "validUntil", "status", "notes", "declineReason"].forEach(k => { const el = $("#qf-" + k); if (el) q[k] = el.value; });
+    ["customer", "contact", "email", "phone", "eventDate", "eventTime", "roomId", "persons", "date", "validUntil", "status", "notes", "declineReason", "manager"].forEach(k => { const el = $("#qf-" + k); if (el) q[k] = el.value; });
     document.querySelectorAll("tr[data-i]").forEach(tr => { const l = q.lines[+tr.dataset.i]; tr.querySelectorAll("[data-k]").forEach(inp => { const k = inp.dataset.k; if (k === "btw" && inp.value === "mix") { l.btw = 21; if (!isMix(l)) l.btwHigh = 75; return; } if (k === "btw") { l.btw = +inp.value; delete l.btwHigh; return; } if (k === "btwHigh") { if (l.btwHigh != null) l.btwHigh = Math.min(99, Math.max(1, +inp.value || 75)); return; } l[k] = k === "desc" ? inp.value : k === "optional" ? inp.checked : +inp.value; }); tr.querySelector("[data-amt]").textContent = eur((+l.qty || 0) * (+l.price || 0)); });
     q.depositPct = +$("#qf-depositPct").value || 0; q.depositPaid = $("#qf-depositPaid").checked; q.finalPaid = $("#qf-finalPaid").checked;
     $("#q-tot").innerHTML = totHtml(totals(q.lines), q);
@@ -2132,6 +2135,7 @@ function openProduct(s, idx) {
       <label class="f"><span>Btw</span>${btwSelect(p, 'id="pf-btw"')}</label>
       <label class="f" id="pf-mixf" ${isMix(p) ? "" : "hidden"}><span>Deel tegen 21% (%)</span><input id="pf-btwHigh" type="number" min="1" max="99" value="${esc(isMix(p) ? p.btwHigh : 75)}"></label>
       <label class="f"><span>Kinderprijs (optioneel)</span><input id="pf-priceChild" type="number" step="0.01" min="0" value="${esc(p.priceChild ?? "")}"></label>
+      <label class="f"><span>Inkoopprijs excl. btw (optioneel)</span><input id="pf-inkoop" type="number" step="0.01" min="0" value="${esc(p.inkoop ?? "")}"></label>
     </div>
     <label class="f"><span>Omschrijving voor de klant (staat op de offerte)</span><textarea id="pf-description">${esc(p.description)}</textarea></label>
     <label class="f"><span>Notitie voor keuken en bar (staat op de partysheet)</span><textarea id="pf-kitchenNote" placeholder="bijv. 1 bitterbal + 1 kaasstengel p.p., warm uitserveren">${esc(p.kitchenNote)}</textarea></label>
@@ -2151,7 +2155,7 @@ function openProduct(s, idx) {
   $("#scrim").addEventListener("mousedown", e => { if (e.target.id === "scrim") closeModal(); });
   $("#prod-form").onsubmit = e => {
     e.preventDefault();
-    const np = { ...p, name: $("#pf-name").value.trim(), category: $("#pf-category").value, price: +$("#pf-price").value || 0, unit: $("#pf-unit").value, btw: $("#pf-btw").value === "mix" ? 21 : +$("#pf-btw").value, btwHigh: $("#pf-btw").value === "mix" ? Math.min(99, Math.max(1, +$("#pf-btwHigh").value || 75)) : null, sub: $("#pf-sub").value.trim(), priceChild: $("#pf-priceChild").value === "" ? null : +$("#pf-priceChild").value, description: $("#pf-description").value.trim(), kitchenNote: $("#pf-kitchenNote").value.trim(), todoText: $("#pf-todoText").value.trim(), todoDays: $("#pf-todoDays").value === "" ? "" : +$("#pf-todoDays").value, active: $("#pf-active").checked };
+    const np = { ...p, name: $("#pf-name").value.trim(), category: $("#pf-category").value, price: +$("#pf-price").value || 0, unit: $("#pf-unit").value, btw: $("#pf-btw").value === "mix" ? 21 : +$("#pf-btw").value, btwHigh: $("#pf-btw").value === "mix" ? Math.min(99, Math.max(1, +$("#pf-btwHigh").value || 75)) : null, sub: $("#pf-sub").value.trim(), priceChild: $("#pf-priceChild").value === "" ? null : +$("#pf-priceChild").value, inkoop: $("#pf-inkoop").value === "" ? null : +$("#pf-inkoop").value, description: $("#pf-description").value.trim(), kitchenNote: $("#pf-kitchenNote").value.trim(), todoText: $("#pf-todoText").value.trim(), todoDays: $("#pf-todoDays").value === "" ? "" : +$("#pf-todoDays").value, active: $("#pf-active").checked };
     if (!np.name) { toast("Geef het product een naam"); return; }
     if (isNew) s.products.push(np); else s.products[idx] = np;
     S.pcat = S.pinstCat = np.category; persist();
