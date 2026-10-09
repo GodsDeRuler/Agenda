@@ -388,6 +388,8 @@ td.r, th.r { text-align: right; font-variant-numeric: tabular-nums; }
 .pcat-h { margin: 6px 0 0; }
 .psub { grid-column: 1 / -1; margin: 4px 0 -2px; }
 @media (prefers-reduced-motion: no-preference) { .day, .btn { transition: border-color .12s; } }
+/* Rapporten */
+#rp-sel { max-width: 100%; }
 /* Vragen en omzetgarantie */
 .og input { min-width: 70px; }
 /* Statistiek extra */
@@ -7578,6 +7580,196 @@ document.head.insertAdjacentHTML("beforeend", `<style id="rq6-style">
 </style>`);
 /* ---------- einde offerte zoals Restau ---------- */
 
+/* ---------- Rapporten (naar voorbeeld van Restau: openstaand, facturen, aanbetalingen, arrangementen, event count, omzet bedrijven) ---------- */
+/* Plakken in horeca-agenda.html binnen de IIFE, vóór de regel `boot();` (ná de financiën-, bedrijven- en statistiekmodules). Zie rapporten-integratie.md.
+   Alleen lezen: gebruikt quotes, reservations, invoices, customers en companies zoals ze al geladen zijn. Geen nieuwe collectie. */
+const RP_LIST = [
+  ["open", "Openstaande bedragen per soort feest"], ["facturen", "Openstaande facturen"], ["aanbet", "Aanbetalingen per jaar"], ["vooruit", "Vooruit ontvangen en nog te ontvangen"],
+  ["arr", "Arrangementen"], ["count", "Event count"], ["bedrijven", "Omzet bedrijven per maand"],
+];
+const rpRes = q => (q && q.reservationId && S.reservations.get(q.reservationId)) || null;
+const rpCust = q => { const r = rpRes(q), id = q.customerId || (r && r.customerId); return (id && S.customers.get(id)) || null; };
+const rpZak = c => !!c && (!!c.companyId || c.type === "bedrijf" || c.type === "team of vereniging");
+const rpTypeId = q => q.eventType || rpRes(q)?.eventType || "";
+const rpTypeName = id => (id && eventType(id)?.name) || "Soort niet gekozen";
+const rpMonthLabel = m => m ? `${MONTHS_SHORT[+m.slice(5, 7) - 1]} ${m.slice(0, 4)}` : "zonder datum";
+const rpNum = x => (Math.round((+x || 0) * 100) / 100).toFixed(2).replace(".", ",");
+const rpWon = () => [...S.quotes.values()].filter(q => q.status === "geaccepteerd" && rpRes(q)?.status !== "geannuleerd");
+const rpGuests = q => { const on = (q.program || []).filter(p => p && p.on !== false); const g = on.length ? Math.max(0, ...on.map(p => (+p.adults || 0) + (+p.kids || 0))) : 0; return g || +q.persons || +(rpRes(q)?.persons) || 0; };
+const rpInvOpen = () => finInvoices().filter(i => i.type !== "credit" && !i.creditedBy && !i.paidOn).map(i => ({ i, amt: totals(i.lines).incl })).filter(x => x.amt > 0.004);
+const rpYears = dates => { const ys = new Set(dates.filter(Boolean).map(d => d.slice(0, 4))); ys.add(todayISO.slice(0, 4)); return [...ys].sort().reverse(); };
+const rpCell = x => `<td class="r" style="white-space:nowrap">${x ? eur(x) : "–"}</td>`;
+const rpTbl = (head, rows, tot) => `<div class="panel tbl-wrap"><table><thead><tr>${head.map((h, i) => `<th${i ? ' class="r"' : ""}>${esc(h)}</th>`).join("")}</tr></thead><tbody>${rows}${tot || ""}</tbody></table></div>`;
+
+/* 5–7: openstaande bedragen particulier / zakelijk / totaal per soort feest */
+function rpOpen() {
+  const rows = finRows().filter(x => x.open > 0.004).map(x => ({ ...x, zak: rpZak(rpCust(x.q)), type: rpTypeId(x.q) }));
+  const g = new Map();
+  for (const x of rows) { const k = x.type, a = g.get(k) || { n: 0, tot: 0, p: 0, z: 0, late: 0 }; a.n++; a.tot += x.tot; a[x.zak ? "z" : "p"] += x.open; a.late += x.lateAmt || 0; g.set(k, a); }
+  const ks = [...g.keys()].sort((a, b) => rpTypeName(a).localeCompare(rpTypeName(b), "nl")), T = { n: 0, tot: 0, p: 0, z: 0, late: 0 };
+  for (const a of g.values()) for (const k in T) T[k] += a[k];
+  const line = (l, a, cls = "") => `<tr class="${cls}"><td>${esc(l)}</td><td class="r">${a.n}</td>${rpCell(a.tot)}${rpCell(a.p)}${rpCell(a.z)}${rpCell(a.p + a.z)}<td class="r" style="white-space:nowrap${a.late ? ";color:var(--bad)" : ""}">${a.late ? eur(a.late) : "–"}</td></tr>`;
+  const det = rows.sort((a, b) => (a.ev || "9999").localeCompare(b.ev || "9999"));
+  const html = `<div class="panel stats">
+      <div class="stat pitch"><span class="eyebrow">Open particulier</span><b class="num">${eur(T.p)}</b></div>
+      <div class="stat bar"><span class="eyebrow">Open zakelijk</span><b class="num">${eur(T.z)}</b><span class="muted small">bedrijf, team of vereniging</span></div>
+      <div class="stat club"><span class="eyebrow">Open totaal</span><b class="num">${eur(T.p + T.z)}</b><span class="muted small">${T.late ? `waarvan ${eur(T.late)} te laat` : "niets te laat"}</span></div></div>
+    ${rows.length ? rpTbl(["Soort feest", "Events", "Offertebedrag", "Open particulier", "Open zakelijk", "Open totaal", "Waarvan te laat"], ks.map(k => line(rpTypeName(k), g.get(k))).join(""), line("Totaal", T, "sx-tot"))
+      + `<h3>Per event</h3>` + rpTbl(["Event", "Klant", "Offertebedrag", "Open", "Eerstvolgende"], det.map(x => `<tr class="click" data-rpq="${esc(x.q.id)}"><td class="num" style="white-space:nowrap">${x.ev ? esc(shortDate(x.ev)) : "–"}</td><td><b>${esc(x.q.customer || "")}</b><br><span class="muted small">${esc(rpTypeName(x.type))} · ${x.zak ? "zakelijk" : "particulier"}</span></td>${rpCell(x.tot)}<td class="r" style="white-space:nowrap${x.late ? ";color:var(--bad)" : ""}">${eur(x.open)}</td><td class="r small" style="white-space:nowrap">${x.next ? esc(shortDate(x.next)) : "–"}</td></tr>`).join(""))
+      : `<p class="empty">Er staat niets open.</p>`}`;
+  const csv = [["Soort feest", "Events", "Offertebedrag", "Open particulier", "Open zakelijk", "Open totaal", "Waarvan te laat"], ...ks.map(k => { const a = g.get(k); return [rpTypeName(k), a.n, rpNum(a.tot), rpNum(a.p), rpNum(a.z), rpNum(a.p + a.z), rpNum(a.late)]; }), ["Totaal", T.n, rpNum(T.tot), rpNum(T.p), rpNum(T.z), rpNum(T.p + T.z), rpNum(T.late)],
+    [], ["Eventdatum", "Klant", "Soort feest", "Particulier/zakelijk", "Offertenummer", "Offertebedrag", "Open", "Eerstvolgende vervaldatum"], ...det.map(x => [x.ev, x.q.customer || "", rpTypeName(x.type), x.zak ? "zakelijk" : "particulier", x.q.number || "", rpNum(x.tot), rpNum(x.open), x.next])];
+  return { html, csv, file: "openstaande-bedragen" };
+}
+
+/* 8–10: openstaande facturen per factuurmaand, verlopen, per eventmaand */
+function rpFacturen() {
+  const sub = ["factuurmaand", "verlopen", "eventmaand"].includes(S.rpInv) ? S.rpInv : "factuurmaand";
+  let list = rpInvOpen();
+  if (sub === "verlopen") list = list.filter(x => x.i.dueDate && x.i.dueDate < todayISO);
+  const late = x => x.i.dueDate && x.i.dueDate < todayISO ? Math.round((parseISO(todayISO) - parseISO(x.i.dueDate)) / 864e5) : 0;
+  const keyOf = x => sub === "eventmaand" ? (x.i.eventDate || "").slice(0, 7) : sub === "verlopen" ? (d => d > 60 ? "4" : d > 30 ? "3" : d > 14 ? "2" : "1")(late(x)) : (x.i.date || "").slice(0, 7);
+  const bucket = { 1: "1 tot 14 dagen te laat", 2: "15 tot 30 dagen te laat", 3: "31 tot 60 dagen te laat", 4: "meer dan 60 dagen te laat" };
+  const lab = k => sub === "verlopen" ? bucket[k] : rpMonthLabel(k);
+  const g = new Map(); for (const x of list) { const k = keyOf(x), a = g.get(k) || { n: 0, amt: 0 }; a.n++; a.amt += x.amt; g.set(k, a); }
+  const ks = [...g.keys()].sort(), tot = list.reduce((s, x) => s + x.amt, 0);
+  const det = list.sort((a, b) => (sub === "eventmaand" ? (a.i.eventDate || "").localeCompare(b.i.eventDate || "") : (a.i.dueDate || "").localeCompare(b.i.dueDate || "")));
+  const tabs = [["factuurmaand", "Per factuurmaand"], ["verlopen", "Verlopen"], ["eventmaand", "Per eventmaand"]];
+  const html = `<div class="ptabs" role="group" aria-label="Indeling">${tabs.map(([k, l]) => `<button type="button" data-rpinv="${k}" aria-pressed="${k === sub}">${l}</button>`).join("")}</div>
+    ${list.length ? rpTbl([sub === "verlopen" ? "Te laat" : sub === "eventmaand" ? "Eventmaand" : "Factuurmaand", "Facturen", "Openstaand"], ks.map(k => `<tr><td>${esc(lab(k))}</td><td class="r">${g.get(k).n}</td>${rpCell(g.get(k).amt)}</tr>`).join(""), `<tr class="sx-tot"><td>Totaal</td><td class="r">${list.length}</td>${rpCell(tot)}</tr>`)
+      + `<h3>Facturen</h3>` + rpTbl(["Factuur", "Klant", "Factuurdatum", "Vervaldatum", "Eventdatum", "Openstaand"], det.map(x => `<tr class="click" data-rpinvopen="${esc(x.i.id)}"><td class="num">${esc(x.i.number || "")}<br><span class="muted small">${esc(FIN_TYPES[x.i.type] || x.i.type || "")}</span></td><td>${esc(x.i.customer || "")}</td><td class="r num">${x.i.date ? esc(shortDate(x.i.date)) : "–"}</td><td class="r num" style="${late(x) ? "color:var(--bad)" : ""}">${x.i.dueDate ? esc(shortDate(x.i.dueDate)) : "–"}${late(x) ? `<br><span class="small">${late(x)} dagen te laat</span>` : ""}</td><td class="r num">${x.i.eventDate ? esc(shortDate(x.i.eventDate)) : "–"}</td>${rpCell(x.amt)}</tr>`).join(""))
+      : `<p class="empty">${sub === "verlopen" ? "Geen verlopen facturen." : "Geen openstaande facturen."}</p>`}`;
+  const csv = [[sub === "verlopen" ? "Te laat" : sub === "eventmaand" ? "Eventmaand" : "Factuurmaand", "Facturen", "Openstaand"], ...ks.map(k => [lab(k), g.get(k).n, rpNum(g.get(k).amt)]), ["Totaal", list.length, rpNum(tot)],
+    [], ["Factuurnummer", "Soort", "Klant", "Factuurdatum", "Vervaldatum", "Dagen te laat", "Eventdatum", "Offertenummer", "Openstaand"], ...det.map(x => [x.i.number || "", FIN_TYPES[x.i.type] || x.i.type || "", x.i.customer || "", x.i.date || "", x.i.dueDate || "", late(x) || "", x.i.eventDate || "", x.i.quoteNumber || "", rpNum(x.amt)])];
+  return { html, csv, file: "openstaande-facturen-" + sub };
+}
+
+/* 12: aanbetalingen particulier / zakelijk gefactureerd / zakelijk betaald, per jaar */
+function rpAanbet() {
+  const g = new Map(), get = y => g.get(y) || (g.set(y, { pn: 0, p: 0, fn: 0, f: 0, zn: 0, z: 0 }), g.get(y));
+  for (const q of finQuotes()) {
+    const t = finTerms(q).find(x => x.key === "1e"); if (!t) continue;
+    const zak = rpZak(rpCust(q));
+    if (t.paid) { const a = get((t.paidOn || finEventDate(q) || "").slice(0, 4) || "–"); if (zak) { a.zn++; a.z += t.amount; } else { a.pn++; a.p += t.amount; } }
+    if (zak && t.inv) { const a = get((t.inv.date || "").slice(0, 4) || "–"); a.fn++; a.f += t.amount; }
+  }
+  const ys = [...g.keys()].sort().reverse(), T = { pn: 0, p: 0, fn: 0, f: 0, zn: 0, z: 0 };
+  for (const a of g.values()) for (const k in T) T[k] += a[k];
+  const line = (l, a, cls = "") => `<tr class="${cls}"><td>${esc(l)}</td><td class="r">${a.pn}</td>${rpCell(a.p)}<td class="r">${a.fn}</td>${rpCell(a.f)}<td class="r">${a.zn}</td>${rpCell(a.z)}</tr>`;
+  const html = `<p class="small muted" style="margin:0">Particulier betaald telt in het jaar van betalen, zakelijk gefactureerd in het jaar van de factuurdatum. Zakelijk = klant bij een bedrijf, of soort klant bedrijf, team of vereniging.</p>
+    ${ys.length ? rpTbl(["Jaar", "Particulier betaald", "Bedrag", "Zakelijk gefactureerd", "Bedrag", "Zakelijk betaald", "Bedrag"], ys.map(y => line(y, g.get(y))).join(""), line("Totaal", T, "sx-tot")) : `<p class="empty">Nog geen aanbetalingen.</p>`}`;
+  const csv = [["Jaar", "Particulier betaald (aantal)", "Particulier betaald", "Zakelijk gefactureerd (aantal)", "Zakelijk gefactureerd", "Zakelijk betaald (aantal)", "Zakelijk betaald"], ...ys.map(y => { const a = g.get(y); return [y, a.pn, rpNum(a.p), a.fn, rpNum(a.f), a.zn, rpNum(a.z)]; }), ["Totaal", T.pn, rpNum(T.p), T.fn, rpNum(T.f), T.zn, rpNum(T.z)]];
+  return { html, csv, file: "aanbetalingen-per-jaar" };
+}
+
+/* 14: vooruit ontvangen en nog te ontvangen op een peildatum */
+function rpVooruit() {
+  const peil = S.rpPeil || todayISO, g = new Map(), past = { n: 0, tot: 0, rec: 0, todo: 0 };
+  for (const q of finQuotes()) {
+    const ev = finEventDate(q), terms = finTerms(q), tot = totals(q.lines).incl;
+    const rec = terms.filter(t => t.paid && (!t.paidOn || t.paidOn <= peil)).reduce((s, t) => s + t.amount, 0), todo = Math.max(0, tot - rec);
+    const a = ev && ev > peil ? (g.get(ev.slice(0, 7)) || (g.set(ev.slice(0, 7), { n: 0, tot: 0, rec: 0, todo: 0 }), g.get(ev.slice(0, 7)))) : past;
+    if (a === past && todo < 0.005) continue;
+    a.n++; a.tot += tot; a.rec += rec; a.todo += todo;
+  }
+  const ks = [...g.keys()].sort(), F = { n: 0, tot: 0, rec: 0, todo: 0 };
+  for (const a of g.values()) for (const k in F) F[k] += a[k];
+  const line = (l, a, cls = "") => `<tr class="${cls}"><td>${esc(l)}</td><td class="r">${a.n}</td>${rpCell(a.tot)}${rpCell(a.rec)}${rpCell(a.todo)}</tr>`;
+  const html = `<div class="row"><label class="f" style="max-width:220px"><span>Peildatum</span><input type="date" id="rp-peil" value="${esc(peil)}"></label></div>
+    <div class="panel stats">
+      <div class="stat pitch"><span class="eyebrow">Vooruit ontvangen</span><b class="num">${eur(F.rec)}</b><span class="muted small">voor events na ${esc(shortDate(peil))}</span></div>
+      <div class="stat bar"><span class="eyebrow">Nog te ontvangen</span><b class="num">${eur(F.todo)}</b><span class="muted small">voor events na ${esc(shortDate(peil))}</span></div>
+      <div class="stat club"><span class="eyebrow">Achterstallig</span><b class="num">${eur(past.todo)}</b><span class="muted small">events op of voor de peildatum</span></div></div>
+    ${ks.length || past.n ? rpTbl(["Eventmaand", "Events", "Offertebedrag", "Vooruit ontvangen", "Nog te ontvangen"], ks.map(k => line(rpMonthLabel(k), g.get(k))).join("") + (past.n ? line("Eerdere events, nog niet alles ontvangen", past) : ""), line("Totaal", { n: F.n + past.n, tot: F.tot + past.tot, rec: F.rec + past.rec, todo: F.todo + past.todo }, "sx-tot")) : `<p class="empty">Geen geaccepteerde offertes.</p>`}`;
+  const csv = [["Peildatum", peil], [], ["Eventmaand", "Events", "Offertebedrag", "Vooruit ontvangen", "Nog te ontvangen"], ...ks.map(k => { const a = g.get(k); return [rpMonthLabel(k), a.n, rpNum(a.tot), rpNum(a.rec), rpNum(a.todo)]; }), ...(past.n ? [["Eerdere events", past.n, rpNum(past.tot), rpNum(past.rec), rpNum(past.todo)]] : [])];
+  return { html, csv, file: "vooruit-ontvangen-" + peil };
+}
+
+/* Jaarkeuze voor arrangementen, event count en omzet bedrijven */
+function rpYearSel(years, all) {
+  const y = S.rpYear && (S.rpYear === "alle" ? all : years.includes(S.rpYear)) ? S.rpYear : years[0];
+  return { y, html: `<select id="rp-year" style="width:auto" aria-label="Jaar">${all ? `<option value="alle" ${y === "alle" ? "selected" : ""}>Alle jaren</option>` : ""}${years.map(x => `<option ${x === y ? "selected" : ""}>${x}</option>`).join("")}</select>` };
+}
+
+/* Arrangementen: omzet, gasten en aantal per arrangement per jaar */
+function rpArr() {
+  const won = rpWon(), ys = rpYearSel(rpYears(won.map(finEventDate)), true), inY = q => ys.y === "alle" || (finEventDate(q) || "").startsWith(ys.y);
+  const g = new Map();
+  for (const q of won.filter(inY)) {
+    const id = q.arrangementId || rpRes(q)?.arrangementId || "", name = id ? (arr(id)?.name || q.arrangementName || "Verwijderd arrangement") : "Zonder arrangement";
+    const k = id || "-", a = g.get(k) || { name, n: 0, gasten: 0, incl: 0, excl: 0 }, t = totals(q.lines);
+    a.n++; a.gasten += rpGuests(q); a.incl += t.incl; a.excl += t.excl; g.set(k, a);
+  }
+  const xs = [...g.values()].sort((a, b) => b.incl - a.incl), T = xs.reduce((s, a) => ({ n: s.n + a.n, gasten: s.gasten + a.gasten, incl: s.incl + a.incl, excl: s.excl + a.excl }), { n: 0, gasten: 0, incl: 0, excl: 0 });
+  const line = (a, cls = "") => `<tr class="${cls}"><td>${esc(a.name)}</td><td class="r">${a.n}</td><td class="r">${a.gasten}</td><td class="r">${a.n ? Math.round(a.gasten / a.n) : "–"}</td>${rpCell(a.incl)}${rpCell(a.excl)}${rpCell(a.gasten ? a.incl / a.gasten : 0)}</tr>`;
+  const html = `<div class="row">${ys.html}<span class="small muted">Geaccepteerde offertes, op eventdatum. Gasten = het grootste aantal volwassenen plus kinderen van de gelegenheden.</span></div>
+    ${xs.length ? rpTbl(["Arrangement", "Events", "Gasten", "Gem. gasten", "Omzet incl.", "Omzet excl.", "Per gast incl."], xs.map(a => line(a)).join(""), line({ name: "Totaal", ...T }, "sx-tot")) : `<p class="empty">Geen geaccepteerde offertes in ${ys.y === "alle" ? "deze periode" : ys.y}.</p>`}`;
+  const csv = [["Jaar", ys.y], [], ["Arrangement", "Events", "Gasten", "Gemiddeld gasten", "Omzet incl. btw", "Omzet excl. btw", "Per gast incl. btw"], ...xs.map(a => [a.name, a.n, a.gasten, a.n ? Math.round(a.gasten / a.n) : "", rpNum(a.incl), rpNum(a.excl), a.gasten ? rpNum(a.incl / a.gasten) : ""]), ["Totaal", T.n, T.gasten, T.n ? Math.round(T.gasten / T.n) : "", rpNum(T.incl), rpNum(T.excl), T.gasten ? rpNum(T.incl / T.gasten) : ""]];
+  return { html, csv, file: "arrangementen-" + ys.y };
+}
+
+/* Event count: per jaar per soort feest het aantal offertes, aanvragen, opties, events en annuleringen */
+function rpCount() {
+  const qs = [...S.quotes.values()], rs = [...S.reservations.values()];
+  const qd = q => statQuoteDate(q), ys = rpYearSel(rpYears([...qs.map(qd), ...rs.map(r => r.date)]), false);
+  const g = new Map(), get = k => g.get(k) || (g.set(k, { off: 0, acc: 0, afg: 0, aanv: 0, opt: 0, ev: 0, ann: 0 }), g.get(k));
+  for (const q of qs) if ((qd(q) || "").startsWith(ys.y)) { const a = get(rpTypeId(q)); a.off++; if (q.status === "geaccepteerd") a.acc++; if (q.status === "afgewezen") a.afg++; }
+  for (const r of rs) if ((r.date || "").startsWith(ys.y)) { const a = get(r.eventType || ""); if (r.status === "aanvraag") a.aanv++; else if (r.status === "optie") a.opt++; else if (r.status === "bevestigd" || r.status === "afgerond") a.ev++; else if (r.status === "geannuleerd") a.ann++; }
+  const ks = [...g.keys()].sort((a, b) => rpTypeName(a).localeCompare(rpTypeName(b), "nl")), T = { off: 0, acc: 0, afg: 0, aanv: 0, opt: 0, ev: 0, ann: 0 };
+  for (const a of g.values()) for (const k in T) T[k] += a[k];
+  const cols = ["off", "acc", "afg", "aanv", "opt", "ev", "ann"], head = ["Soort feest", "Offertes", "Geaccepteerd", "Afgewezen", "Aanvragen", "In optie", "Events", "Geannuleerd"];
+  const line = (l, a, cls = "") => `<tr class="${cls}"><td>${esc(l)}</td>${cols.map(c => `<td class="r">${a[c] || "–"}</td>`).join("")}</tr>`;
+  const html = `<div class="row">${ys.html}<span class="small muted">Op eventdatum (offertes zonder eventdatum op offertedatum). Events = bevestigd of afgerond. Verwijderde offertes en reserveringen worden niet bewaard en tellen niet mee.</span></div>
+    ${ks.length ? rpTbl(head, ks.map(k => line(rpTypeName(k), g.get(k))).join(""), line("Totaal", T, "sx-tot")) : `<p class="empty">Niets in ${ys.y}.</p>`}`;
+  const csv = [["Jaar", ys.y], [], head, ...ks.map(k => [rpTypeName(k), ...cols.map(c => g.get(k)[c])]), ["Totaal", ...cols.map(c => T[c])]];
+  return { html, csv, file: "event-count-" + ys.y };
+}
+
+/* Omzet bedrijven: per bedrijf (of zakelijke klant) per maand */
+function rpBedrijven() {
+  const won = rpWon(), ys = rpYearSel(rpYears(won.map(finEventDate)), false), g = new Map();
+  for (const q of won) {
+    const ev = finEventDate(q); if (!ev || !ev.startsWith(ys.y)) continue;
+    const c = rpCust(q); if (!rpZak(c)) continue;
+    const co = c.companyId && S.companies && S.companies.get(c.companyId), k = co ? "co:" + co.id : "c:" + c.id;
+    const a = g.get(k) || { name: co ? co.name || "(bedrijf zonder naam)" : c.name || q.customer || "", m: Array(12).fill(0), tot: 0, n: 0 };
+    const v = totals(q.lines).incl; a.m[+ev.slice(5, 7) - 1] += v; a.tot += v; a.n++; g.set(k, a);
+  }
+  const xs = [...g.values()].sort((a, b) => b.tot - a.tot), M = Array(12).fill(0).map((_, i) => xs.reduce((s, a) => s + a.m[i], 0)), tot = xs.reduce((s, a) => s + a.tot, 0);
+  const money = v => v ? `<td class="r" style="white-space:nowrap">${eur(v).replace(/,00$/, "")}</td>` : `<td class="r muted">–</td>`;
+  const html = `<div class="row">${ys.html}<span class="small muted">Geaccepteerde offertes van zakelijke klanten, incl. btw, op eventdatum. Contactpersonen van één bedrijf tellen samen.</span></div>
+    ${xs.length ? rpTbl(["Bedrijf", ...MONTHS_SHORT, "Totaal"], xs.map(a => `<tr><td>${esc(a.name)}<br><span class="muted small">${a.n} event${a.n === 1 ? "" : "s"}</span></td>${a.m.map(money).join("")}${rpCell(a.tot)}</tr>`).join(""), `<tr class="sx-tot"><td>Totaal</td>${M.map(money).join("")}${rpCell(tot)}</tr>`) : `<p class="empty">Geen zakelijke omzet in ${ys.y}.</p>`}`;
+  const csv = [["Jaar", ys.y], [], ["Bedrijf", "Events", ...MONTHS_SHORT, "Totaal"], ...xs.map(a => [a.name, a.n, ...a.m.map(rpNum), rpNum(a.tot)]), ["Totaal", xs.reduce((s, a) => s + a.n, 0), ...M.map(rpNum), rpNum(tot)]];
+  return { html, csv, file: "omzet-bedrijven-" + ys.y };
+}
+
+const RP_FN = { open: rpOpen, facturen: rpFacturen, aanbet: rpAanbet, vooruit: rpVooruit, arr: rpArr, count: rpCount, bedrijven: rpBedrijven };
+const rpCur = () => RP_FN[S.rapport] ? S.rapport : "open";
+function vRapporten() {
+  const k = rpCur(), rep = RP_FN[k]();
+  return `<section class="stack">
+    <div class="row spread"><h2>Rapporten</h2><div class="row"><select id="rp-sel" style="width:auto" aria-label="Rapport">${RP_LIST.map(([v, l]) => `<option value="${v}" ${v === k ? "selected" : ""}>${esc(l)}</option>`).join("")}</select><button class="btn" id="rp-csv">Downloaden</button></div></div>
+    ${rep.html}
+  </section>`;
+}
+after.rapporten = () => {
+  $("#rp-sel").onchange = e => { S.rapport = e.target.value; render(); };
+  const y = $("#rp-year"); if (y) y.onchange = e => { S.rpYear = e.target.value; render(); };
+  const pl = $("#rp-peil"); if (pl) pl.onchange = e => { S.rpPeil = e.target.value || todayISO; render(); };
+  document.querySelectorAll("[data-rpinv]").forEach(b => b.onclick = () => { S.rpInv = b.dataset.rpinv; render(); });
+  document.querySelectorAll("[data-rpq]").forEach(el => el.onclick = () => { const q = S.quotes.get(el.dataset.rpq), r = rpRes(q); if (r) openRes(r); else if (q) { S.quoteOpen = q.id; setView("off"); } });
+  document.querySelectorAll("[data-rpinvopen]").forEach(el => el.onclick = () => { if (typeof finOpenInvoice === "function") finOpenInvoice(el.dataset.rpinvopen); });
+  $("#rp-csv").onclick = () => {
+    const rep = RP_FN[rpCur()](), cell = c => /[;"\n]/.test(String(c ?? "")) ? `"${String(c).replace(/"/g, '""')}"` : String(c ?? "");
+    saveFile(`rapport-${rep.file}.csv`, "﻿" + rep.csv.map(r => r.map(cell).join(";")).join("\r\n"), "text/csv");
+  };
+};
+VIEWS.rapporten = () => vRapporten();
+(() => {
+  const st = MENU.find(m => m.id === "stat"); if (!st || st.items.some(i => i.v === "rapporten")) return;
+  const short = { open: "Openstaande bedragen", facturen: "Openstaande facturen", aanbet: "Aanbetalingen", vooruit: "Vooruit ontvangen", arr: "Arrangementen", count: "Event count", bedrijven: "Omzet bedrijven" };
+  st.items.push({ h: "Rapporten" }, ...RP_LIST.map(([v]) => ({ l: short[v], v: "rapporten", set: { rapport: v } })));
+})();
 boot();
 })();
 </script>
