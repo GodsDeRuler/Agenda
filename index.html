@@ -1167,7 +1167,7 @@ function notifRows(f) {
     { l: "Nieuwe aanvragen", n: rs.filter(r => r.status === "aanvraag" && mgrMatch(r.manager, f)).length, go: { v: "res", set: { resFilter: "aanvragen", resMgr: f || "" } } },
     { l: "Opties die binnen 3 dagen verlopen", n: rs.filter(r => r.status === "optie" && r.optieTot && r.optieTot <= soon && mgrMatch(r.manager, f)).length, go: { v: "res", set: { resFilter: "opties", resMgr: f || "" } } },
     { l: "Events komende 14 dagen", n: rs.filter(r => r.date >= todayISO && r.date <= in14 && mgrMatch(r.manager, f)).length, go: { v: "res", set: { resFilter: "komend", resMgr: f || "" } } },
-    { l: "Events zonder accountmanager", n: f && f !== "__none" ? 0 : rs.filter(r => r.date >= todayISO && !r.manager).length, go: { v: "res", set: { resFilter: "komend", resMgr: "__none" } } },
+    { l: "Events zonder accountmanager", n: f && f !== "__none" ? 0 : rs.filter(r => r.date >= todayISO && !r.manager && r.soort !== "team").length, go: { v: "res", set: { resFilter: "komend", resMgr: "__none" } } },
     { l: "To-do's vandaag en achterstallig", n: allTasks().filter(t => taskOpen(t) && t.due && t.due <= todayISO && mgrMatch(t.manager || t.r.manager, f)).length, go: { v: "todo", set: { todoFilter: "open", todoMgr: f || "" } } },
   ];
   if (typeof finRows === "function") rows.push({ l: "Betalingen te laat", n: finRows().filter(x => x.late && mgrMatch(mgrOfQuote(x.q), f)).length, go: { v: "betalingen", set: { payFilter: "late" } } });
@@ -3059,6 +3059,7 @@ function openBlock(b0) {
       <label class="check small" style="align-self:end"><input type="checkbox" id="bf-weekly" ${b.weekly ? "checked" : ""} ${ro}> Elke week herhalen</label>
       <label class="f"><span>Herhalen tot en met</span><input type="date" id="bf-until" value="${esc(b.until)}" ${ro}></label>
     </div>
+    <label class="check small"><input type="checkbox" id="bf-extern" ${blockExternOnly(b) ? "checked" : ""} ${ro}> Alleen voor externe verhuur: teams mogen hier wel overleggen</label>
     <div class="row spread">
       <span class="row">${!isNew ? `<button type="button" class="btn danger" id="bf-del" ${ro}>Blokkade opheffen</button>` : ""}</span>
       <button type="submit" class="btn primary" ${ro}>Opslaan</button>
@@ -3070,7 +3071,7 @@ function openBlock(b0) {
   $("#bf-allDay").onchange = e => { $("#bf-start").disabled = $("#bf-end").disabled = e.target.checked; };
   $("#blk-form").onsubmit = async e => {
     e.preventDefault();
-    const body = { roomId: $("#bf-room").value, date: $("#bf-date").value, start: $("#bf-start").value, end: $("#bf-end").value, allDay: $("#bf-allDay").checked, reason: $("#bf-reason").value.trim(), weekly: $("#bf-weekly").checked, until: $("#bf-until").value, updatedAt: new Date().toISOString() };
+    const body = { roomId: $("#bf-room").value, date: $("#bf-date").value, start: $("#bf-start").value, end: $("#bf-end").value, allDay: $("#bf-allDay").checked, reason: $("#bf-reason").value.trim(), weekly: $("#bf-weekly").checked, until: $("#bf-until").value, alleenExtern: $("#bf-extern").checked, updatedAt: new Date().toISOString() };
     if (!body.date) { toast("Kies een datum"); return; }
     if (!body.allDay && (!body.start || !body.end)) { toast("Vul een begin- en eindtijd in, of kies hele dag"); return; }
     const clash = [...S.reservations.values()].filter(r => r.status !== "geannuleerd" && r.date >= body.date && (r.date === body.date || (body.weekly && (!body.until || r.date <= body.until) && parseISO(r.date).getDay() === parseISO(body.date).getDay())))
@@ -5202,6 +5203,217 @@ DOSSIER_TABS.vragen = {
   after: (r, upd) => { const get = vrResWire(r), b = $("#dv-save"); if (b) b.onclick = () => upd(get(), "Antwoorden opgeslagen"); },
 };
 
+/* ---------- Teamreserveringen: teams reserveren een ruimte voor overleg of een kleine vergadering ---------- */
+/* Plakken in horeca-agenda.html binnen de IIFE, vóór de regel `boot();` (ná de dagindelingsmodule). Zie teamreserveringen-integratie.md.
+   Een teamreservering is een gewone reservering met soort "team": ze staat in de dag- en maandagenda, telt mee in de
+   conflictcontrole van andere reserveringen en andersom. Teams mogen ook in blokkades die alleen voor externe verhuur
+   gelden (de weekendblokkades), maar nooit dubbel met een reservering of een gewone blokkade. */
+const TEAMS_DEFAULT = /*TEAMS*/[{"kort":"D01","naam":"D01","groep":"Dames","categorie":"Senioren","gepubliceerd":true},{"kort":"D02","naam":"D02","groep":"Dames","categorie":"Senioren","gepubliceerd":true},{"kort":"D03","naam":"D03","groep":"Dames","categorie":"Senioren","gepubliceerd":true},{"kort":"D04","naam":"D04","groep":"Dames","categorie":"Senioren","gepubliceerd":true},{"kort":"D05","naam":"D05","groep":"Dames","categorie":"Senioren","gepubliceerd":true},{"kort":"D06","naam":"D06","groep":"Dames","categorie":"Senioren","gepubliceerd":true},{"kort":"D07","naam":"D07","groep":"Dames","categorie":"Senioren","gepubliceerd":true},{"kort":"D08","naam":"D08","groep":"Dames","categorie":"Senioren","gepubliceerd":true},{"kort":"DDW1","naam":"DDW1","groep":"Dames","categorie":"Dames doordeweeks","gepubliceerd":true},{"kort":"DDW2","naam":"DDW2","groep":"Dames","categorie":"Dames doordeweeks","gepubliceerd":true},{"kort":"DDW3","naam":"DDW3","groep":"Dames","categorie":"Dames doordeweeks","gepubliceerd":true},{"kort":"DDW4","naam":"DDW4","groep":"Dames","categorie":"Dames doordeweeks","gepubliceerd":true},{"kort":"DO25-1","naam":"DO25-01","groep":"Dames","categorie":"Senioren","gepubliceerd":true},{"kort":"DO25-2","naam":"DO25-02","groep":"Dames","categorie":"Senioren","gepubliceerd":true},{"kort":"DO25-3","naam":"DO25-03","groep":"Dames","categorie":"Senioren","gepubliceerd":true},{"kort":"DO25-4","naam":"DO25-04","groep":"Dames","categorie":"Senioren","gepubliceerd":true},{"kort":"DO25-5","naam":"DO25-05","groep":"Dames","categorie":"Senioren","gepubliceerd":true},{"kort":"DO25-6","naam":"DO25-06","groep":"Dames","categorie":"Senioren","gepubliceerd":true},{"kort":"DO25-7","naam":"DO25-07","groep":"Dames","categorie":"Senioren","gepubliceerd":true},{"kort":"DO25-8","naam":"DO25-08","groep":"Dames","categorie":"Senioren","gepubliceerd":true},{"kort":"DO25-9","naam":"DO25-09","groep":"Dames","categorie":"Senioren","gepubliceerd":true},{"kort":"DO25-10","naam":"DO25-10","groep":"Dames","categorie":"Senioren","gepubliceerd":true},{"kort":"D025-11","naam":"DO25-11","groep":"Dames","categorie":"Senioren","gepubliceerd":true},{"kort":"D025-12","naam":"DO25-12","groep":"Dames","categorie":"Senioren","gepubliceerd":true},{"kort":"D025-13","naam":"DO25-13","groep":"Dames","categorie":"Senioren","gepubliceerd":true},{"kort":"H01","naam":"H01","groep":"Heren","categorie":"Senioren","gepubliceerd":true},{"kort":"H02","naam":"H02","groep":"Heren","categorie":"Senioren","gepubliceerd":true},{"kort":"H025-1","naam":"H025-1","groep":"Heren","categorie":"Senioren","gepubliceerd":true},{"kort":"H025-2","naam":"H025-2","groep":"Heren","categorie":"Senioren","gepubliceerd":true},{"kort":"H03","naam":"H03","groep":"Heren","categorie":"Senioren","gepubliceerd":true},{"kort":"H04","naam":"H04","groep":"Heren","categorie":"Senioren","gepubliceerd":true},{"kort":"H05","naam":"H05","groep":"Heren","categorie":"Senioren","gepubliceerd":true},{"kort":"H06","naam":"H06","groep":"Heren","categorie":"Senioren","gepubliceerd":true},{"kort":"H30-1","naam":"H30-1","groep":"Heren","categorie":"Senioren","gepubliceerd":true},{"kort":"H30-2","naam":"H30-2","groep":"Heren","categorie":"Senioren","gepubliceerd":true},{"kort":"H30-3","naam":"H30-3","groep":"Heren","categorie":"Senioren","gepubliceerd":true},{"kort":"H45A Training","naam":"H45-1 Training","groep":"Heren","categorie":"Senioren","gepubliceerd":true},{"kort":"JO8-Petrol","naam":"JO8-Petrol","groep":"Jongens","categorie":"Onder 8","gepubliceerd":true},{"kort":"JO8-Zwart","naam":"JO8-Zwart","groep":"Jongens","categorie":"Onder 8","gepubliceerd":true},{"kort":"JO9-Petrol","naam":"JO9-Petrol","groep":"Jongens","categorie":"Onder 9","gepubliceerd":true},{"kort":"JO9-Zwart","naam":"JO9-Zwart","groep":"Jongens","categorie":"Onder 9","gepubliceerd":true},{"kort":"JO11-1","naam":"JO11-01","groep":"Jongens","categorie":"Onder 11","gepubliceerd":true},{"kort":"JO11-2","naam":"JO11-02","groep":"Jongens","categorie":"Onder 11","gepubliceerd":true},{"kort":"JO12-1","naam":"JO12-01","groep":"Jongens","categorie":"Onder 12","gepubliceerd":true},{"kort":"JO14-1","naam":"JO14-01","groep":"Jongens","categorie":"Onder 14","gepubliceerd":true},{"kort":"JO14-2","naam":"JO14-02","groep":"Jongens","categorie":"Onder 14","gepubliceerd":true},{"kort":"JO16-1","naam":"JO16-01","groep":"Jongens","categorie":"Onder 16","gepubliceerd":true},{"kort":"JO16-2","naam":"JO16-02","groep":"Jongens","categorie":"Onder 16","gepubliceerd":true},{"kort":"JO18-1","naam":"JO18-01","groep":"Jongens","categorie":"Onder 18","gepubliceerd":true},{"kort":"JO18-2","naam":"JO18-02","groep":"Jongens","categorie":"Onder 18","gepubliceerd":true},{"kort":"JO18-3","naam":"JO18-03","groep":"Jongens","categorie":"Onder 18","gepubliceerd":true},{"kort":"MO8-Lila","naam":"MO8-Lila","groep":"Meisjes","categorie":"Onder 8","gepubliceerd":true},{"kort":"MO8-Paars","naam":"MO8-Paars","groep":"Meisjes","categorie":"Onder 8","gepubliceerd":true},{"kort":"MO8-Rood","naam":"MO8-Rood","groep":"Meisjes","categorie":"Onder 8","gepubliceerd":true},{"kort":"MO8-Roze","naam":"MO8-Roze","groep":"Meisjes","categorie":"Onder 8","gepubliceerd":true},{"kort":"MO8-Turquoise","naam":"MO8-Turquoise","groep":"Meisjes","categorie":"Onder 8","gepubliceerd":true},{"kort":"MO8-Wit","naam":"MO8-Wit","groep":"Meisjes","categorie":"Onder 8","gepubliceerd":true},{"kort":"MO9-Lila","naam":"MO9-Lila","groep":"Meisjes","categorie":"Onder 9","gepubliceerd":true},{"kort":"MO9-Paars","naam":"MO9-Paars","groep":"Meisjes","categorie":"Onder 9","gepubliceerd":true},{"kort":"MO9-Rood","naam":"MO9-Rood","groep":"Meisjes","categorie":"Onder 9","gepubliceerd":true},{"kort":"MO9-Roze","naam":"MO9-Roze","groep":"Meisjes","categorie":"Onder 9","gepubliceerd":true},{"kort":"MO9-Turquoise","naam":"MO9-Turquoise","groep":"Meisjes","categorie":"Onder 9","gepubliceerd":true},{"kort":"MO10-Lila","naam":"MO10-Lila","groep":"Meisjes","categorie":"Onder 10","gepubliceerd":true},{"kort":"MO10-Paars","naam":"MO10-Paars","groep":"Meisjes","categorie":"Onder 10","gepubliceerd":true},{"kort":"MO10-Rood","naam":"MO10-Rood","groep":"Meisjes","categorie":"Onder 10","gepubliceerd":true},{"kort":"MO11-1","naam":"MO11-01","groep":"Meisjes","categorie":"Onder 11","gepubliceerd":true},{"kort":"MO11-2","naam":"MO11-02","groep":"Meisjes","categorie":"Onder 11","gepubliceerd":true},{"kort":"MO11-3","naam":"MO11-03","groep":"Meisjes","categorie":"Onder 11","gepubliceerd":true},{"kort":"MO11-4","naam":"MO11-04","groep":"Meisjes","categorie":"Onder 11","gepubliceerd":true},{"kort":"MO12-1","naam":"MO12-01","groep":"Meisjes","categorie":"Onder 12","gepubliceerd":true},{"kort":"MO12-2","naam":"MO12-02","groep":"Meisjes","categorie":"Onder 12","gepubliceerd":true},{"kort":"MO14-1","naam":"MO14-01","groep":"Meisjes","categorie":"Onder 14","gepubliceerd":true},{"kort":"MO14-2","naam":"MO14-02","groep":"Meisjes","categorie":"Onder 14","gepubliceerd":true},{"kort":"MO14-3","naam":"MO14-03","groep":"Meisjes","categorie":"Onder 14","gepubliceerd":true},{"kort":"MO14-4","naam":"MO14-04","groep":"Meisjes","categorie":"Onder 14","gepubliceerd":true},{"kort":"MO14-5","naam":"MO14-05","groep":"Meisjes","categorie":"Onder 14","gepubliceerd":true},{"kort":"MO14-6","naam":"MO14-06","groep":"Meisjes","categorie":"Onder 14","gepubliceerd":true},{"kort":"MO14-7","naam":"MO14-07","groep":"Meisjes","categorie":"Onder 14","gepubliceerd":true},{"kort":"MO16-1","naam":"MO16-01","groep":"Meisjes","categorie":"Onder 16","gepubliceerd":true},{"kort":"MO16-2","naam":"MO16-02","groep":"Meisjes","categorie":"Onder 16","gepubliceerd":true},{"kort":"MO16-3","naam":"MO16-03","groep":"Meisjes","categorie":"Onder 16","gepubliceerd":true},{"kort":"MO16-4","naam":"MO16-04","groep":"Meisjes","categorie":"Onder 16","gepubliceerd":true},{"kort":"MO16-5","naam":"MO16-05","groep":"Meisjes","categorie":"Onder 16","gepubliceerd":true},{"kort":"MO16-6","naam":"MO16-06","groep":"Meisjes","categorie":"Onder 16","gepubliceerd":true},{"kort":"MO16-7","naam":"MO16-07","groep":"Meisjes","categorie":"Onder 16","gepubliceerd":true},{"kort":"MO16-8","naam":"MO16-08","groep":"Meisjes","categorie":"Onder 16","gepubliceerd":true},{"kort":"MO18-1","naam":"MO18-01","groep":"Meisjes","categorie":"Onder 18","gepubliceerd":true},{"kort":"MO18-2","naam":"MO18-02","groep":"Meisjes","categorie":"Onder 18","gepubliceerd":true},{"kort":"MO18-3","naam":"MO18-03","groep":"Meisjes","categorie":"Onder 18","gepubliceerd":true},{"kort":"MO18-4","naam":"MO18-04","groep":"Meisjes","categorie":"Onder 18","gepubliceerd":true},{"kort":"MO18-5","naam":"MO18-05","groep":"Meisjes","categorie":"Onder 18","gepubliceerd":true},{"kort":"MO18-6","naam":"MO18-06","groep":"Meisjes","categorie":"Onder 18","gepubliceerd":true},{"kort":"KT JJ","naam":"Keeperstraining jongste jeugd","groep":"Trainingsgroepen en overig","categorie":"","gepubliceerd":true},{"kort":"Keeper011,12,14","naam":"Keeperstraining O11, O12, O14","groep":"Trainingsgroepen en overig","categorie":"","gepubliceerd":true},{"kort":"Keeper016,18","naam":"Keeperstraining O16, O18","groep":"Trainingsgroepen en overig","categorie":"","gepubliceerd":true},{"kort":"KT Jeugd","naam":"Keepertraining Jeugd","groep":"Trainingsgroepen en overig","categorie":"","gepubliceerd":true},{"kort":"Munkey","naam":"Munkey","groep":"Trainingsgroepen en overig","categorie":"Onder 6","gepubliceerd":true},{"kort":"Recreanten","naam":"Recreanten - training","groep":"Trainingsgroepen en overig","categorie":"","gepubliceerd":true},{"kort":"Recreanten wed.","naam":"Recreanten - wedstrijd","groep":"Trainingsgroepen en overig","categorie":"Senioren","gepubliceerd":true},{"kort":"Training Jeugd","naam":"Training jeugd","groep":"Trainingsgroepen en overig","categorie":"","gepubliceerd":true},{"kort":"Training JJ","naam":"Training JJ","groep":"Trainingsgroepen en overig","categorie":"","gepubliceerd":true},{"kort":"Walking","naam":"Walking sports","groep":"Trainingsgroepen en overig","categorie":"","gepubliceerd":true},{"kort":"D01GC","naam":"D01 Gold Cup","groep":"Overig","categorie":"Senioren","gepubliceerd":false},{"kort":"H01GC","naam":"H01 Gold Cup","groep":"Overig","categorie":"Senioren","gepubliceerd":false},{"kort":"HoT100","naam":"HoT100","groep":"Overig","categorie":"","gepubliceerd":false},{"kort":"JdB","naam":"Jeu de Boules","groep":"Overig","categorie":"","gepubliceerd":false},{"kort":"Niet Spelend","naam":"Niet spelend","groep":"Overig","categorie":"","gepubliceerd":false},{"kort":"Onfire","naam":"Onfire trainingen","groep":"Overig","categorie":"","gepubliceerd":false},{"kort":"Reservering","naam":"Reservering","groep":"Overig","categorie":"","gepubliceerd":false},{"kort":"Sportklas","naam":"Sportklas","groep":"Overig","categorie":"","gepubliceerd":false},{"kort":"Sportklas Zaal","naam":"Sportklas Zaal","groep":"Overig","categorie":"","gepubliceerd":false},{"kort":"Taakie","naam":"Taakie testpanel","groep":"Overig","categorie":"","gepubliceerd":false},{"kort":"Training senioren","naam":"Training senioren","groep":"Overig","categorie":"Senioren","gepubliceerd":false},{"kort":"Trainingsleden","naam":"Trainingsleden","groep":"Overig","categorie":"Senioren","gepubliceerd":false},{"kort":"ZD1","naam":"ZD1","groep":"Overig","categorie":"Senioren","gepubliceerd":false},{"kort":"ZDO25-1","naam":"ZDO25-1","groep":"Overig","categorie":"Senioren","gepubliceerd":false},{"kort":"ZDO25-10","naam":"ZDO25-10","groep":"Overig","categorie":"Senioren","gepubliceerd":false},{"kort":"ZDO25-11","naam":"ZDO25-11","groep":"Overig","categorie":"Senioren","gepubliceerd":false},{"kort":"ZDO25-2","naam":"ZDO25-2","groep":"Overig","categorie":"Senioren","gepubliceerd":false}]/*/TEAMS*/;
+const TEAM_ROOMS_DEFAULT = ["aquarium", "oude-warande", "business-lounge"];
+const TEAM_EXTERN_BLOCKS = ["weekend-zaterdag", "weekend-zondag"]; // gelden zonder vinkje alleen voor externe verhuur
+const TEAM_GROUPS = ["Dames", "Heren", "Jongens", "Meisjes", "Trainingsgroepen en overig", "Overig"];
+const teamsAll = () => Array.isArray(S.settings.teams) && S.settings.teams.length ? S.settings.teams : TEAMS_DEFAULT;
+const teamsPub = () => teamsAll().filter(t => t.gepubliceerd);
+const teamByKort = k => teamsAll().find(t => t.kort === k);
+const teamRoomIds = () => Array.isArray(S.settings.teamRooms) ? S.settings.teamRooms : TEAM_ROOMS_DEFAULT;
+const isTeamRes = r => !!r && r.soort === "team";
+const blockExternOnly = b => !!b && (b.alleenExtern ?? TEAM_EXTERN_BLOCKS.includes(b.id));
+const teamOptions = (sel, extra) => {
+  const pub = teamsPub().slice(); if (extra && !pub.some(t => t.kort === extra.kort)) pub.push(extra);
+  const groups = [...new Set([...TEAM_GROUPS, ...pub.map(t => t.groep || "Overig")])];
+  return groups.map(g => { const ts = pub.filter(t => (t.groep || "Overig") === g); return ts.length ? `<optgroup label="${esc(g)}">${ts.map(t => `<option value="${esc(t.kort)}" ${t.kort === sel ? "selected" : ""}>${esc(t.naam || t.kort)}</option>`).join("")}</optgroup>` : ""; }).join("");
+};
+
+// Conflictcontrole: voor een teamreservering tellen blokkades voor externe verhuur niet mee.
+const _teamConflictsBase = conflicts;
+conflicts = function (r) {
+  if (!isTeamRes(r)) return _teamConflictsBase(r);
+  const all = S.blocks;
+  S.blocks = new Map([...all].filter(([, b]) => !blockExternOnly(b)));
+  try { return _teamConflictsBase(r); } finally { S.blocks = all; }
+};
+// Een teamreservering opent in het korte teamformulier in plaats van het feestformulier.
+const _teamOpenResBase = openRes;
+openRes = function (r0) { return isTeamRes(r0) ? openTeamRes(r0) : _teamOpenResBase(r0); };
+if (typeof openResForm === "function") { const _teamOpenResForm = openResForm; openResForm = function (r0) { return isTeamRes(r0) ? openTeamRes(r0) : _teamOpenResForm(r0); }; }
+
+/* Formulier: teamoverleg reserveren of bewerken */
+function openTeamRes(r0) {
+  const r = { status: "bevestigd", start: "20:00", end: "21:00", persons: "", date: S.day || todayISO, ...r0 };
+  const isNew = !r.id, ro = S.readOnly ? "disabled" : "";
+  const cur = r.team && teamByKort(r.team);
+  const extra = r.team && !teamsPub().some(t => t.kort === r.team) ? (cur || { kort: r.team, naam: r.teamNaam || r.team, groep: "Overig" }) : null;
+  const bySize = list => [...list].sort((a, b) => (teamRoomIds().includes(b.id) - teamRoomIds().includes(a.id)) || ((+a.capacity || 9999) - (+b.capacity || 9999)));
+  if (!r.roomId) r.roomId = (bySize(S.settings.rooms)[0] || {}).id || "";
+  $("#modal-root").innerHTML = `
+  <div class="scrim" id="scrim"><form class="modal" id="tr-form" aria-label="Teamoverleg">
+    <div class="row spread"><h2>${isNew ? "Teamoverleg reserveren" : "Teamoverleg bewerken"}</h2><button type="button" class="btn ghost" id="tr-x" aria-label="Sluiten">✕</button></div>
+    <p class="small muted" style="margin:0">Voor teamoverleg of een kleine vergadering, de hele week. In de weekendblokkade voor externe verhuur mag een team wel, maar nooit tegelijk met een andere reservering.</p>
+    <div class="fields">
+      <label class="f"><span>Team</span><select id="tf-team" required ${ro}><option value="">Kies een team…</option>${teamOptions(r.team, extra)}</select></label>
+      <label class="f"><span>Datum</span><input type="date" id="tf-date" required value="${esc(r.date)}" ${ro}></label>
+      <label class="f"><span>Van</span><input type="time" id="tf-start" required value="${esc(r.start)}" ${ro}></label>
+      <label class="f"><span>Tot</span><input type="time" id="tf-end" required value="${esc(r.end)}" ${ro}></label>
+    </div>
+    <div class="stack" style="gap:6px"><b>Ruimte</b><div id="tf-rooms" class="stack" style="gap:6px"></div></div>
+    <div class="fields">
+      <label class="f"><span>Aantal personen</span><input id="tf-persons" type="number" min="1" inputmode="numeric" value="${esc(r.persons)}" ${ro}></label>
+      <label class="f"><span>Contactpersoon</span><input id="tf-contact" value="${esc(r.contact)}" placeholder="bijv. trainer of teammanager" ${ro}></label>
+      <label class="f"><span>Telefoon</span><input id="tf-phone" type="tel" value="${esc(r.phone)}" ${ro}></label>
+      <label class="f"><span>Status</span><select id="tf-status" ${ro}>${["bevestigd", "geannuleerd"].map(s => `<option ${s === r.status ? "selected" : ""}>${s}</option>`).join("")}</select></label>
+    </div>
+    <label class="f"><span>Onderwerp of opmerking</span><textarea id="tf-notes" rows="2" placeholder="bijv. seizoensevaluatie, koffie graag klaarzetten" ${ro}>${esc(r.notes)}</textarea></label>
+    <div id="tf-warn" class="stack"></div>
+    <div class="row spread">
+      <div class="row">${!isNew ? `<button type="button" class="btn danger" id="tf-del" ${ro}>Verwijderen</button><span id="tf-delconfirm" hidden class="row"><span class="small">Zeker weten?</span><button type="button" class="btn danger" id="tf-del2">Ja, verwijder</button></span>` : ""}</div>
+      <button type="submit" class="btn bar" ${ro}>Opslaan</button>
+    </div>
+  </form></div>`;
+  document.body.style.overflow = "hidden";
+  let roomId = r.roomId, forced = false;
+  const read = () => {
+    const t = teamByKort($("#tf-team").value) || extra;
+    return { ...r, soort: "team", eventType: "teamoverleg", team: $("#tf-team").value, teamNaam: t ? (t.naam || t.kort) : "",
+      customer: t ? "Team " + (t.naam || t.kort) : "", date: $("#tf-date").value, start: $("#tf-start").value, end: $("#tf-end").value, roomId,
+      persons: $("#tf-persons").value ? +$("#tf-persons").value : "", contact: $("#tf-contact").value.trim(), phone: $("#tf-phone").value.trim(),
+      status: $("#tf-status").value, notes: $("#tf-notes").value.trim(), tasks: r.tasks || [], program: r.program || [] };
+  };
+  const drawRooms = () => {
+    const d = read(), mine = teamRoomIds(), list = bySize(S.settings.rooms);
+    $("#tf-rooms").innerHTML = list.map(x => {
+      const c = d.date && d.start && d.end ? conflicts({ ...d, roomId: x.id }) : { hard: [] };
+      const busy = c.hard.length, other = !mine.includes(x.id);
+      return `<label class="check" style="gap:10px;${busy ? "opacity:.6" : ""}"><input type="radio" name="tf-room" value="${esc(x.id)}" ${x.id === roomId ? "checked" : ""} ${ro}>
+        <span><span class="dot" style="background:${esc(x.color || "var(--bar)")}"></span> <b>${esc(x.name)}</b>${x.capacity ? ` <span class="muted small">max ${esc(x.capacity)}</span>` : ""}${other ? ` <span class="muted small">(normaal niet voor teams)</span>` : ""}
+        ${busy ? `<span class="chip c3">bezet</span>` : `<span class="chip c1">vrij</span>`}</span></label>`;
+    }).join("") || `<p class="small muted" style="margin:0">Voeg eerst ruimtes toe onder Instellingen › Zalen.</p>`;
+    document.querySelectorAll("[name=tf-room]").forEach(el => el.onchange = () => { roomId = el.value; check(); });
+  };
+  const check = () => {
+    const d = read(), w = $("#tf-warn");
+    const s = toMin(d.start), e = toMin(d.end);
+    const own = [];
+    if (s != null && e != null && e <= s) own.push("De eindtijd ligt voor de begintijd.");
+    const c = d.roomId && d.date && s != null ? conflicts(d) : { hard: [], soft: [] };
+    w.innerHTML = own.map(x => `<div class="warnbox bad">${esc(x)}</div>`).join("") + c.hard.map(x => `<div class="warnbox bad">${esc(x)}</div>`).join("") + c.soft.map(x => `<div class="warnbox warn">${esc(x)}</div>`).join("")
+      + (c.hard.length ? `<label class="check small"><input type="checkbox" id="tf-force" ${forced ? "checked" : ""}> Toch opslaan (dubbele boeking)</label>` : "")
+      + (!own.length && !c.hard.length && !c.soft.length && d.roomId && d.date ? `<div class="warnbox ok">${esc(roomName(d.roomId))} is vrij op dit tijdstip.</div>` : "");
+    const f = $("#tf-force"); if (f) f.onchange = ev => forced = ev.target.checked;
+    return { ...c, own };
+  };
+  const both = () => { drawRooms(); check(); };
+  ["tf-date", "tf-start", "tf-end", "tf-team", "tf-persons", "tf-status"].forEach(id => $("#" + id).addEventListener("change", both));
+  both();
+  $("#tr-x").onclick = closeModal;
+  $("#scrim").addEventListener("mousedown", e => { if (e.target.id === "scrim") closeModal(); });
+  document.addEventListener("keydown", function k(e) { if (e.key === "Escape") { closeModal(); document.removeEventListener("keydown", k); } });
+  $("#tr-form").onsubmit = async e => {
+    e.preventDefault();
+    const d = read(), c = check();
+    if (!d.team || !d.date || !d.roomId || !d.start || !d.end) { toast("Kies een team, datum, tijd en ruimte"); return; }
+    if (c.own.length) { toast(c.own[0]); return; }
+    if (c.hard.length && !forced && d.status !== "geannuleerd") { toast("Deze ruimte is dan al bezet. Kies een andere tijd of ruimte"); return; }
+    const id = d.id || uid(), body = { ...d, updatedAt: new Date().toISOString() };
+    delete body.id; if (!d.id) { body.createdAt = body.updatedAt; body.bron = "agenda"; }
+    if (await write("reservations/" + id, body)) { closeModal(); toast(`${roomName(d.roomId)} gereserveerd voor ${d.customer}`); }
+  };
+  const del = $("#tf-del"); if (del) del.onclick = () => { $("#tf-delconfirm").hidden = false; del.hidden = true; };
+  const del2 = $("#tf-del2"); if (del2) del2.onclick = async () => { if (await write("reservations/" + r.id, null, "delete")) { closeModal(); toast("Teamreservering verwijderd"); } };
+}
+
+/* Overzicht: Agenda › Teamoverleg */
+const teamPageUrl = () => { try { return /^https?:/.test(location.protocol) && !/claude\.(ai|site)|claudeusercontent/.test(location.host) ? new URL("teams.html", location.href.split("#")[0]).href : ""; } catch (e) { return ""; } };
+VIEWS.teamres = () => {
+  const f = S.teamFilter || "komend";
+  let list = [...S.reservations.values()].filter(isTeamRes);
+  if (f === "komend") list = list.filter(r => r.date >= todayISO && r.status !== "geannuleerd");
+  if (f === "oud") list = list.filter(r => r.date < todayISO);
+  list.sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
+  if (f !== "komend") list.reverse();
+  const url = teamPageUrl(), on = !!String(S.settings.teamCode || "").trim();
+  return `<section class="stack">
+    <div class="row spread"><h2>Teamoverleg</h2><button class="btn bar" id="tm-new" ${S.readOnly ? "disabled" : ""}>Teamoverleg reserveren</button></div>
+    <div class="panel stack" style="gap:6px">
+      <b>Teams reserveren zelf</b>
+      <p class="small" style="margin:0">${on ? `Trainers en teammanagers reserveren via ${url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a>` : "de teampagina naast de agenda (teams.html)"} met de clubcode <b>${esc(S.settings.teamCode)}</b>. Ze zien alleen of een ruimte vrij is, niet wie er zit.` : `De teampagina staat nog uit. Stel een clubcode in onder Instellingen › Teams en teamoverleg en geef die aan de trainers en teammanagers.`}</p>
+      <p class="small muted" style="margin:0">Alleen gepubliceerde teams (${teamsPub().length}) zijn te kiezen. Ruimtes voor teams: ${esc(S.settings.rooms.filter(x => teamRoomIds().includes(x.id)).map(x => x.name).join(", ") || "geen")}.</p>
+    </div>
+    <div class="row"><select id="tm-filter" style="width:auto" aria-label="Welke reserveringen">
+      <option value="komend" ${f === "komend" ? "selected" : ""}>Komend</option><option value="oud" ${f === "oud" ? "selected" : ""}>Geweest</option><option value="alle" ${f === "alle" ? "selected" : ""}>Alles, ook afgezegd</option></select></div>
+    <div class="panel tbl-wrap">${list.length ? `<table><thead><tr><th>Datum</th><th>Tijd</th><th>Team</th><th>Ruimte</th><th class="r">Pers.</th><th>Contact</th><th>Via</th><th>Status</th></tr></thead><tbody>
+      ${list.map(r => `<tr class="click" data-res="${esc(r.id)}"><td class="num">${esc(shortDate(r.date))}</td><td class="num">${esc(r.start)}–${esc(r.end)}</td><td><b>${esc(r.teamNaam || r.team)}</b>${r.notes ? `<br><span class="muted small">${esc(r.notes)}</span>` : ""}</td><td><span class="dot" style="background:${esc(room(r.roomId)?.color || "var(--bar)")}"></span> ${esc(roomName(r.roomId))}</td><td class="r">${esc(r.persons || "")}</td><td>${esc(r.contact || "")}${r.phone ? `<br><span class="muted small">${esc(r.phone)}</span>` : ""}</td><td class="small muted">${r.bron === "teampagina" ? "teampagina" : "agenda"}</td><td>${statusChip(r.status)}</td></tr>`).join("")}
+    </tbody></table>` : `<p class="empty">Geen teamreserveringen${f === "komend" ? " gepland" : ""}.</p>`}</div>
+  </section>`;
+};
+after.teamres = () => {
+  $("#tm-new").onclick = () => openTeamRes({ date: todayISO });
+  $("#tm-filter").onchange = e => { S.teamFilter = e.target.value; render(); };
+  document.querySelectorAll("tr[data-res]").forEach(el => el.onclick = () => openTeamRes(S.reservations.get(el.dataset.res)));
+};
+
+/* Instellingen › Teams en teamoverleg: clubcode, ruimtes voor teams en de teamlijst */
+let teamDraft = null;
+VIEWS.teams = () => {
+  if (!teamDraft) teamDraft = { teamCode: S.settings.teamCode || "", teamRooms: teamRoomIds().slice(), teams: structuredClone(teamsAll()) };
+  const d = teamDraft, ro = S.readOnly ? "disabled" : "", q = (S.teamQuery || "").toLowerCase();
+  const rows = d.teams.map((t, i) => ({ t, i })).filter(({ t }) => !q || (t.naam + " " + t.kort + " " + t.groep).toLowerCase().includes(q));
+  return `<section class="stack">
+    <div class="row spread"><h2>Teams en teamoverleg</h2><div class="row"><button class="btn ghost" id="ts-reset">Wijzigingen ongedaan maken</button><button class="btn primary" id="ts-save" ${ro}>Opslaan</button></div></div>
+    <div class="panel stack">
+      <h3>Teampagina</h3>
+      <label class="f" style="max-width:320px"><span>Clubcode voor teams</span><input id="ts-code" value="${esc(d.teamCode)}" placeholder="bijv. hockey2026" autocomplete="off" ${ro}><span class="small muted" style="font-weight:400">Leeg = teams kunnen zelf niet reserveren. Wijzig de code als hij buiten de club rondgaat.</span></label>
+      <div class="stack" style="gap:4px"><b class="small">Ruimtes die teams zelf mogen kiezen</b><div class="row wrap" style="gap:4px 16px">${S.settings.rooms.map(x => `<label class="check small"><input type="checkbox" data-troom="${esc(x.id)}" ${d.teamRooms.includes(x.id) ? "checked" : ""} ${ro}> ${esc(x.name)}${x.capacity ? ` (max ${esc(x.capacity)})` : ""}</label>`).join("")}</div></div>
+    </div>
+    <div class="panel stack">
+      <div class="row spread"><h3>Teams (${d.teams.filter(t => t.gepubliceerd).length} gepubliceerd van ${d.teams.length})</h3><div class="row"><input id="ts-q" type="search" placeholder="Zoek team" value="${esc(S.teamQuery || "")}" style="max-width:220px"><button class="btn" id="ts-add" ${ro}>+ Team</button></div></div>
+      <p class="small muted" style="margin:0">Alleen teams met een vinkje bij Gepubliceerd zijn te kiezen bij een teamreservering, net als in LISA.</p>
+      <div class="tbl-wrap"><table class="lines"><thead><tr><th>Naam</th><th>Korte naam</th><th>Groep</th><th>Gepubliceerd</th><th></th></tr></thead><tbody>
+      ${rows.map(({ t, i }) => `<tr data-ti="${i}"><td><input data-k="naam" value="${esc(t.naam)}" aria-label="Naam" ${ro}></td><td style="width:150px"><input data-k="kort" value="${esc(t.kort)}" aria-label="Korte naam" ${ro}></td>
+        <td style="width:210px"><select data-k="groep" aria-label="Groep" ${ro}>${[...new Set([...TEAM_GROUPS, t.groep || "Overig"])].map(g => `<option ${g === (t.groep || "Overig") ? "selected" : ""}>${esc(g)}</option>`).join("")}</select></td>
+        <td style="width:110px;text-align:center"><input type="checkbox" data-k="gepubliceerd" ${t.gepubliceerd ? "checked" : ""} aria-label="Gepubliceerd" ${ro}></td>
+        <td style="width:40px"><button class="btn ghost" data-tdel="${i}" aria-label="Team verwijderen" ${ro}>✕</button></td></tr>`).join("")}
+      </tbody></table></div>
+    </div>
+  </section>`;
+};
+after.teams = () => {
+  const d = teamDraft;
+  const sync = () => {
+    d.teamCode = $("#ts-code").value.trim();
+    d.teamRooms = [...document.querySelectorAll("[data-troom]")].filter(x => x.checked).map(x => x.dataset.troom);
+    document.querySelectorAll("tr[data-ti]").forEach(tr => { const t = d.teams[+tr.dataset.ti]; tr.querySelectorAll("[data-k]").forEach(el => { t[el.dataset.k] = el.type === "checkbox" ? el.checked : el.value.trim(); }); });
+  };
+  document.querySelectorAll("#app input, #app select").forEach(el => el.addEventListener("change", sync));
+  $("#ts-q").oninput = e => { sync(); S.teamQuery = e.target.value; render(); const x = $("#ts-q"); x.focus(); x.setSelectionRange(x.value.length, x.value.length); };
+  $("#ts-add").onclick = () => { sync(); S.teamQuery = ""; d.teams.unshift({ kort: "", naam: "", groep: "Overig", categorie: "", gepubliceerd: true }); render(); $("tr[data-ti] input")?.focus(); };
+  document.querySelectorAll("[data-tdel]").forEach(b => b.onclick = () => { sync(); d.teams.splice(+b.dataset.tdel, 1); render(); });
+  $("#ts-reset").onclick = () => { teamDraft = null; render(); };
+  $("#ts-save").onclick = async () => {
+    sync();
+    const teams = d.teams.filter(t => t.kort || t.naam).map(t => ({ ...t, kort: t.kort || t.naam, naam: t.naam || t.kort }));
+    const dup = teams.map(t => t.kort).find((k, i, a) => a.indexOf(k) !== i);
+    if (dup) { toast(`Korte naam ${dup} staat er twee keer in`); return; }
+    if (await write("settings/main", { teams, teamRooms: d.teamRooms, teamCode: d.teamCode }, "update")) { Object.assign(S.settings, { teams, teamRooms: d.teamRooms, teamCode: d.teamCode }); teamDraft = null; toast("Teams opgeslagen"); render(); }
+  };
+};
+const _teamSetView = setView;
+setView = function (v) { if (v !== "teams") teamDraft = null; _teamSetView(v); };
+
+/* Menu: Agenda › Teamoverleg en Instellingen › Teams en teamoverleg; knop op de dag-agenda */
+(() => {
+  const ag = MENU.find(m => m.id === "agenda");
+  if (ag) { const i = ag.items.findIndex(it => it.act === "block"); ag.items.splice(i < 0 ? ag.items.length : i + 1, 0, { l: "Teamoverleg reserveren", act: "teamRes" }, { l: "Teamoverleg (overzicht)", v: "teamres" }); }
+  MENU_ACTS.teamRes = () => { setView("teamres"); openTeamRes({ date: todayISO }); };
+  const inst = MENU.find(m => m.id === "inst"), desc = inst && Object.getOwnPropertyDescriptor(inst, "items");
+  if (desc && desc.get) Object.defineProperty(inst, "items", { configurable: true, get: () => { const its = desc.get(); const i = its.findIndex(it => it.v === "inst" && it.set && it.set.instTab === "feesten"); its.splice(i < 0 ? its.length : i + 1, 0, { l: "Teams en teamoverleg", v: "teams" }); return its; } });
+  else if (inst) inst.items.push({ l: "Teams en teamoverleg", v: "teams" });
+  const _dag = after.dag;
+  after.dag = () => {
+    if (_dag) _dag();
+    const anchor = $("#d-block") || $("#d-new");
+    if (anchor && !$("#d-team")) { anchor.insertAdjacentHTML("beforebegin", `<button class="btn" id="d-team" ${S.readOnly ? "disabled" : ""}>Teamoverleg</button>`); $("#d-team").onclick = () => openTeamRes({ date: S.day }); }
+  };
+})();
 boot();
 })();
 </script>
