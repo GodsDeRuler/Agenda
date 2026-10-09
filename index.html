@@ -85,11 +85,44 @@ header.top { position: sticky; top: 0; z-index: 20; }
 .sres p { margin: 0; padding: 10px; color: var(--muted); }
 nav.tabs { display: flex; margin-left: auto; overflow-x: auto; scrollbar-width: none; }
 nav.tabs.lnav { margin-left: 0; overflow: visible; }
-nav.tabs button { background: none; border: 0; color: inherit; width: 48px; flex: none; display: grid; place-items: center; cursor: pointer; }
-nav.tabs button svg { width: 20px; height: 20px; }
-nav.tabs button:hover { background: rgba(255,255,255,.12); }
-nav.tabs button[aria-selected="true"] { background: var(--page); color: var(--orange); }
-nav.tabs button:focus-visible { outline: 2px solid #fff; outline-offset: -4px; }
+nav.tabs#tabs { overflow: visible; }
+.mi { position: relative; display: flex; }
+.mi > button { position: relative; }
+.mi > button .badge { position: absolute; top: 5px; right: 3px; background: var(--orange); color: #fff; font-size: .62rem; font-weight: 700; border-radius: 8px; padding: 0 4px; line-height: 1.45; min-width: 15px; text-align: center; }
+.mi > button[aria-selected="true"] .badge { background: var(--teal); }
+.dd { position: absolute; top: 100%; right: 0; min-width: 250px; background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-top: 3px solid var(--orange); box-shadow: 0 10px 24px rgba(0,0,0,.2); z-index: 40; padding: 6px 0; display: none; }
+.mi.open .dd { display: block; }
+.dd .dh { padding: 8px 16px 3px; font-size: .72rem; font-weight: 700; color: var(--teal); text-transform: uppercase; letter-spacing: .05em; }
+.dd button { display: flex; width: 100%; background: none; border: 0; text-align: left; padding: 7px 16px; font-size: .88rem; cursor: pointer; color: var(--fg); gap: 10px; justify-content: space-between; align-items: center; white-space: nowrap; }
+.dd button:hover, .dd button:focus-visible { background: var(--orange-soft); color: var(--orange); outline: none; }
+.dd button[aria-current="page"] { color: var(--orange); font-weight: 600; }
+.dd hr { border: 0; border-top: 1px solid var(--line); margin: 5px 0; }
+.dd .cnt { background: var(--orange); color: #fff; border-radius: 9px; font-size: .7rem; padding: 0 7px; font-weight: 600; }
+.dd .soon { font-size: .68rem; color: var(--muted); border: 1px solid var(--line); border-radius: 2px; padding: 0 5px; }
+@media (max-width: 760px) { .dd { position: fixed; top: 48px; left: 8px; right: 8px; min-width: 0; max-height: calc(100vh - 60px); overflow: auto; } }
+.ptabs { display: flex; flex-wrap: wrap; border: 1px solid var(--line); background: var(--surface); }
+.ptabs button { background: none; border: 0; border-right: 1px solid var(--line); padding: 8px 14px; font-size: .84rem; color: var(--teal); cursor: pointer; }
+.ptabs button[aria-pressed="true"] { background: var(--teal-soft); color: var(--teal-d); font-weight: 600; }
+.ptabs button .muted { margin-left: 4px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; text-align: left; cursor: pointer; display: grid; gap: 2px; }
+.tile:hover { border-color: var(--orange); }
+.tile b { font-size: 1.7rem; line-height: 1.1; color: var(--orange); font-weight: 600; }
+.tile span { font-size: .84rem; color: var(--fg); }
+.tile.teal b { color: var(--teal); }
+.tile.zero b { color: var(--muted); }
+.soonbox { border: 1px dashed var(--teal); background: var(--surface); padding: 18px; border-radius: var(--r); }
+.soonbox ul { margin: 8px 0 0; padding-left: 20px; }
+.todo-row { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: start; padding: 8px 0; border-top: 1px solid var(--line); }
+.todo-row:first-child { border-top: 0; }
+.todo-row input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--teal); }
+.todo-row.done .tt { text-decoration: line-through; color: var(--muted); }
+nav.tabs > button, .mi > button { background: none; border: 0; color: inherit; width: 48px; flex: none; display: grid; place-items: center; cursor: pointer; }
+nav.tabs svg { width: 20px; height: 20px; }
+nav.tabs > button:hover, .mi > button:hover, .mi.open > button { background: rgba(255,255,255,.12); }
+.mi > button[aria-selected="true"] { background: var(--page); color: var(--orange); }
+.mi > button:focus-visible { outline: 2px solid #fff; outline-offset: -4px; }
+.mi > button[aria-selected="true"]:focus-visible { outline-color: var(--orange); }
 .who { display: flex; align-items: center; gap: 8px; padding: 0 14px 0 10px; font-size: .84rem; white-space: nowrap; border-left: 1px solid rgba(255,255,255,.18); }
 .who .logo { width: 30px; height: 30px; border-radius: 50%; background: #fff; color: var(--teal-d); display: grid; place-items: center; font-weight: 700; font-size: .62rem; letter-spacing: .02em; border: 2px solid rgba(255,255,255,.6); }
 .subnav { background: var(--page); border-bottom: 1px solid var(--line); box-shadow: 0 2px 4px rgba(0,0,0,.06); }
@@ -105,10 +138,11 @@ nav.tabs button:focus-visible { outline: 2px solid #fff; outline-offset: -4px; }
   .who { display: none; }
   .search { order: 3; flex: 1 1 100%; margin: 0 10px 8px 0; }
   nav.tabs { min-height: 44px; }
-  nav.tabs button { width: 38px; }
-  nav.tabs button svg { width: 19px; height: 19px; }
+  .mi > button { width: 35px; }
+  nav.tabs svg { width: 19px; height: 19px; }
+  .wordmark { font-size: .74rem; letter-spacing: .08em; }
 }
-@media (max-width: 359px) { .wordmark { letter-spacing: .06em; } nav.tabs button { width: 34px; } }
+@media (max-width: 374px) { .wordmark { letter-spacing: .03em; font-size: .68rem; } .mi > button { width: 31px; } }
 
 main { width: 100%; max-width: 1180px; margin: 18px auto 0; padding: 16px 16px 40px; display: grid; gap: 14px; background: var(--bg); border: 1px solid var(--line); flex: 1 0 auto; align-content: start; }
 @media (max-width: 760px) { main { margin-top: 0; border: 0; padding: 12px 12px 40px; } }
@@ -119,7 +153,7 @@ footer.foot b { font-family: Cinzel, Georgia, serif; font-weight: 500; letter-sp
 .row { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
 .spread { justify-content: space-between; }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; min-width: 0; }
-.stack { display: grid; gap: 12px; }
+.stack { display: grid; gap: 12px; align-content: start; }
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
 
 /* Knoppen: oranje = actie, petrol = opslaan/wijzig, wit = overig */
@@ -260,16 +294,8 @@ td.r, th.r { text-align: right; font-variant-numeric: tabular-nums; }
 <header class="top">
   <div class="topbar"><div class="top-inner">
     <button type="button" class="brand" data-v="agenda" aria-label="HC Tilburg horeca-agenda, naar de maandagenda"><span class="wordmark">HC TILBURG</span></button>
-    <nav class="tabs lnav" aria-label="Start"><button type="button" data-v="dag" data-today="1" title="Vandaag" aria-label="Vandaag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v10h5v-6h3v6h5V10"/></svg></button></nav>
     <div class="search" role="search"><input type="search" id="g-search" placeholder="Zoek op naam" autocomplete="off" aria-label="Zoek op naam van klant, reservering of offerte"><div class="sres" id="g-sres" hidden></div></div>
-    <nav class="tabs" role="tablist" id="tabs" aria-label="Onderdelen">
-      <button type="button" role="tab" data-v="agenda" data-views="agenda dag" title="Agenda" aria-label="Agenda" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="1"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M7.5 14h2M11 14h2M14.5 14h2M7.5 17h2M11 17h2"/></svg></button>
-      <button type="button" role="tab" data-v="res" data-views="res" title="Reserveringen" aria-label="Reserveringen" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6.5h11M9 12h11M9 17.5h11"/><path d="M4 6.5h.5M4 12h.5M4 17.5h.5" stroke-width="3"/></svg></button>
-      <button type="button" role="tab" data-v="off" data-views="off" title="Offertes" aria-label="Offertes" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="4.5" width="14" height="16.5" rx="1"/><path d="M9 4.5V3h6v1.5M8.5 10h7M8.5 13.5h7M8.5 17h4"/></svg></button>
-      <button type="button" role="tab" data-v="klant" data-views="klant" title="Klanten" aria-label="Klanten" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.8"/><path d="M4.5 20.5c.6-4 3.7-6.3 7.5-6.3s6.9 2.3 7.5 6.3"/></svg></button>
-      <button type="button" role="tab" data-v="stat" data-views="stat" title="Statistieken" aria-label="Statistieken" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 20.5h18M6.5 20.5v-6M11 20.5V8M15.5 20.5v-9M20 20.5V4.5"/></svg></button>
-      <button type="button" role="tab" data-v="inst" data-views="inst import" title="Instellingen" aria-label="Instellingen" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.5 5.5l1.9 1.9M16.6 16.6l1.9 1.9M5.5 18.5l1.9-1.9M16.6 7.4l1.9-1.9"/><circle cx="12" cy="12" r="6.6"/></svg></button>
-    </nav>
+    <nav class="tabs" id="tabs" aria-label="Hoofdmenu"></nav>
     <div class="who"><span>Horeca</span><span class="logo" aria-hidden="true">HCT</span></div>
   </div></div>
   <div class="subnav"><div class="subnav-inner" id="subnav"></div></div>
@@ -672,6 +698,7 @@ const DEFAULT_SETTINGS = {
   products: [],
   productCategories: ["Dranken", "Drankafkoop", "Hapjes", "Lunch", "Buffet en diner", "Zaalhuur", "Decoratie", "Muziek", "Extra's"],
   drukte: { jeugd: 45, senior: 35, top: 250, topTeams: "Heren 1, Dames 1", duur: 105, grens1: 150, grens2: 400, grens3: 800 },
+  locatie: { naam: "HC Tilburg Horeca", adres: "Bredaseweg 447", postcode: "5036 NA", plaats: "Tilburg", telefoon: "", email: "horeca@hctilburg.nl", website: "", kvk: "", btwnr: "", iban: "", voorwaarden: "", managers: [], afwijsredenen: ["Locatie niet geschikt", "Voorkeur voor andere locatie", "Feest gaat niet door", "Datum niet beschikbaar", "Te duur / budget niet toereikend", "Anders"], bronnen: ["Website", "Social media", "Zoekmachine", "Mond tot mond", "Lid van de club", "Anders"] },
 };
 const S = {
   db: null, dbState: "loading", readOnly: false,
@@ -681,7 +708,7 @@ const S = {
   resFilter: "komend", resQuery: "", quoteOpen: null, custOpen: null, custQuery: "", custFilter: "alle", importLisa: null, importIcs: null,
 };
 try { const v = localStorage.getItem("hct-view"); if (v) S.view = v; } catch (e) {}
-if (/^#(agenda|dag|res|off|klant|stat|import|inst)$/.test(location.hash)) S.view = location.hash.slice(1);
+if (/^#[a-z][a-z-]*$/.test(location.hash)) S.view = location.hash.slice(1);
 
 /* ---------- persistence ---------- */
 async function write(path, data, mode = "set") {
@@ -711,6 +738,7 @@ function normSettings(d) {
   s.rooms = Array.isArray(s.rooms) ? s.rooms : [];
   s.arrangementen = Array.isArray(s.arrangementen) ? s.arrangementen : [];
   s.products = Array.isArray(s.products) ? s.products : [];
+  s.locatie = { ...structuredClone(DEFAULT_SETTINGS.locatie), ...((d && d.locatie) || {}) };
   s.productCategories = Array.isArray(s.productCategories) && s.productCategories.length ? s.productCategories : DEFAULT_CATS.slice();
   return s;
 }
@@ -812,23 +840,112 @@ function setView(v) {
   S.view = v; try { localStorage.setItem("hct-view", v); } catch (e) {}
   render(); window.scrollTo(0, 0);
 }
+/* ---------- Hoofdmenu met uitklapmenu's (naar voorbeeld van Restau) ---------- */
+const ICONS = {
+  home: '<path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v10h5v-6h3v6h5V10"/>',
+  agenda: '<rect x="3.5" y="5" width="17" height="15.5" rx="1"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M7.5 14h2M11 14h2M14.5 14h2M7.5 17h2M11 17h2"/>',
+  off: '<path d="M12 3.2l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.5l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z"/>',
+  todo: '<rect x="5" y="4.5" width="14" height="16.5" rx="1"/><path d="M9 4.5V3h6v1.5"/><path d="M8.5 11l1.6 1.6 3-3M8.5 16.5h7"/>',
+  klant: '<circle cx="12" cy="8" r="3.8"/><path d="M4.5 20.5c.6-4 3.7-6.3 7.5-6.3s6.9 2.3 7.5 6.3"/>',
+  stat: '<path d="M3 20.5h18M6.5 20.5v-6M11 20.5V8M15.5 20.5v-9M20 20.5V4.5"/>',
+  fin: '<circle cx="12" cy="12" r="8.6"/><path d="M15.4 8.6a4.2 4.2 0 1 0 0 6.8M6.8 10.8h6M6.8 13.4h6"/>',
+  inst: '<circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.5 5.5l1.9 1.9M16.6 16.6l1.9 1.9M5.5 18.5l1.9-1.9M16.6 7.4l1.9-1.9"/><circle cx="12" cy="12" r="6.6"/>',
+};
+const svgIcon = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k] || ""}</svg>`;
+const MENU = [
+  { id: "home", label: "Dashboard", items: [{ l: "Dashboard", v: "home" }, { l: "Vandaag (dag-agenda)", v: "dag", set: { day: "today" } }, { sep: 1 }, { l: "Nieuwe offerte", act: "newQuote" }, { l: "Nieuwe reservering", act: "newRes" }] },
+  { id: "off", label: "Offertes en events", items: [
+    { h: "Offertes" }, { l: "Nieuwe offerte", act: "newQuote" },
+    { l: "Openstaande offertes", v: "off", set: { offTab: "open" }, cnt: () => [...S.quotes.values()].filter(q => q.status === "concept" || q.status === "verstuurd").length },
+    { l: "In optie", v: "off", set: { offTab: "optie" } }, { l: "Geaccepteerd", v: "off", set: { offTab: "geaccepteerd" } }, { l: "Afgewezen", v: "off", set: { offTab: "afgewezen" } },
+    { h: "Events" }, { l: "Nieuwe reservering", act: "newRes" },
+    { l: "Nieuwe aanvragen", v: "res", set: { resFilter: "aanvragen" }, cnt: () => [...S.reservations.values()].filter(r => r.status === "aanvraag").length },
+    { l: "Komende events", v: "res", set: { resFilter: "komend" } }, { l: "Openstaande opties", v: "res", set: { resFilter: "opties" } },
+    { l: "Oude events", v: "res", set: { resFilter: "oud" } }, { l: "Alle reserveringen", v: "res", set: { resFilter: "alle" } }] },
+  { id: "agenda", label: "Agenda", items: [
+    { l: "Dag-agenda", v: "dag" }, { l: "Week- en zaalagenda", v: "week" }, { l: "Maand-agenda", v: "agenda" }, { l: "Afspraken", v: "afspraken" },
+    { sep: 1 }, { l: "Ruimte blokkeren", act: "block" }, { l: "Agenda-koppeling (Outlook, Google)", v: "koppeling" }] },
+  { id: "stat", label: "Statistieken", items: [{ l: "Dashboard", v: "stat" }, { l: "Managers", v: "stat-managers" }, { l: "Gedetailleerd en marge", v: "stat-detail" }, { l: "Status report", v: "stat-status" }] },
+  { id: "todo", label: "To-do", items: [
+    { l: "Open to-do's", v: "todo", set: { todoFilter: "open" }, cnt: () => allTasks().filter(t => !t.done && t.due && t.due <= todayISO).length },
+    { l: "Achterstallig", v: "todo", set: { todoFilter: "late" } }, { l: "Afgerond", v: "todo", set: { todoFilter: "done" } }, { l: "Alle to-do's", v: "todo", set: { todoFilter: "alle" } }] },
+  { id: "fin", label: "Financiën", items: [{ l: "Betalingen", v: "betalingen" }, { l: "Facturen", v: "facturen" }, { l: "E-mails in outbox", v: "outbox" }, { l: "Omzetgarantie", v: "omzetgarantie" }] },
+  { id: "klant", label: "Klanten", items: [
+    { l: "Contactpersonen", v: "klant", set: { custFilter: "alle" } }, { l: "Opvolgen en terugbellen", v: "klant", set: { custFilter: "opvolgen" } },
+    { l: "Met een komend feest", v: "klant", set: { custFilter: "komend" } }, { l: "Bedrijven en teams", v: "bedrijven" }, { sep: 1 }, { l: "Nieuwe klant", act: "newCust" }] },
+  { id: "inst", label: "Instellingen", items: [
+    { h: "Locatie" }, { l: "Algemeen", v: "inst", set: { instTab: "locatie" } }, { l: "Zalen", v: "inst", set: { instTab: "zalen" } }, { l: "Drukte en LISA", v: "inst", set: { instTab: "drukte" } },
+    { h: "Aanbod" }, { l: "Arrangementen", v: "inst", set: { instTab: "arrangementen" } }, { l: "Producten", v: "inst", set: { instTab: "producten" } },
+    { h: "Per soort feest" }, { l: "Soorten feest en programma", v: "inst", set: { instTab: "feesten" } }, { l: "E-mailteksten", v: "mailteksten" }, { l: "Vragen en voorwaarden", v: "vragen" },
+    { h: "Gegevens" }, { l: "Importeren (LISA, Outlook)", v: "import" }] },
+];
+const isCur = it => it.v === S.view && Object.entries(it.set || {}).every(([k, v]) => k === "day" || S[k] === v || (k === "instTab" && !INST_TABS.some(([t]) => t === S.instTab) && v === "locatie"));
+const menuOf = v => v === "home" ? MENU[0] : MENU.slice(1).find(m => m.items.some(it => it.v === v)) || MENU[0];
+function menuGo(it) {
+  closeMenus();
+  if (it.act) return MENU_ACTS[it.act]();
+  for (const [k, v] of Object.entries(it.set || {})) S[k] = k === "day" && v === "today" ? todayISO : v;
+  if (it.v === "off") S.quoteOpen = null;
+  if (it.v === "klant") S.custOpen = null;
+  setView(it.v);
+}
+const MENU_ACTS = {
+  newQuote: () => { S.offTab = "open"; S.quoteOpen = null; setView("off"); $("#q-new")?.click(); },
+  newRes: () => { setView("res"); openRes({ date: todayISO }); },
+  newCust: () => { S.custOpen = null; setView("klant"); $("#k-new")?.click(); },
+  block: () => { setView("dag"); openBlock({ date: S.day || todayISO }); },
+};
+function closeMenus(except) { document.querySelectorAll(".mi.open").forEach(m => { if (m !== except) { m.classList.remove("open"); m.querySelector(":scope > button").setAttribute("aria-expanded", "false"); } }); }
+function buildMenu() {
+  const nav = $("#tabs");
+  nav.innerHTML = MENU.map(m => `<div class="mi" data-m="${m.id}"><button type="button" aria-haspopup="menu" aria-expanded="false" title="${esc(m.label)}" aria-label="${esc(m.label)}">${svgIcon(m.id)}<span class="badge" hidden></span></button><div class="dd" role="menu" aria-label="${esc(m.label)}"></div></div>`).join("");
+  const hover = matchMedia("(hover: hover) and (pointer: fine)");
+  nav.querySelectorAll(".mi").forEach(mi => {
+    const m = MENU.find(x => x.id === mi.dataset.m), btn = mi.querySelector(":scope > button"), dd = mi.querySelector(".dd");
+    const fill = () => {
+      dd.innerHTML = m.items.map((it, i) => it.h ? `<div class="dh">${esc(it.h)}</div>` : it.sep ? "<hr>" : `<button type="button" role="menuitem" data-i="${i}" ${isCur(it) ? 'aria-current="page"' : ""}><span>${esc(it.l)}</span>${it.cnt && it.cnt() ? `<span class="cnt">${it.cnt()}</span>` : it.v && !VIEWS[it.v] ? `<span class="soon">in aanbouw</span>` : ""}</button>`).join("");
+      dd.querySelectorAll("[data-i]").forEach(b => b.onclick = () => menuGo(m.items[+b.dataset.i]));
+    };
+    const open = () => { closeMenus(mi); fill(); mi.classList.add("open"); btn.setAttribute("aria-expanded", "true"); };
+    const close = () => { mi.classList.remove("open"); btn.setAttribute("aria-expanded", "false"); };
+    let t;
+    mi.addEventListener("mouseenter", () => { if (hover.matches) { clearTimeout(t); open(); } });
+    mi.addEventListener("mouseleave", () => { if (hover.matches) t = setTimeout(close, 180); });
+    btn.addEventListener("click", () => {
+      if (hover.matches) { menuGo(m.items.find(it => it.v)); return; }
+      mi.classList.contains("open") ? close() : open();
+    });
+    btn.addEventListener("keydown", e => { if (e.key === "ArrowDown" || ((e.key === "Enter" || e.key === " ") && hover.matches && e.altKey)) { e.preventDefault(); open(); dd.querySelector("button")?.focus(); } });
+    dd.addEventListener("keydown", e => {
+      const bs = [...dd.querySelectorAll("button")], i = bs.indexOf(document.activeElement);
+      if (e.key === "ArrowDown") { e.preventDefault(); bs[Math.min(bs.length - 1, i + 1)]?.focus(); }
+      if (e.key === "ArrowUp") { e.preventDefault(); i > 0 ? bs[i - 1].focus() : (close(), btn.focus()); }
+      if (e.key === "Escape") { close(); btn.focus(); }
+    });
+    mi.addEventListener("focusout", e => { if (!mi.contains(e.relatedTarget)) close(); });
+  });
+  document.addEventListener("click", e => { if (!e.target.closest(".mi")) closeMenus(); });
+}
 document.querySelector("header.top").addEventListener("click", e => {
   const b = e.target.closest("button[data-v]"); if (!b) return;
-  if (b.dataset.today) S.day = todayISO;
   if (b.dataset.tab) S.instTab = b.dataset.tab;
+  if (b.dataset.set) Object.assign(S, JSON.parse(b.dataset.set));
   setView(b.dataset.v);
 });
-const SECTIONS = {
-  agenda: ["Agenda", [["dag", "Dag-agenda"], ["agenda", "Maand-agenda"]]], dag: ["Agenda", [["dag", "Dag-agenda"], ["agenda", "Maand-agenda"]]],
-  res: ["Reserveringen", []], off: ["Offertes", []], klant: ["Klanten", []], stat: ["Statistieken", []],
-  inst: ["Instellingen", null], import: ["Instellingen", null],
-};
 function drawChrome() {
-  document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.views.split(" ").includes(S.view))));
-  const [title, subs0] = SECTIONS[S.view] || SECTIONS.agenda;
-  const it = INST_TABS.some(([k]) => k === S.instTab) ? S.instTab : "zalen";
-  const subs = subs0 || [...INST_TABS.map(([k, l]) => ["inst", l, k]), ["import", "Importeren"]];
-  $("#subnav").innerHTML = `<h1>${esc(title)}</h1>` + subs.map(([v, l, k]) => `<button type="button" data-v="${v}"${k ? ` data-tab="${k}"` : ""} ${v === S.view && (!k || k === it) ? 'aria-current="page"' : ""}>${esc(l)}</button>`).join("");
+  if (!$("#tabs .mi")) buildMenu();
+  const cur = menuOf(S.view);
+  document.querySelectorAll("#tabs .mi").forEach(mi => {
+    const m = MENU.find(x => x.id === mi.dataset.m), b = mi.querySelector(":scope > button");
+    b.setAttribute("aria-selected", String(m === cur));
+    const n = m.items.reduce((t, it) => t + (it.cnt ? it.cnt() : 0), 0), bd = b.querySelector(".badge");
+    bd.hidden = !n; bd.textContent = n > 99 ? "99+" : n;
+  });
+  // subbalk: de groep (tussenkop) van het menu waarin de huidige pagina valt
+  const groups = []; cur.items.forEach(it => { if (it.h || !groups.length) groups.push([]); if (it.v) groups[groups.length - 1].push(it); });
+  const grp = groups.find(g => g.some(isCur)) || groups.find(g => g.length) || [];
+  const subs = cur.id === "home" ? grp.filter(it => it.v === "home") : cur.id === "inst" ? cur.items.filter(it => it.v) : grp;
+  $("#subnav").innerHTML = `<h1>${esc(cur.label)}</h1>` + subs.map(it => `<button type="button" data-v="${it.v}" data-set='${esc(JSON.stringify(Object.fromEntries(Object.entries(it.set || {}).filter(([k]) => k !== "day"))))}' ${isCur(it) ? 'aria-current="page"' : ""}>${esc(it.l)}</button>`).join("");
 }
 /* Zoeken op naam (bovenbalk): klanten, reserveringen en offertes */
 function gSearch(term) {
@@ -879,11 +996,31 @@ function render() {
   if (S.dbState === "none") banner = `<div class="banner">De gedeelde opslag is in deze weergave niet beschikbaar. Je kunt rondkijken, maar wijzigingen worden niet bewaard. Log opnieuw in of herlaad de pagina.</div>`;
   else if (S.dbState === "gone") banner = `<div class="banner">De verbinding met de gedeelde opslag is verbroken. Herlaad de pagina.</div>`;
   else if (S.readOnly) banner = `<div class="banner">Je kunt deze agenda bekijken, maar niet wijzigen.</div>`;
-  const views = { agenda: vAgenda, dag: vDag, res: vRes, off: vOff, klant: vKlant, stat: vStat, import: vImport, inst: vInst };
-  app.innerHTML = banner + (views[S.view] || vAgenda)();
+  app.innerHTML = banner + (VIEWS[S.view] || vSoon)();
   (after[S.view] || (() => {}))();
 }
 const after = {};
+/* Weergaven. Losse modules voegen hier hun eigen weergave toe: VIEWS.sleutel = () => html; after.sleutel = () => { ... } */
+const VIEWS = { home: () => vHome(), agenda: () => vAgenda(), dag: () => vDag(), res: () => vRes(), off: () => vOff(), klant: () => vKlant(), stat: () => vStat(), import: () => vImport(), inst: () => vInst(), todo: () => vTodo(), koppeling: () => vKoppeling() };
+const SOON = {
+  week: ["Week- en zaalagenda", ["Per week een tijdlijn per ruimte, zoals de Super Agenda in Restau", "Reserveringen, opties, blokkeringen en wedstrijden in één overzicht"]],
+  afspraken: ["Afspraken", ["Afspraken met klanten (kennismaking, proeverij, puntjes op de i)", "Aangevraagd, bevestigen of afwijzen, met herinnering", "Zichtbaar in de dag-agenda"]],
+  "stat-managers": ["Statistiek per manager", ["Per accountmanager: offertes, in optie, afgewezen, geboekt", "Conversieratio en omzet"]],
+  "stat-detail": ["Gedetailleerde statistiek en marge", ["Per product: aantal, omzet, inkoop en marge", "Periode kiezen en downloaden"]],
+  "stat-status": ["Status report", ["Logboek van alle statuswijzigingen: van, naar, datum, manager en omzet"]],
+  betalingen: ["Betalingen", ["Per feest de termijnen: aanbetaling, 2e betaling en eindafrekening", "Wat betaald is en wat nog moet binnenkomen, met datum"]],
+  facturen: ["Facturen", ["Facturen 1e, 2e, eind en credit met eigen nummering", "Printen of als bestand opslaan, betaald markeren"]],
+  outbox: ["E-mails in outbox", ["Klaargezette e-mails per fase (offerte, in optie, bevestiging, herinneringen)", "Eerst nakijken, dan versturen"]],
+  omzetgarantie: ["Omzetgarantie", ["Per soort feest en dag een minimumomzet"]],
+  bedrijven: ["Bedrijven en teams", ["Bedrijven, teams en commissies met hun contactpersonen", "Eigen betaalafspraken per bedrijf", "Offertes en omzet per bedrijf"]],
+  mailteksten: ["E-mailteksten", ["Per soort feest de teksten voor elke fase, aan of uit", "Met invulvelden zoals naam, datum en bedrag"]],
+  vragen: ["Vragen en voorwaarden", ["Vragen die bij elk feest terugkomen (definitief aantal, dieetwensen, hoe gevonden)", "Algemene voorwaarden en betalingsvoorwaarden"]],
+};
+function vSoon() {
+  const [t, pts] = SOON[S.view] || ["Dit onderdeel", []];
+  return `<section class="stack"><div class="row spread"><h2>${esc(t)}</h2></div>
+    <div class="soonbox"><b>Dit onderdeel wordt nu gebouwd.</b> Het komt in een volgende versie van de agenda en bevat:<ul>${pts.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div></section>`;
+}
 
 /* Agenda (maand) */
 function vAgenda() {
@@ -1014,6 +1151,135 @@ after.dag = () => {
   dagAfterDag();
   document.querySelectorAll("[data-res]").forEach(el => el.onclick = () => openRes(S.reservations.get(el.dataset.res)));
 };
+
+/* ---------- Dashboard (startscherm, naar voorbeeld van Restau) ---------- */
+function vHome() {
+  const res = [...S.reservations.values()], qs = [...S.quotes.values()];
+  const in30 = addDays(todayISO, 30);
+  const upcoming = res.filter(r => r.date >= todayISO && r.status !== "geannuleerd").sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
+  const tasks = allTasks().filter(t => !t.done);
+  const qOf = r => r.quoteId && S.quotes.get(r.quoteId);
+  const openPay = qs.filter(q => q.status === "geaccepteerd" && (!q.depositPaid || !q.finalPaid));
+  const tile = (n, label, go, cls = "") => `<button type="button" class="tile ${cls} ${n ? "" : "zero"}" data-go='${esc(JSON.stringify(go))}'><b>${n}</b><span>${esc(label)}</span></button>`;
+  const today = resOn(todayISO), c = crowd(todayISO);
+  return `<section class="stack">
+    <div class="row spread"><h2>Dashboard</h2><div class="row"><button class="btn" id="h-newres" ${S.readOnly ? "disabled" : ""}>Nieuwe reservering</button><button class="btn primary" id="h-newq" ${S.readOnly ? "disabled" : ""}>Nieuwe offerte maken</button></div></div>
+    <div class="tiles">
+      ${tile(res.filter(r => r.status === "aanvraag").length, "Nieuwe aanvragen", { v: "res", resFilter: "aanvragen" })}
+      ${tile(qs.filter(q => q.status === "concept" || q.status === "verstuurd").length, "Openstaande offertes", { v: "off", offTab: "open" })}
+      ${tile(res.filter(r => r.status === "optie" && r.date >= todayISO).length, "In optie", { v: "res", resFilter: "opties" })}
+      ${tile(upcoming.filter(r => r.date <= in30 && r.status === "bevestigd").length, "Events komende 30 dagen", { v: "res", resFilter: "komend" }, "teal")}
+      ${tile(tasks.filter(t => t.due && t.due <= todayISO).length, "To-do's voor vandaag of eerder", { v: "todo", todoFilter: "open" })}
+      ${tile(openPay.length, "Betalingen nog open", { v: "off", offTab: "geaccepteerd" }, "teal")}
+    </div>
+    <div class="grid2">
+      <div class="panel stack"><div class="row spread"><h3>Vandaag</h3><button class="btn" data-go='{"v":"dag","day":"${todayISO}"}'>Dag-agenda</button></div>
+        <p style="margin:0">${esc(longDate(todayISO))}: ${c.total ? `ongeveer <b>${c.total}</b> verwachte bezoekers (${esc(c.lvlName)})` : "geen wedstrijden of feesten bekend"}, ${today.length} ${today.length === 1 ? "reservering" : "reserveringen"}.</p>
+        ${today.length ? `<div class="list">${today.map(r => `<div class="it" data-res="${esc(r.id)}" style="cursor:pointer"><span class="t">${esc(r.start)}</span><span><b>${esc(r.customer || "Reservering")}</b><br><span class="muted small">${esc(roomName(r.roomId))}${r.persons ? " · " + esc(r.persons) + " pers." : ""}</span></span>${statusChip(r.status)}</div>`).join("")}</div>` : ""}
+      </div>
+      <div class="panel stack"><div class="row spread"><h3>To-do's</h3><button class="btn" data-go='{"v":"todo","todoFilter":"open"}'>Alle to-do's</button></div>
+        ${tasks.length ? `<div class="list">${tasks.slice(0, 6).map(t => `<div class="it" data-res="${esc(t.r.id)}" style="cursor:pointer"><span class="t" style="${t.due && t.due < todayISO ? "color:var(--bad)" : ""}">${t.due ? esc(shortDate(t.due)) : "–"}</span><span>${esc(t.text)}<br><span class="muted small">${esc(t.r.customer || "")} · ${esc(shortDate(t.r.date))}</span></span><span></span></div>`).join("")}</div>` : `<p class="empty">Geen open to-do's.</p>`}
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="panel stack"><h3>Aankomende events</h3>
+        ${upcoming.length ? `<div class="tbl-wrap"><table><tbody>${upcoming.slice(0, 10).map(r => `<tr class="click" data-res="${esc(r.id)}"><td class="num">${esc(shortDate(r.date))}</td><td><b>${esc(r.customer || "")}</b><br><span class="muted small">${esc(roomName(r.roomId))}${r.persons ? " · " + esc(r.persons) + " pers." : ""}</span></td><td>${statusChip(r.status)}</td><td class="r">${qOf(r) ? eur(totals(qOf(r).lines).incl) : ""}</td></tr>`).join("")}</tbody></table></div>` : `<p class="empty">Geen komende events.</p>`}
+      </div>
+      <div class="panel stack"><h3>Nieuwste offertes</h3>
+        ${qs.length ? `<div class="tbl-wrap"><table><tbody>${qs.sort((a, b) => String(b.number).localeCompare(String(a.number))).slice(0, 8).map(q => `<tr class="click" data-q="${esc(q.id)}"><td class="num"><b>${esc(q.number)}</b></td><td>${esc(q.customer || "")}<br><span class="muted small">${q.eventDate ? esc(shortDate(q.eventDate)) : ""}</span></td><td>${statusChip(q.status)}</td><td class="r">${eur(totals(q.lines).incl)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="empty">Nog geen offertes.</p>`}
+      </div>
+    </div>
+  </section>`;
+}
+after.home = () => {
+  document.querySelectorAll("[data-go]").forEach(b => b.onclick = () => { const g = JSON.parse(b.dataset.go); const { v, ...rest } = g; Object.assign(S, rest); setView(v); });
+  document.querySelectorAll("[data-res]").forEach(el => el.onclick = () => openRes(S.reservations.get(el.dataset.res)));
+  document.querySelectorAll("[data-q]").forEach(el => el.onclick = () => { S.offTab = "alle"; S.quoteOpen = el.dataset.q; setView("off"); });
+  $("#h-newq").onclick = () => MENU_ACTS.newQuote();
+  $("#h-newres").onclick = () => MENU_ACTS.newRes();
+};
+
+/* ---------- To-do-lijst over alle reserveringen ---------- */
+function allTasks() {
+  const out = [];
+  for (const r of S.reservations.values()) {
+    if (r.status === "geannuleerd") continue;
+    (r.tasks || []).forEach((t, i) => out.push({ ...t, i, r }));
+  }
+  return out.sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999") || (a.r.date || "").localeCompare(b.r.date || ""));
+}
+function vTodo() {
+  const f = S.todoFilter || "open", all = allTasks(), q = (S.todoQuery || "").trim().toLowerCase();
+  let list = all.filter(t => f === "alle" ? true : f === "done" ? t.done : f === "late" ? !t.done && t.due && t.due < todayISO : !t.done);
+  if (q) list = list.filter(t => [t.text, t.r.customer, roomName(t.r.roomId)].join(" ").toLowerCase().includes(q));
+  if (f === "done") list.reverse();
+  const groups = new Map();
+  for (const t of list) {
+    const k = !t.due ? "Zonder datum" : t.due < todayISO && !t.done ? "Achterstallig" : t.due === todayISO ? "Vandaag" : longDate(t.due);
+    if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t);
+  }
+  const TABS = [["open", "Open"], ["late", "Achterstallig"], ["done", "Afgerond"], ["alle", "Alle"]];
+  const cnt = k => all.filter(t => k === "alle" ? true : k === "done" ? t.done : k === "late" ? !t.done && t.due && t.due < todayISO : !t.done).length;
+  return `<section class="stack">
+    <div class="row spread"><h2>To-do-lijst</h2><input id="td-q" type="search" placeholder="Zoek op taak of klant" value="${esc(S.todoQuery || "")}" style="max-width:280px"></div>
+    <div class="ptabs" role="group" aria-label="Welke to-do's">${TABS.map(([k, l]) => `<button type="button" data-tdf="${k}" aria-pressed="${k === f}">${l}<span class="muted">${cnt(k)}</span></button>`).join("")}</div>
+    <p class="small muted" style="margin:0">To-do's horen bij een reservering. Ze komen uit de standaardtaken, uit producten op de offerte, of je zet ze zelf in de reservering.</p>
+    ${groups.size ? [...groups.entries()].map(([k, ts]) => `<div class="panel stack" style="gap:4px"><h3 style="${k === "Achterstallig" ? "color:var(--bad)" : ""}">${esc(k)} <span class="small muted">${ts.length}</span></h3>
+      <div>${ts.map(t => `<div class="todo-row ${t.done ? "done" : ""}"><input type="checkbox" data-tdone="${esc(t.r.id)}:${t.i}" ${t.done ? "checked" : ""} ${S.readOnly ? "disabled" : ""} aria-label="Klaar: ${esc(t.text)}"><div><span class="tt">${esc(t.text)}</span><br><a href="#" class="small" data-res="${esc(t.r.id)}">${esc(t.r.customer || "Reservering")} · ${esc(shortDate(t.r.date))} · ${esc(roomName(t.r.roomId))}</a></div><span>${t.done ? `<span class="chip c1">klaar</span>` : t.due && t.due < todayISO ? `<span class="chip c3">achterstallig</span>` : statusChip(t.r.status)}</span></div>`).join("")}</div></div>`).join("") : `<div class="panel"><p class="empty">Geen to-do's in deze lijst.</p></div>`}
+  </section>`;
+}
+after.todo = () => {
+  document.querySelectorAll("[data-tdf]").forEach(b => b.onclick = () => { S.todoFilter = b.dataset.tdf; render(); });
+  const qi = $("#td-q"); qi.oninput = e => { S.todoQuery = e.target.value; clearTimeout(qi._t); qi._t = setTimeout(() => { render(); const n = $("#td-q"); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 250); };
+  document.querySelectorAll("[data-res]").forEach(el => el.onclick = e => { e.preventDefault(); openRes(S.reservations.get(el.dataset.res)); });
+  document.querySelectorAll("[data-tdone]").forEach(cb => cb.onchange = async () => {
+    const [id, i] = cb.dataset.tdone.split(":"); const r = S.reservations.get(id); if (!r) return;
+    const tasks = structuredClone(r.tasks || []); if (!tasks[+i]) return;
+    tasks[+i].done = cb.checked;
+    if (await write("reservations/" + id, { tasks }, "update")) { r.tasks = tasks; toast(cb.checked ? "To-do afgevinkt" : "To-do weer open"); render(); }
+  });
+};
+
+/* ---------- Agenda-koppeling: .ics-bestand voor Outlook of Google ---------- */
+async function saveFile(filename, data, type = "text/plain") {
+  let dl = null; try { dl = await window.claude?.use?.("downloads"); } catch (e) {}
+  if (dl) { try { await dl.save({ filename, data }); return true; } catch (e) { if (e?.code !== "declined") toast("Downloaden lukte niet"); return false; } }
+  try { const url = URL.createObjectURL(new Blob([data], { type })); const a = document.createElement("a"); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000); return true; }
+  catch (e) { toast("Downloaden is hier niet beschikbaar"); return false; }
+}
+function icsFor(list) {
+  const pad = n => String(n).padStart(2, "0"), stamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15) + "Z";
+  const dt = (d, t) => d.replace(/-/g, "") + "T" + (t || "00:00").replace(":", "") + "00";
+  const escI = x => String(x || "").replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/[,;]/g, m => "\\" + m);
+  const ev = list.map(r => {
+    let endD = r.date; if (r.end && r.start && r.end <= r.start) endD = addDays(r.date, 1);
+    return ["BEGIN:VEVENT", `UID:${r.id}@hct-horeca`, `DTSTAMP:${stamp}`, `DTSTART;TZID=Europe/Amsterdam:${dt(r.date, r.start)}`, `DTEND;TZID=Europe/Amsterdam:${dt(endD, r.end || r.start)}`,
+      `SUMMARY:${escI((r.status === "optie" ? "[optie] " : "") + (r.customer || "Reservering") + (r.persons ? ` (${r.persons} p.)` : ""))}`, `LOCATION:${escI(roomName(r.roomId))}`,
+      `DESCRIPTION:${escI([r.status, arr(r.arrangementId)?.name, r.notes].filter(Boolean).join("\n"))}`, "END:VEVENT"].join("\r\n");
+  });
+  return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//HC Tilburg//Horeca-agenda//NL", "CALSCALE:GREGORIAN", "X-WR-CALNAME:HC Tilburg horeca", ...ev, "END:VCALENDAR"].join("\r\n");
+}
+function vKoppeling() {
+  const k = S.icsKind || "alles";
+  const sel = [...S.reservations.values()].filter(r => r.date >= addDays(todayISO, -30) && (k === "alles" ? ["optie", "bevestigd", "aanvraag"].includes(r.status) : k === "bevestigd" ? r.status === "bevestigd" : r.status === "optie"));
+  return `<section class="stack"><div class="row spread"><h2>Agenda-koppeling</h2></div>
+    <div class="panel stack">
+      <p style="margin:0">Zet de reserveringen in Outlook of Google Agenda met een agendabestand (.ics). Open het bestand op je computer of telefoon, dan komen de feesten in je eigen agenda.</p>
+      <div class="ptabs" role="group" aria-label="Welke reserveringen">${[["alles", "Bevestigd, in optie en aanvragen"], ["bevestigd", "Alleen bevestigd"], ["optie", "Alleen in optie"]].map(([v, l]) => `<button type="button" data-ick="${v}" aria-pressed="${v === k}">${l}</button>`).join("")}</div>
+      <div class="row"><button class="btn primary" id="ics-dl">Download agendabestand (${sel.length} ${sel.length === 1 ? "reservering" : "reserveringen"})</button></div>
+      <p class="small muted" style="margin:0">Het bestand is een momentopname van vanaf 30 dagen geleden. Download het opnieuw na wijzigingen; Outlook en Google werken bestaande afspraken dan bij.</p>
+    </div></section>`;
+}
+after.koppeling = () => {
+  document.querySelectorAll("[data-ick]").forEach(b => b.onclick = () => { S.icsKind = b.dataset.ick; render(); });
+  $("#ics-dl").onclick = () => {
+    const k = S.icsKind || "alles";
+    const sel = [...S.reservations.values()].filter(r => r.date >= addDays(todayISO, -30) && (k === "alles" ? ["optie", "bevestigd", "aanvraag"].includes(r.status) : k === "bevestigd" ? r.status === "bevestigd" : r.status === "optie"));
+    if (!sel.length) { toast("Er zijn geen reserveringen om te exporteren"); return; }
+    saveFile(`hct-horeca-${k}.ics`, icsFor(sel), "text/calendar");
+  };
+};
+
 function statusChip(s) {
   s = s || "optie";
   const cls = { aanvraag: "c0", optie: "c2", bevestigd: "c1", afgerond: "c1", betaald: "c1", geannuleerd: "c0", concept: "c0", verstuurd: "c2", geaccepteerd: "c1", afgewezen: "c3" }[s] || "c0";
@@ -1039,10 +1305,11 @@ function vRes() {
   if (S.resFilter === "komend") list = list.filter(r => r.date >= todayISO && r.status !== "geannuleerd");
   if (S.resFilter === "opties") list = list.filter(r => r.status === "optie" && r.date >= todayISO);
   if (S.resFilter === "aanvragen") list = list.filter(r => r.status === "aanvraag");
+  if (S.resFilter === "oud") list = list.filter(r => r.date < todayISO);
   const q = S.resQuery.trim().toLowerCase();
   if (q) list = list.filter(r => [r.customer, r.contact, r.email, r.notes, roomName(r.roomId)].join(" ").toLowerCase().includes(q));
   list.sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
-  if (S.resFilter === "alle") list.reverse();
+  if (S.resFilter === "alle" || S.resFilter === "oud") list.reverse();
   return `
   <section class="stack">
     <div class="row spread"><h2>Reserveringen</h2><button class="btn bar" id="r-new" ${S.readOnly ? "disabled" : ""}>Nieuwe reservering</button></div>
@@ -1051,6 +1318,7 @@ function vRes() {
         <option value="komend" ${S.resFilter === "komend" ? "selected" : ""}>Komend</option>
         <option value="opties" ${S.resFilter === "opties" ? "selected" : ""}>Openstaande opties</option>
         <option value="aanvragen" ${S.resFilter === "aanvragen" ? "selected" : ""}>Nieuwe aanvragen</option>
+        <option value="oud" ${S.resFilter === "oud" ? "selected" : ""}>Oude events</option>
         <option value="alle" ${S.resFilter === "alle" ? "selected" : ""}>Alles, ook geannuleerd</option>
       </select>
       <input id="r-q" type="search" placeholder="Zoek op klant, ruimte of notitie" value="${esc(S.resQuery)}" style="max-width:320px">
@@ -1296,15 +1564,25 @@ function totals(lines) {
 function vOff() {
   const q = S.quoteOpen && (draft && draft.id === S.quoteOpen ? draft : S.quotes.get(S.quoteOpen));
   if (q) return vQuote(q);
-  const list = [...S.quotes.values()].sort((a, b) => String(b.number).localeCompare(String(a.number)));
+  const all = [...S.quotes.values()].sort((a, b) => String(b.number).localeCompare(String(a.number)));
+  const resOf = q => q.reservationId && S.reservations.get(q.reservationId);
+  const TABS = [
+    ["open", "Openstaand", q => (q.status === "concept" || q.status === "verstuurd") && resOf(q)?.status !== "optie"],
+    ["optie", "In optie", q => resOf(q)?.status === "optie" && q.status !== "afgewezen"],
+    ["geaccepteerd", "Geaccepteerd", q => q.status === "geaccepteerd"],
+    ["afgewezen", "Afgewezen", q => q.status === "afgewezen"],
+    ["alle", "Alle", () => true]];
+  const tab = TABS.find(t => t[0] === S.offTab) || TABS[0];
+  const list = all.filter(tab[2]);
+  const optDays = q => { const r = resOf(q); if (!r || !r.optieTot) return ""; const d = Math.round((parseISO(r.optieTot) - parseISO(todayISO)) / 864e5); return d < 0 ? `verlopen` : `nog ${d} ${d === 1 ? "dag" : "dagen"}`; };
   return `
   <section class="stack">
     <div class="row spread"><h2>Offertes</h2><button class="btn primary" id="q-new" ${S.readOnly ? "disabled" : ""}>Nieuwe offerte</button></div>
-    <p class="muted small">Tip: maak een offerte vanuit een reservering, dan worden datum, ruimte, arrangement en aantal personen al ingevuld.</p>
+    <div class="ptabs" role="group" aria-label="Soort offertes">${TABS.map(([k, l, f]) => `<button type="button" data-otab="${k}" aria-pressed="${k === tab[0]}">${l}<span class="muted">${all.filter(f).length}</span></button>`).join("")}</div>
     <div class="panel tbl-wrap">
-      ${list.length ? `<table><thead><tr><th>Nummer</th><th>Klant</th><th>Datum feest</th><th class="r">Totaal incl. btw</th><th>Status</th></tr></thead><tbody>
-      ${list.map(x => `<tr class="click" data-q="${esc(x.id)}"><td class="num"><b>${esc(x.number)}</b></td><td>${esc(x.customer)}</td><td class="num">${x.eventDate ? esc(shortDate(x.eventDate)) : ""}</td><td class="r">${eur(totals(x.lines).incl)}</td><td>${statusChip(x.status)}</td></tr>`).join("")}
-      </tbody></table>` : `<p class="empty">Nog geen offertes.</p>`}
+      ${list.length ? `<table><thead><tr><th>Nummer</th><th>Klant</th><th>Datum feest</th><th class="r">Totaal incl. btw</th><th>Status</th>${tab[0] === "optie" ? "<th>Optie</th>" : ""}${tab[0] === "afgewezen" ? "<th>Reden</th>" : ""}</tr></thead><tbody>
+      ${list.map(x => `<tr class="click" data-q="${esc(x.id)}"><td class="num"><b>${esc(x.number)}</b></td><td>${esc(x.customer)}</td><td class="num">${x.eventDate ? esc(shortDate(x.eventDate)) : ""}</td><td class="r">${eur(totals(x.lines).incl)}</td><td>${statusChip(x.status)}</td>${tab[0] === "optie" ? `<td class="small">${esc(optDays(x))}</td>` : ""}${tab[0] === "afgewezen" ? `<td class="small">${esc(x.declineReason || "")}</td>` : ""}</tr>`).join("")}
+      </tbody></table>` : `<p class="empty">${all.length ? "Geen offertes in deze lijst." : "Nog geen offertes. Tip: maak een offerte vanuit een reservering, dan worden datum, ruimte, arrangement en aantal personen al ingevuld."}</p>`}
     </div>
   </section>`;
 }
@@ -1338,7 +1616,7 @@ function vQuote(q) {
         <label class="f"><span>Offertedatum</span><input type="date" id="qf-date" value="${esc(q.date)}" ${ro}></label>
         <label class="f"><span>Geldig tot</span><input type="date" id="qf-validUntil" value="${esc(q.validUntil)}" ${ro}></label>
         <label class="f"><span>Status</span><select id="qf-status" ${ro}>${["concept", "verstuurd", "geaccepteerd", "afgewezen"].map(s => `<option ${s === q.status ? "selected" : ""}>${s}</option>`).join("")}</select></label>
-        ${q.status === "afgewezen" ? `<label class="f"><span>Reden van afwijzen</span><select id="qf-declineReason" ${ro}>${["", "Locatie niet geschikt", "Voorkeur voor andere locatie", "Feest gaat niet door", "Datum niet beschikbaar", "Te duur / budget", "Anders"].map(x => `<option value="${esc(x)}" ${x === (q.declineReason || "") ? "selected" : ""}>${x || "–"}</option>`).join("")}</select></label>` : ""}
+        ${q.status === "afgewezen" ? `<label class="f"><span>Reden van afwijzen</span><select id="qf-declineReason" ${ro}>${[...new Set(["", ...(S.settings.locatie?.afwijsredenen || []), q.declineReason || ""])].map(x => `<option value="${esc(x)}" ${x === (q.declineReason || "") ? "selected" : ""}>${x || "–"}</option>`).join("")}</select></label>` : ""}
         <label class="f"><span>Reservering</span><span style="padding:7px 0">${res ? `<a href="#" id="q-res">${esc(shortDate(res.date))} · ${esc(roomName(res.roomId))}</a>` : "niet gekoppeld"}</span></label>
       </div>
     </div>
@@ -1408,6 +1686,7 @@ after.off = () => {
       if (await write("quotes/" + q.id, strip(q))) { S.quotes.set(q.id, q); S.quoteOpen = q.id; render(); }
     };
     document.querySelectorAll("[data-q]").forEach(el => el.onclick = () => { S.quoteOpen = el.dataset.q; render(); });
+    document.querySelectorAll("[data-otab]").forEach(b => b.onclick = () => { S.offTab = b.dataset.otab; render(); });
     return;
   }
   if (!draft || draft.id !== q0.id) draft = structuredClone(q0);
@@ -1473,7 +1752,7 @@ function quoteHtml(q) {
 <style>body{font-family:"Open Sans",Arial,sans-serif;font-size:14px;color:#3b3b3b;max-width:760px;margin:40px auto;padding:0 24px;line-height:1.5}h1{color:#e5621c;font-weight:600;margin:0}
 .hd{display:flex;justify-content:space-between;gap:24px;border-bottom:3px solid #1b7d88;padding-bottom:12px;margin-bottom:20px}table{width:100%;border-collapse:collapse;margin:20px 0}th,td{padding:7px 6px;border-bottom:1px solid #e3e3e3;text-align:left}th{color:#1b7d88}td.r,th.r{text-align:right}
 .tot{margin-left:auto;width:300px}.tot td{border:0;padding:3px 6px}.big td{font-weight:700;font-size:1.15em;border-top:2px solid #1b7d88}.muted{color:#8a8a8a}@media print{body{margin:0}}</style></head><body>
-<div class="hd"><div><h1>Offerte</h1><div class="muted">nr. ${esc(q.number)} · ${q.date ? esc(longDate(q.date)) : ""}</div></div><div style="text-align:right"><b>HC Tilburg Horeca</b><br>Bredaseweg 447<br>5036 NA Tilburg<br>horeca@hctilburg.nl</div></div>
+<div class="hd"><div><h1>Offerte</h1><div class="muted">nr. ${esc(q.number)} · ${q.date ? esc(longDate(q.date)) : ""}</div></div><div style="text-align:right">${(() => { const L = S.settings.locatie || {}; return [`<b>${esc(L.naam || "HC Tilburg Horeca")}</b>`, esc(L.adres || ""), esc([L.postcode, L.plaats].filter(Boolean).join(" ")), esc(L.telefoon || ""), esc(L.email || ""), L.kvk ? "KvK " + esc(L.kvk) : "", L.btwnr ? "Btw " + esc(L.btwnr) : "", L.iban ? "IBAN " + esc(L.iban) : ""].filter(Boolean).join("<br>"); })()}</div></div>
 <p><b>${esc(q.customer)}</b>${q.contact ? "<br>t.a.v. " + esc(q.contact) : ""}${q.email ? "<br>" + esc(q.email) : ""}${q.phone ? "<br>" + esc(q.phone) : ""}</p>
 ${q.eventDate ? `<p>Betreft: ${esc(longDate(q.eventDate))} ${esc(q.eventTime || "")}${q.roomId ? " in " + esc(roomName(q.roomId)) : ""}${q.persons ? ", " + esc(q.persons) + " personen" : ""}.</p>` : ""}
 <table><thead><tr><th>Omschrijving</th><th class="r">Aantal</th><th class="r">Prijs</th><th class="r">Btw</th><th class="r">Bedrag</th></tr></thead><tbody>
@@ -1482,7 +1761,7 @@ ${q.lines.filter(l => (l.desc || l.price) && !l.optional).map(l => `<tr><td>${es
 <table class="tot"><tr><td>Totaal excl. btw</td><td class="r">${eur(t.excl)}</td></tr>${Object.keys(t.btw).map(r => `<tr><td>Btw ${r}%</td><td class="r">${eur(t.btw[r])}</td></tr>`).join("")}<tr class="big"><td>Totaal incl. btw</td><td class="r">${eur(t.incl)}</td></tr>${+q.depositPct ? `<tr><td>Aanbetaling ${esc(q.depositPct)}%</td><td class="r">${eur(t.incl * q.depositPct / 100)}</td></tr><tr><td>Restant bij eindafrekening</td><td class="r">${eur(t.incl * (100 - q.depositPct) / 100)}</td></tr>` : ""}</table>
 ${q.lines.some(l => l.optional) ? `<h3 style="margin-top:24px">Optioneel, op aanvraag</h3><table><tbody>${q.lines.filter(l => l.optional).map(l => `<tr><td>${esc(l.desc)}</td><td class="r">${esc(l.qty)} × ${eur(l.price)}</td><td class="r">${eur(l.qty * l.price)}</td></tr>`).join("")}</tbody></table>` : ""}
 ${q.notes ? `<p>${esc(q.notes).replace(/\n/g, "<br>")}</p>` : ""}
-<p class="muted">Deze offerte is geldig tot ${q.validUntil ? esc(longDate(q.validUntil)) : "14 dagen na dagtekening"}. Alle prijzen zijn inclusief btw.</p></body></html>`;
+<p class="muted">Deze offerte is geldig tot ${q.validUntil ? esc(longDate(q.validUntil)) : "14 dagen na dagtekening"}. Alle prijzen zijn inclusief btw.</p>${S.settings.locatie?.voorwaarden ? `<h3 style="font-size:1rem;color:#1b7d88;margin-top:24px">Voorwaarden</h3><p class="muted" style="font-size:.9em">${esc(S.settings.locatie.voorwaarden).replace(/\n/g, "<br>")}</p>` : ""}</body></html>`;
 }
 
 /* ---------- Import ---------- */
@@ -1727,15 +2006,30 @@ after.import = () => {
 
 /* ---------- Instellingen ---------- */
 let setDraft = null;
-const INST_TABS = [["zalen", "Zalen"], ["arrangementen", "Arrangementen"], ["producten", "Producten"], ["feesten", "Soorten feest"], ["drukte", "Drukte en LISA"]];
+const INST_TABS = [["locatie", "Algemeen"], ["zalen", "Zalen"], ["arrangementen", "Arrangementen"], ["producten", "Producten"], ["feesten", "Soorten feest"], ["drukte", "Drukte en LISA"]];
 function vInst() {
   if (!setDraft) setDraft = structuredClone(S.settings);
   const s = setDraft, D = s.drukte, ro = S.readOnly ? "disabled" : "";
-  const tab = INST_TABS.some(([k]) => k === S.instTab) ? S.instTab : "zalen";
+  const tab = INST_TABS.some(([k]) => k === S.instTab) ? S.instTab : "locatie";
+  const L = s.locatie;
+  const lf = (k, label, ph = "") => `<label class="f"><span>${label}</span><input data-lk="${k}" value="${esc(L[k] || "")}" placeholder="${esc(ph)}" ${ro}></label>`;
+  const ll = (k, label, help) => `<label class="f"><span>${label}</span><textarea data-ll="${k}" rows="6" ${ro}>${esc((L[k] || []).join("\n"))}</textarea><span class="small muted" style="font-weight:400">${help}</span></label>`;
   const sec = k => `data-sec="${k}" ${k === tab ? "" : "hidden"}`;
   return `
   <section class="stack">
     <div class="row spread"><h2>${esc(INST_TABS.find(([k]) => k === tab)[1])}</h2><div class="row"><button class="btn ghost" id="s-reset">Wijzigingen ongedaan maken</button><button class="btn primary" id="s-save" ${ro}>Opslaan</button></div></div>
+    <div class="stack" ${sec("locatie")}>
+      <div class="panel stack"><h3>Gegevens van de locatie</h3>
+        <p class="small muted" style="margin:0">Deze gegevens staan op de offerte en later op facturen en e-mails.</p>
+        <div class="fields">${lf("naam", "Naam", "HC Tilburg Horeca")}${lf("adres", "Adres")}${lf("postcode", "Postcode")}${lf("plaats", "Plaats")}</div>
+        <div class="fields">${lf("telefoon", "Telefoon")}${lf("email", "E-mail")}${lf("website", "Website")}</div>
+        <div class="fields">${lf("kvk", "KvK-nummer")}${lf("btwnr", "Btw-nummer")}${lf("iban", "IBAN")}</div>
+        <label class="f"><span>Algemene voorwaarden en betalingsvoorwaarden (komt onder de offerte)</span><textarea data-lk="voorwaarden" rows="4" ${ro}>${esc(L.voorwaarden || "")}</textarea></label>
+      </div>
+      <div class="panel stack"><h3>Lijsten</h3>
+        <div class="grid2">${ll("managers", "Accountmanagers", "Eén naam per regel. Zij kunnen eigenaar zijn van een reservering of offerte.")}${ll("afwijsredenen", "Redenen voor afwijzen offerte", "Eén reden per regel. Kies je bij een afgewezen offerte.")}${ll("bronnen", "Hoe heeft de klant ons gevonden?", "Eén keuze per regel.")}</div>
+      </div>
+    </div>
     <div class="panel stack" ${sec("zalen")}>
       <div class="row spread"><h3>Ruimtes</h3><button class="btn" id="s-addroom" ${ro}>+ Ruimte</button></div>
       <p class="small muted" style="margin:0">Zoekwoorden koppelen items uit de Outlook-clubagenda aan een ruimte, bijvoorbeeld de naam die in het veld Locatie staat. Zaalhuur komt automatisch op een offerte.</p>
@@ -1792,6 +2086,8 @@ after.inst = () => {
   $("#s-reset").onclick = () => { setDraft = null; render(); };
   const ap = $("#s-addprod"); if (ap) ap.onclick = () => { sync(); openProduct(s, null); };
   document.querySelectorAll("[data-prod]").forEach(el => el.onclick = () => { sync(); openProduct(s, +el.dataset.prod); });
+  document.querySelectorAll("[data-lk]").forEach(el => el.addEventListener("input", () => { s.locatie[el.dataset.lk] = el.value; }));
+  document.querySelectorAll("[data-ll]").forEach(el => el.addEventListener("input", () => { s.locatie[el.dataset.ll] = el.value.split("\n").map(x => x.trim()).filter(Boolean); }));
   const si = $("#s-showinactive"); if (si) si.onchange = e => { sync(); S.showInactive = e.target.checked; render(); };
   document.querySelectorAll("[data-pic]").forEach(b => b.onclick = () => { sync(); S.pinstCat = b.dataset.pic; render(); });
   document.querySelectorAll("[data-arritems]").forEach(b => b.onclick = () => { sync(); openArrItems(s, +b.dataset.arritems); });
