@@ -1093,12 +1093,16 @@ function eventHours(q) {
   return Math.max(0.5, Math.round((b - a) / 30) / 2);
 }
 const qtyFor = (unit, q) => unit === "persoon" ? (+q.persons || 1) : unit === "uur" ? eventHours(q) : unit === "ppu" ? (+q.persons || 1) * eventHours(q) : 1;
-const productLine = (p, q) => ({ desc: p.name + (p.unit === "ppu" ? ` (${String(eventHours(q)).replace(".", ",")} uur)` : ""), qty: qtyFor(p.unit, q), price: +p.price || 0, btw: +p.btw || 0, productId: p.id, unit: p.unit || "stuk", category: p.category || "" });
+const productLine = (p, q) => ({ desc: p.name + (p.unit === "ppu" ? ` (${String(eventHours(q)).replace(".", ",")} uur)` : ""), qty: qtyFor(p.unit, q), price: +p.price || 0, btw: +p.btw || 0, ...(isMix(p) ? { btwHigh: +p.btwHigh } : {}), productId: p.id, unit: p.unit || "stuk", category: p.category || "" });
 function arrangementLines(a, q) {
   if (a.items && a.items.length) return a.items.map(product).filter(Boolean).map(p => productLine(p, q));
   return [{ desc: a.name + (a.description ? " – " + a.description : ""), qty: +q.persons || 1, price: +a.price || 0, btw: +a.btw || 9 }];
 }
 const arrPrice = a => a.items && a.items.length ? a.items.map(product).filter(p => p && p.unit === "persoon").reduce((t, p) => t + (+p.price || 0), 0) : +a.price || 0;
+// Gemengde btw (bijv. drankafkoop): btwHigh = deel van de prijs tegen 21%, de rest tegen 9%.
+const isMix = x => +x.btwHigh > 0 && +x.btwHigh < 100;
+const btwLabel = x => isMix(x) ? `${+x.btwHigh}% à 21, ${100 - x.btwHigh}% à 9` : `${+x.btw || 0}%`;
+const btwSelect = (x, attrs) => `<select ${attrs}>${[9, 21, 0].map(b => `<option value="${b}" ${!isMix(x) && +x.btw === b ? "selected" : ""}>${b}%</option>`).join("")}<option value="mix" ${isMix(x) ? "selected" : ""}>gemengd 21/9</option></select>`;
 function catOrder(c) { const i = (S.settings.productCategories || []).indexOf(c); return i < 0 ? 999 : i; }
 
 const STATUSES = ["aanvraag", "optie", "bevestigd", "afgerond", "geannuleerd"];
@@ -1155,7 +1159,8 @@ function totals(lines) {
     const t = (+l.qty || 0) * (+l.price || 0);
     if (l.optional) { opt += t; continue; }
     incl += t;
-    const rate = +l.btw || 0; btw[rate] = (btw[rate] || 0) + t - t / (1 + rate / 100);
+    const parts = isMix(l) ? [[21, t * l.btwHigh / 100], [9, t * (100 - l.btwHigh) / 100]] : [[+l.btw || 0, t]];
+    for (const [rate, a] of parts) btw[rate] = (btw[rate] || 0) + a - a / (1 + rate / 100);
   }
   const btwTot = Object.values(btw).reduce((a, b) => a + b, 0);
   return { incl, btw, excl: incl - btwTot, opt };
@@ -1222,7 +1227,7 @@ function vQuote(q) {
           <td><input data-k="desc" value="${esc(l.desc)}" ${ro} aria-label="Omschrijving">${l.productId ? `<span class="small muted">${esc(l.category || product(l.productId)?.category || "")}${l.unit ? " · " + esc(UNITS[l.unit] || "") : ""}</span>` : ""}</td>
           <td><input data-k="qty" type="number" step="any" value="${esc(l.qty)}" style="text-align:right" ${ro} aria-label="Aantal"></td>
           <td><input data-k="price" type="number" step="0.01" value="${esc(l.price)}" style="text-align:right" ${ro} aria-label="Prijs"></td>
-          <td><select data-k="btw" ${ro} aria-label="Btw">${[9, 21, 0].map(b => `<option value="${b}" ${+l.btw === b ? "selected" : ""}>${b}%</option>`).join("")}</select></td>
+          <td>${btwSelect(l, `data-k="btw" ${ro} aria-label="Btw"`)}${isMix(l) ? `<input data-k="btwHigh" type="number" min="1" max="99" value="${esc(l.btwHigh)}" aria-label="Deel tegen 21% (%)" title="Deel tegen 21%" style="width:70px;margin-top:4px">` : ""}</td>
           <td class="r" data-amt>${eur((+l.qty || 0) * (+l.price || 0))}</td>
           <td style="text-align:center"><input type="checkbox" data-k="optional" ${l.optional ? "checked" : ""} ${ro} style="width:auto" aria-label="Optionele post"></td>
           <td><button class="btn ghost" data-del="${i}" aria-label="Regel verwijderen" ${ro}>✕</button></td></tr>`).join("")}
@@ -1249,7 +1254,7 @@ function prodPicker() {
   const zoek = (S.psearch || "").trim().toLowerCase();
   const shown = zoek ? prods.filter(p => (p.name + " " + (p.sub || "") + " " + (p.category || "")).toLowerCase().includes(zoek)) : inCat(cur);
   const subs = [...new Set(shown.map(p => p.sub || ""))];
-  const btn = p => `<button type="button" class="pbtn" data-padd="${esc(p.id)}" title="${esc(p.description || "")}"><b>+ ${esc(p.name)}</b><span>${eur(p.price)} ${esc(UNITS[p.unit] || "")} · btw ${esc(p.btw)}%${zoek ? " · " + esc(p.category) : ""}</span></button>`;
+  const btn = p => `<button type="button" class="pbtn" data-padd="${esc(p.id)}" title="${esc(p.description || "")}"><b>+ ${esc(p.name)}</b><span>${eur(p.price)} ${esc(UNITS[p.unit] || "")} · btw ${esc(btwLabel(p))}${zoek ? " · " + esc(p.category) : ""}</span></button>`;
   return `<div class="stack" style="gap:8px;border:1px solid var(--line);border-radius:var(--r);padding:10px;background:var(--bg)">
     <input id="q-psearch" type="search" placeholder="Zoek een product…" value="${esc(S.psearch || "")}" aria-label="Zoek een product" style="max-width:320px">
     ${zoek ? "" : `<div class="catbar" role="group" aria-label="Productcategorieën">${cats.map(c => `<button type="button" data-pcat="${esc(c)}" aria-pressed="${c === cur}">${esc(c)} <span class="muted">${inCat(c).length}</span></button>`).join("")}</div>`}
@@ -1281,24 +1286,25 @@ after.off = () => {
   const q = draft;
   const sync = () => {
     ["customer", "contact", "email", "phone", "eventDate", "eventTime", "roomId", "persons", "date", "validUntil", "status", "notes", "declineReason"].forEach(k => { const el = $("#qf-" + k); if (el) q[k] = el.value; });
-    document.querySelectorAll("tr[data-i]").forEach(tr => { const l = q.lines[+tr.dataset.i]; tr.querySelectorAll("[data-k]").forEach(inp => { const k = inp.dataset.k; l[k] = k === "desc" ? inp.value : k === "optional" ? inp.checked : +inp.value; }); tr.querySelector("[data-amt]").textContent = eur((+l.qty || 0) * (+l.price || 0)); });
+    document.querySelectorAll("tr[data-i]").forEach(tr => { const l = q.lines[+tr.dataset.i]; tr.querySelectorAll("[data-k]").forEach(inp => { const k = inp.dataset.k; if (k === "btw" && inp.value === "mix") { l.btw = 21; if (!isMix(l)) l.btwHigh = 75; return; } if (k === "btw") { l.btw = +inp.value; delete l.btwHigh; return; } if (k === "btwHigh") { if (l.btwHigh != null) l.btwHigh = Math.min(99, Math.max(1, +inp.value || 75)); return; } l[k] = k === "desc" ? inp.value : k === "optional" ? inp.checked : +inp.value; }); tr.querySelector("[data-amt]").textContent = eur((+l.qty || 0) * (+l.price || 0)); });
     q.depositPct = +$("#qf-depositPct").value || 0; q.depositPaid = $("#qf-depositPaid").checked; q.finalPaid = $("#qf-finalPaid").checked;
     $("#q-tot").innerHTML = totHtml(totals(q.lines), q);
   };
   const rerender = () => { sync(); render(); };
   document.querySelectorAll("#app input, #app select, #app textarea").forEach(el => { if (!el.id?.startsWith("q-")) { el.addEventListener("input", sync); el.addEventListener("change", sync); } });
   const qs = $("#qf-status"); if (qs) qs.addEventListener("change", () => { sync(); render(); });
+  document.querySelectorAll('tr[data-i] [data-k="btw"]').forEach(el => el.addEventListener("change", rerender));
   $("#q-back").onclick = () => { S.quoteOpen = null; draft = null; render(); };
   wireCustomerPicker("qf", id => q.customerId = id);
   const qc = $("#q-cust"); if (qc) qc.onclick = e => { e.preventDefault(); S.custOpen = q.customerId; setView("klant"); };
-  $("#q-addline").onclick = () => { sync(); q.lines.push({ desc: "", qty: 1, price: 0, btw: 9 }); rerender(); };
-  $("#q-addarr").onchange = e => { const a = arr(e.target.value); if (!a) return; sync(); q.lines = q.lines.filter(l => l.desc || +l.price); q.lines.push(...arrangementLines(a, q)); rerender(); };
+  $("#q-addline").onclick = () => { sync(); q.lines.push({ desc: "", qty: 1, price: 0, btw: 9 }); render(); };
+  $("#q-addarr").onchange = e => { const a = arr(e.target.value); if (!a) return; sync(); q.lines = q.lines.filter(l => l.desc || +l.price); q.lines.push(...arrangementLines(a, q)); render(); };
   document.querySelectorAll("[data-pcat]").forEach(b => b.onclick = () => { sync(); S.pcat = b.dataset.pcat; rerender(); });
   const ps = $("#q-psearch"); if (ps) ps.oninput = e => { S.psearch = e.target.value; clearTimeout(ps._t); ps._t = setTimeout(() => { rerender(); const n = $("#q-psearch"); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } }, 250); };
-  document.querySelectorAll("[data-padd]").forEach(b => b.onclick = () => { const p = product(b.dataset.padd); if (!p) return; sync(); q.lines = q.lines.filter(l => l.desc || +l.price); q.lines.push(productLine(p, q)); rerender(); toast(`${p.name} toegevoegd`); });
-  const sc = $("#q-sortcat"); if (sc) sc.onclick = () => { sync(); q.lines = q.lines.map((l, i) => ({ l, i })).sort((a, b) => catOrder(a.l.category || product(a.l.productId)?.category) - catOrder(b.l.category || product(b.l.productId)?.category) || a.i - b.i).map(x => x.l); rerender(); };
-  const rq2 = $("#q-requantity"); if (rq2) rq2.onclick = () => { sync(); q.lines.forEach(l => { if (l.productId && (l.unit === "persoon" || l.unit === "uur" || l.unit === "ppu")) l.qty = qtyFor(l.unit, q); }); rerender(); };
-  document.querySelectorAll("[data-del]").forEach(b => b.onclick = () => { sync(); q.lines.splice(+b.dataset.del, 1); rerender(); });
+  document.querySelectorAll("[data-padd]").forEach(b => b.onclick = () => { const p = product(b.dataset.padd); if (!p) return; sync(); q.lines = q.lines.filter(l => l.desc || +l.price); q.lines.push(productLine(p, q)); render(); toast(`${p.name} toegevoegd`); });
+  const sc = $("#q-sortcat"); if (sc) sc.onclick = () => { sync(); q.lines = q.lines.map((l, i) => ({ l, i })).sort((a, b) => catOrder(a.l.category || product(a.l.productId)?.category) - catOrder(b.l.category || product(b.l.productId)?.category) || a.i - b.i).map(x => x.l); render(); };
+  const rq2 = $("#q-requantity"); if (rq2) rq2.onclick = () => { sync(); q.lines.forEach(l => { if (l.productId && (l.unit === "persoon" || l.unit === "uur" || l.unit === "ppu")) l.qty = qtyFor(l.unit, q); }); render(); };
+  document.querySelectorAll("[data-del]").forEach(b => b.onclick = () => { sync(); q.lines.splice(+b.dataset.del, 1); render(); });
   $("#q-save").onclick = async () => { sync(); const before = S.quotes.get(q.id)?.status; q.customerId = await ensureCustomer(q); const body = { ...q, updatedAt: new Date().toISOString() }; delete body.id; if (await write("quotes/" + q.id, body)) { await logQuoteStatus(q, before); toast("Offerte opgeslagen"); await syncProductTasks(q); } };
   const rl = $("#q-res"); if (rl) rl.onclick = e => { e.preventDefault(); openRes(S.reservations.get(q.reservationId)); };
   $("#q-del").onclick = () => { $("#q-delc").hidden = false; $("#q-del").hidden = true; };
@@ -1327,7 +1333,7 @@ function quoteText(q) {
   return [`OFFERTE ${q.number}`, `HC Tilburg Horeca · Bredaseweg 447, 5036 NA Tilburg · horeca@hctilburg.nl`, ``,
     `Voor: ${q.customer}${q.contact ? " t.a.v. " + q.contact : ""}`, `Datum offerte: ${q.date ? longDate(q.date) : ""} · geldig tot ${q.validUntil ? longDate(q.validUntil) : ""}`,
     q.eventDate ? `Feest: ${longDate(q.eventDate)} ${q.eventTime || ""}${q.roomId ? " · " + roomName(q.roomId) : ""}${q.persons ? " · " + q.persons + " personen" : ""}` : "", ``,
-    ...q.lines.filter(l => (l.desc || l.price) && !l.optional).map(l => `${l.qty} × ${l.desc}  à ${eur(l.price)}  = ${eur(l.qty * l.price)}  (btw ${l.btw}%)`), ``,
+    ...q.lines.filter(l => (l.desc || l.price) && !l.optional).map(l => `${l.qty} × ${l.desc}  à ${eur(l.price)}  = ${eur(l.qty * l.price)}  (btw ${btwLabel(l)})`), ``,
     `Totaal excl. btw: ${eur(t.excl)}`, ...Object.keys(t.btw).map(r => `Btw ${r}%: ${eur(t.btw[r])}`), `Totaal incl. btw: ${eur(t.incl)}`,
     ...(q.lines.some(l => l.optional) ? [``, `Optioneel (op aanvraag):`, ...q.lines.filter(l => l.optional).map(l => `${l.qty} × ${l.desc}  à ${eur(l.price)}  = ${eur(l.qty * l.price)}`)] : []),
     ...(+q.depositPct ? [``, `Aanbetaling ${q.depositPct}%: ${eur(t.incl * q.depositPct / 100)} · restant ${eur(t.incl * (100 - q.depositPct) / 100)} bij eindafrekening`] : []),
@@ -1343,7 +1349,7 @@ function quoteHtml(q) {
 <p><b>${esc(q.customer)}</b>${q.contact ? "<br>t.a.v. " + esc(q.contact) : ""}${q.email ? "<br>" + esc(q.email) : ""}${q.phone ? "<br>" + esc(q.phone) : ""}</p>
 ${q.eventDate ? `<p>Betreft: ${esc(longDate(q.eventDate))} ${esc(q.eventTime || "")}${q.roomId ? " in " + esc(roomName(q.roomId)) : ""}${q.persons ? ", " + esc(q.persons) + " personen" : ""}.</p>` : ""}
 <table><thead><tr><th>Omschrijving</th><th class="r">Aantal</th><th class="r">Prijs</th><th class="r">Btw</th><th class="r">Bedrag</th></tr></thead><tbody>
-${q.lines.filter(l => (l.desc || l.price) && !l.optional).map(l => `<tr><td>${esc(l.desc)}${product(l.productId)?.description ? `<br><span class="muted" style="font-size:.88em">${esc(product(l.productId).description)}</span>` : ""}</td><td class="r">${esc(l.qty)}</td><td class="r">${eur(l.price)}</td><td class="r">${esc(l.btw)}%</td><td class="r">${eur(l.qty * l.price)}</td></tr>`).join("")}
+${q.lines.filter(l => (l.desc || l.price) && !l.optional).map(l => `<tr><td>${esc(l.desc)}${product(l.productId)?.description ? `<br><span class="muted" style="font-size:.88em">${esc(product(l.productId).description)}</span>` : ""}</td><td class="r">${esc(l.qty)}</td><td class="r">${eur(l.price)}</td><td class="r">${esc(btwLabel(l))}</td><td class="r">${eur(l.qty * l.price)}</td></tr>`).join("")}
 </tbody></table>
 <table class="tot"><tr><td>Totaal excl. btw</td><td class="r">${eur(t.excl)}</td></tr>${Object.keys(t.btw).map(r => `<tr><td>Btw ${r}%</td><td class="r">${eur(t.btw[r])}</td></tr>`).join("")}<tr class="big"><td>Totaal incl. btw</td><td class="r">${eur(t.incl)}</td></tr>${+q.depositPct ? `<tr><td>Aanbetaling ${esc(q.depositPct)}%</td><td class="r">${eur(t.incl * q.depositPct / 100)}</td></tr><tr><td>Restant bij eindafrekening</td><td class="r">${eur(t.incl * (100 - q.depositPct) / 100)}</td></tr>` : ""}</table>
 ${q.lines.some(l => l.optional) ? `<h3 style="margin-top:24px">Optioneel, op aanvraag</h3><table><tbody>${q.lines.filter(l => l.optional).map(l => `<tr><td>${esc(l.desc)}</td><td class="r">${esc(l.qty)} × ${eur(l.price)}</td><td class="r">${eur(l.qty * l.price)}</td></tr>`).join("")}</tbody></table>` : ""}
@@ -1674,7 +1680,7 @@ function prodInstHtml(s, ro) {
     ${nInactive ? `<label class="check small"><input type="checkbox" id="s-showinactive" ${S.showInactive ? "checked" : ""}> Toon ook de ${nInactive} niet-actieve producten</label>` : ""}
     ${groups.length ? groups.map(g => `<h4 class="eyebrow pcat-h">${esc(g.c || "Zonder categorie")} · ${g.items.length}</h4>
       <div class="tbl-wrap"><table><thead><tr><th>Product</th><th>Subcategorie</th><th class="r">Prijs incl. btw</th><th>Eenheid</th><th class="r">Btw</th><th>To-do</th><th></th></tr></thead><tbody>
-      ${g.items.map(({ p, i }) => `<tr class="click" data-prod="${i}"><td><b>${esc(p.name)}</b>${p.description ? `<br><span class="muted small">${esc(p.description.length > 140 ? p.description.slice(0, 140) + "…" : p.description)}</span>` : ""}</td><td class="small">${esc(p.sub || "")}</td><td class="r">${eur(p.price)}${p.priceChild != null && p.priceChild !== "" ? `<br><span class="muted small">kind ${eur(p.priceChild)}</span>` : ""}</td><td>${esc(UNITS[p.unit] || "")}</td><td class="r">${esc(p.btw)}%</td><td class="small">${p.todoText ? esc(p.todoText) + (p.todoDays !== "" && p.todoDays != null ? ` (${esc(p.todoDays)} dagen vooraf)` : "") : ""}</td><td>${p.active === false ? `<span class="chip c0">niet actief</span>` : ""}</td></tr>`).join("")}
+      ${g.items.map(({ p, i }) => `<tr class="click" data-prod="${i}"><td><b>${esc(p.name)}</b>${p.description ? `<br><span class="muted small">${esc(p.description.length > 140 ? p.description.slice(0, 140) + "…" : p.description)}</span>` : ""}</td><td class="small">${esc(p.sub || "")}</td><td class="r">${eur(p.price)}${p.priceChild != null && p.priceChild !== "" ? `<br><span class="muted small">kind ${eur(p.priceChild)}</span>` : ""}</td><td>${esc(UNITS[p.unit] || "")}</td><td class="r">${esc(btwLabel(p))}</td><td class="small">${p.todoText ? esc(p.todoText) + (p.todoDays !== "" && p.todoDays != null ? ` (${esc(p.todoDays)} dagen vooraf)` : "") : ""}</td><td>${p.active === false ? `<span class="chip c0">niet actief</span>` : ""}</td></tr>`).join("")}
       </tbody></table></div>`).join("") : `<p class="empty">Nog geen producten. Voeg ze toe met <b>+ Product</b>, bijvoorbeeld "Bittergarnituur, 2 stuks p.p." in Hapjes.</p>`}
   </div>`;
 }
@@ -1691,7 +1697,8 @@ function openProduct(s, idx) {
     <div class="fields">
       <label class="f"><span>Prijs incl. btw (€)</span><input id="pf-price" type="number" step="0.01" min="0" required value="${esc(p.price)}"></label>
       <label class="f"><span>Eenheid</span><select id="pf-unit">${Object.entries(UNITS).map(([v, l]) => `<option value="${v}" ${v === p.unit ? "selected" : ""}>${l}</option>`).join("")}</select></label>
-      <label class="f"><span>Btw</span><select id="pf-btw">${[9, 21, 0].map(b => `<option value="${b}" ${+p.btw === b ? "selected" : ""}>${b}%</option>`).join("")}</select></label>
+      <label class="f"><span>Btw</span>${btwSelect(p, 'id="pf-btw"')}</label>
+      <label class="f" id="pf-mixf" ${isMix(p) ? "" : "hidden"}><span>Deel tegen 21% (%)</span><input id="pf-btwHigh" type="number" min="1" max="99" value="${esc(isMix(p) ? p.btwHigh : 75)}"></label>
       <label class="f"><span>Kinderprijs (optioneel)</span><input id="pf-priceChild" type="number" step="0.01" min="0" value="${esc(p.priceChild ?? "")}"></label>
     </div>
     <label class="f"><span>Omschrijving voor de klant (staat op de offerte)</span><textarea id="pf-description">${esc(p.description)}</textarea></label>
@@ -1708,10 +1715,11 @@ function openProduct(s, idx) {
   </form></div>`;
   const persist = () => { closeModal(); render(); $("#s-save")?.click(); };
   $("#pf-x").onclick = closeModal;
+  $("#pf-btw").onchange = e => { $("#pf-mixf").hidden = e.target.value !== "mix"; };
   $("#scrim").addEventListener("mousedown", e => { if (e.target.id === "scrim") closeModal(); });
   $("#prod-form").onsubmit = e => {
     e.preventDefault();
-    const np = { ...p, name: $("#pf-name").value.trim(), category: $("#pf-category").value, price: +$("#pf-price").value || 0, unit: $("#pf-unit").value, btw: +$("#pf-btw").value, sub: $("#pf-sub").value.trim(), priceChild: $("#pf-priceChild").value === "" ? null : +$("#pf-priceChild").value, description: $("#pf-description").value.trim(), kitchenNote: $("#pf-kitchenNote").value.trim(), todoText: $("#pf-todoText").value.trim(), todoDays: $("#pf-todoDays").value === "" ? "" : +$("#pf-todoDays").value, active: $("#pf-active").checked };
+    const np = { ...p, name: $("#pf-name").value.trim(), category: $("#pf-category").value, price: +$("#pf-price").value || 0, unit: $("#pf-unit").value, btw: $("#pf-btw").value === "mix" ? 21 : +$("#pf-btw").value, btwHigh: $("#pf-btw").value === "mix" ? Math.min(99, Math.max(1, +$("#pf-btwHigh").value || 75)) : null, sub: $("#pf-sub").value.trim(), priceChild: $("#pf-priceChild").value === "" ? null : +$("#pf-priceChild").value, description: $("#pf-description").value.trim(), kitchenNote: $("#pf-kitchenNote").value.trim(), todoText: $("#pf-todoText").value.trim(), todoDays: $("#pf-todoDays").value === "" ? "" : +$("#pf-todoDays").value, active: $("#pf-active").checked };
     if (!np.name) { toast("Geef het product een naam"); return; }
     if (isNew) s.products.push(np); else s.products[idx] = np;
     S.pcat = np.category; persist();
