@@ -974,7 +974,7 @@ async function boot() {
 
 /* ---------- domain ---------- */
 const room = id => S.settings.rooms.find(r => r.id === id);
-const roomName = id => room(id)?.name || "Onbekende ruimte";
+const roomName = id => id ? (room(id)?.name || "Onbekende ruimte") : "Ruimte nog kiezen";
 // Gekoppelde ruimtes (bijv. Business Lounge en Oude Warande): is de ene bezet of geblokkeerd, dan de andere ook. Werkt in beide richtingen.
 const linkedTo = id => !id ? [] : [...new Set([id, ...(room(id)?.linkedRooms || []), ...S.settings.rooms.filter(x => (x.linkedRooms || []).includes(id)).map(x => x.id)])];
 const roomsClash = (a, b) => !!a && !!b && (a === b || linkedTo(a).includes(b));
@@ -6088,6 +6088,155 @@ document.head.insertAdjacentHTML("beforeend", `<style id="rph-style">
 .rfoto-mini img { width: 64px; height: 44px; object-fit: cover; border-radius: 2px; border: 1px solid var(--line); }
 @media (max-width: 760px) { .rph-it, .rph-it img, .rph-bad { width: 140px; } .rph-it img, .rph-bad { height: 90px; } }
 </style>`);
+/* ---------- Aanvragen via de website (offerteformulier aanvraag.html) ---------- */
+/* Plakken in horeca-agenda.html binnen de IIFE, vóór de regel `boot();` (na de andere modules). Zie aanvraag-integratie.md.
+   Gasten vragen op aanvraag.html een offerte aan; de edge function offerte-aanvraag zet die als reservering met
+   status "aanvraag" en bron "website" in de agenda (zonder ruimte), met klantkaart, to-do en bevestigingsmail in de outbox.
+   Deze module laat nieuwe aanvragen opvallen: een blok bovenaan het dashboard, een melding zodra er een binnenkomt,
+   het aantal in de tabtitel, en Instellingen › Aanvraagformulier website (aan/uit, link, code voor de clubsite). */
+const WA_ETEN = { borrel: "Borrel met hapjes", walking: "Walking dinner", buffet: "Buffet of BBQ", diner: "Diner aan tafel", lunch: "Lunch of broodjes", koffie: "Koffie, thee en iets lekkers",
+  vergader: "Vergaderarrangement", koffietafel: "Koffietafel", kinder: "Patat of snack", traktatie: "Limonade en iets lekkers", advies: "Adviseer mij" };
+const WA_DRINKEN = { arrangement: "Drankarrangement", rekening: "Op rekening", munten: "Consumptiemunten", zelf: "Gasten betalen zelf", koffiethee: "Koffie, thee en water onbeperkt", limonade: "Limonade onbeperkt", advies: "Adviseer mij" };
+const WA_BUDGET = { "tot25": "tot € 25 p.p.", "25-40": "€ 25 – 40 p.p.", "40-60": "€ 40 – 60 p.p.", "60plus": "meer dan € 60 p.p.", "onbekend": "nog niet bekend" };
+const WA_LID = { lid: ["Lid", "c1"], ouder: ["Ouder van jeugdlid", "c1"], sponsor: ["Sponsor", "c4"], nee: ["Geen lid", "c0"] };
+const WA_URL = "https://godsderuler.github.io/Agenda/aanvraag.html";
+const waUrl = () => /^https?:/.test(location.protocol) && /github\.io|localhost|127\.0\.0\.1/.test(location.host) ? new URL("aanvraag.html", location.href).href : WA_URL;
+
+// Bevestigingsmail: de edge function verstuurt hem; hier alleen de tekst, zodat hij in E-mailteksten aan te passen is.
+MAIL_DEFS.push({ key: "aanvraag_ontvangen", phase: "Offerte", name: "Aanvraag ontvangen (website)", when: "direct na een aanvraag via het formulier op de website", on: true,
+  subject: "Wij hebben je aanvraag ontvangen – {locatie}",
+  body: "{aanhef}\n\nBedankt voor je aanvraag voor een {gelegenheid} op {datum}. Wij hebben hem goed ontvangen en sturen je binnen twee werkdagen een offerte op maat.\n\nDit heb je ons doorgegeven:\n{samenvatting}\n\nKlopt er iets niet of wil je nog iets aanvullen? Beantwoord dan gewoon deze mail.\n\n{handtekening}" });
+MAIL_FIELDS.push(["gelegenheid", "soort gelegenheid (aanvraag)"], ["samenvatting", "samenvatting aanvraag"]);
+
+const isWebAanvraag = r => !!r && r.bron === "website";
+const waNieuw = () => [...S.reservations.values()].filter(r => isWebAanvraag(r) && r.status === "aanvraag" && !r.gezien)
+  .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+function waAgo(iso) {
+  const t = Date.parse(iso || ""); if (!t) return "";
+  const min = Math.round((Date.now() - t) / 6e4);
+  if (min < 2) return "zojuist";
+  if (min < 60) return `${min} min geleden`;
+  if (min < 24 * 60) return `${Math.round(min / 60)} uur geleden`;
+  const d = String(iso).slice(0, 10);
+  return d === addDays(todayISO, -1) ? "gisteren" : shortDate(d);
+}
+async function waGezien(r, gezien = true) {
+  if (!r || S.readOnly) return false;
+  const who = (document.querySelector(".who span")?.textContent || "").trim();
+  const body = { gezien, gezienOp: gezien ? new Date().toISOString() : "", gezienDoor: gezien ? who : "" };
+  const ok = await write("reservations/" + r.id, body, "update");
+  if (ok) S.reservations.set(r.id, { ...S.reservations.get(r.id), ...body });
+  return ok;
+}
+
+/* Dashboard: opvallend blok met de nieuwe aanvragen */
+function waKaart(r) {
+  const a = r.aanvraag || {}, lid = WA_LID[a.lid], task = (r.tasks || []).find(taskOpen), late = task && task.due && task.due < todayISO;
+  const eten = (a.eten || []).map(k => WA_ETEN[k] || k).join(", "), drinken = WA_DRINKEN[a.drinken] || "";
+  const regel = (k, v) => v ? `<dt>${esc(k)}</dt><dd>${v}</dd>` : "";
+  return `<article class="wa-kaart">
+    <div class="wa-top"><span class="wa-ic" aria-hidden="true">${esc(a.icoon || "✉️")}</span>
+      <div class="wa-titel"><b>${esc(r.gelegenheid || a.gelegenheidNaam || "Aanvraag")}</b><span class="muted small">${esc(r.customer || "")}${r.customer && r.contact && r.contact !== r.customer ? " · " + esc(r.contact) : ""} · ${esc(waAgo(r.createdAt))}</span></div>
+      ${lid ? `<span class="chip ${lid[1]}">${esc(lid[0])}</span>` : ""}</div>
+    <dl class="wa-dl">
+      ${regel("Datum", `<b>${esc(longDate(r.date))}</b>, ${esc(r.start || "")}${r.end ? " – " + esc(r.end) : ""}${a.flexibel ? ` <span class="chip c2">flexibel</span>${a.flexTekst ? ` <span class="muted small">${esc(a.flexTekst)}</span>` : ""}` : ""}`)}
+      ${regel("Gasten", `<b>${esc(r.persons)}</b>${+a.kinderen ? `, waarvan ${esc(a.kinderen)} kinderen` : ""}`)}
+      ${regel("Eten", esc(eten))}
+      ${regel("Drinken", esc(drinken))}
+      ${regel("Budget", esc(WA_BUDGET[a.budget] || ""))}
+      ${regel("Contact", `${r.phone ? `<a href="tel:${esc(String(r.phone).replace(/[^+0-9]/g, ""))}">${esc(r.phone)}</a>` : ""}${r.phone && r.email ? " · " : ""}${r.email ? `<a href="mailto:${esc(r.email)}">${esc(r.email)}</a>` : ""}${a.contact === "bellen" ? ` <span class="chip c2">wil gebeld worden</span>` : ""}`)}
+    </dl>
+    <div class="wa-voet">${task ? `<span class="small ${late ? "wa-laat" : "muted"}">${esc(task.text)} vóór ${esc(shortDate(task.due))}${late ? " (te laat)" : ""}</span>` : "<span></span>"}
+      <div class="row"><button class="btn ghost" data-wa-gezien="${esc(r.id)}" ${S.readOnly ? "disabled" : ""}>Gezien</button><button class="btn primary" data-wa-open="${esc(r.id)}">Openen</button></div></div>
+  </article>`;
+}
+function waBand() {
+  const nieuw = waNieuw();
+  if (!nieuw.length) return "";
+  const n = nieuw.length, toon = nieuw.slice(0, 6);
+  return `<section class="wa-band" aria-label="Nieuwe aanvragen via de website">
+    <div class="wa-kop"><span class="wa-bel" aria-hidden="true">🔔</span><div><h3>${n === 1 ? "Nieuwe aanvraag" : `${n} nieuwe aanvragen`} via de website</h3><span class="small">Stuur binnen twee werkdagen een offerte. Kies bij het openen een ruimte.</span></div>
+      <button class="btn" data-wa-alle>Alle aanvragen</button></div>
+    <div class="wa-lijst">${toon.map(waKaart).join("")}</div>
+    ${n > toon.length ? `<p class="small" style="margin:0">En nog ${n - toon.length} meer, zie Alle aanvragen.</p>` : ""}
+  </section>`;
+}
+{ const f = VIEWS.home; VIEWS.home = () => {
+  const h = f(), b = waBand(); if (!b) return h;
+  const i = h.indexOf('id="h-newq"'), j = i < 0 ? -1 : h.indexOf("</div></div>", i);
+  return j >= 0 ? h.slice(0, j + 12) + b + h.slice(j + 12) : h.replace('<div class="tiles">', b + '<div class="tiles">');
+}; }
+{ const f = after.home; after.home = () => {
+  if (f) f();
+  document.querySelectorAll("[data-wa-open]").forEach(b => b.onclick = () => openRes(S.reservations.get(b.dataset.waOpen)));
+  document.querySelectorAll("[data-wa-gezien]").forEach(b => b.onclick = async () => { if (await waGezien(S.reservations.get(b.dataset.waGezien))) { toast("Gemarkeerd als gezien, de aanvraag blijft bij Nieuwe aanvragen"); render(); } });
+  document.querySelectorAll("[data-wa-alle]").forEach(b => b.onclick = () => { S.resFilter = "aanvragen"; setView("res"); });
+}; }
+// Openen = gezien.
+const _waOpenRes = openRes;
+openRes = function (r0) { if (isWebAanvraag(r0) && r0.status === "aanvraag" && !r0.gezien) waGezien(r0); return _waOpenRes(r0); };
+
+/* Melding zodra er een aanvraag binnenkomt (ook als het dashboard niet open staat) en het aantal in de tabtitel */
+let waBekend = null; const waTitel = document.title;
+setInterval(() => {
+  if (S.dbState === "loading") return;
+  const nieuw = waNieuw(), ids = new Set(nieuw.map(r => r.id));
+  if (waBekend) {
+    const vers = nieuw.filter(r => !waBekend.has(r.id) && Date.now() - Date.parse(r.createdAt || 0) < 15 * 6e4);
+    if (vers.length) { const r = vers[0]; toast(vers.length > 1 ? `${vers.length} nieuwe aanvragen via de website` : `Nieuwe aanvraag: ${r.gelegenheid || "feest"} op ${shortDate(r.date)} (${r.persons} pers.)`); if (S.view === "home") scheduleRender(); }
+  }
+  waBekend = ids;
+  document.title = (nieuw.length ? `(${nieuw.length}) ` : "") + waTitel;
+}, 3000);
+
+/* Instellingen › Aanvraagformulier website */
+VIEWS.aanvraagform = () => {
+  const aan = S.settings.aanvraagUit !== true, url = waUrl(), ro = S.readOnly ? "disabled" : "";
+  const iframe = `<iframe src="${url}" title="Offerte aanvragen" style="width:100%;min-height:1400px;border:0"></iframe>`;
+  const n = [...S.reservations.values()].filter(isWebAanvraag).length;
+  return `<section class="stack">
+    <div class="row spread"><h2>Aanvraagformulier website</h2><a class="btn" href="${esc(url)}" target="_blank" rel="noopener">Formulier bekijken</a></div>
+    <div class="panel stack">
+      <label class="check"><input type="checkbox" id="wa-aan" ${aan ? "checked" : ""} ${ro}> Gasten kunnen via de website een offerte aanvragen</label>
+      <p class="small muted" style="margin:0">Staat dit uit, dan zien gasten de melding dat aanvragen tijdelijk uit staat. Tot nu toe ${n} ${n === 1 ? "aanvraag" : "aanvragen"} via de website.</p>
+    </div>
+    <div class="panel stack">
+      <h3>Op de clubsite zetten</h3>
+      <label class="f"><span>Link voor een knop "Offerte aanvragen" op hctilburg.com/verhuur</span><input readonly value="${esc(url)}" onclick="this.select()"></label>
+      <label class="f"><span>Of het formulier in de pagina zelf (iframe)</span><textarea readonly rows="3" onclick="this.select()">${esc(iframe)}</textarea></label>
+      <p class="small muted" style="margin:0">De beheerder van de clubsite plakt een van deze twee. Foto's en tekst van de ruimtes komen uit Instellingen › Ruimtes. De bevestigingsmail pas je aan in E-mailteksten (Aanvraag ontvangen).</p>
+    </div>
+  </section>`;
+};
+after.aanvraagform = () => {
+  const c = $("#wa-aan"); if (c) c.onchange = async () => { const uit = !c.checked; if (await write("settings/main", { aanvraagUit: uit }, "update")) { S.settings.aanvraagUit = uit; toast(uit ? "Aanvraagformulier staat uit" : "Aanvraagformulier staat aan"); render(); } else c.checked = !uit; };
+};
+(() => {
+  const inst = MENU.find(m => m.id === "inst"), desc = inst && Object.getOwnPropertyDescriptor(inst, "items");
+  const item = { l: "Aanvraagformulier website", v: "aanvraagform" };
+  if (desc && desc.get) Object.defineProperty(inst, "items", { configurable: true, get: () => { const its = desc.get(); const i = its.findIndex(it => it.v === "teams"); its.splice(i < 0 ? its.length : i + 1, 0, item); return its; } });
+  else if (inst) inst.items.push(item);
+  const st = document.createElement("style");
+  st.textContent = `
+.wa-band { border: 2px solid var(--orange); background: var(--orange-soft); border-radius: var(--r, 4px); padding: 14px; display: grid; gap: 12px; }
+.wa-kop { display: flex; gap: 12px; align-items: center; }
+.wa-kop > div { flex: 1; min-width: 0; } .wa-kop h3 { margin: 0; color: var(--orange); font-size: 1.1rem; }
+.wa-bel { font-size: 1.6rem; line-height: 1; animation: wa-bel 1.2s ease-in-out 3; transform-origin: 50% 0; }
+@keyframes wa-bel { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(14deg); } 75% { transform: rotate(-14deg); } }
+@media (prefers-reduced-motion: reduce) { .wa-bel { animation: none; } }
+.wa-lijst { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+.wa-kaart { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--orange); border-radius: var(--r, 4px); padding: 12px; display: grid; gap: 8px; min-width: 0; }
+.wa-top { display: flex; gap: 10px; align-items: flex-start; } .wa-ic { font-size: 1.4rem; line-height: 1.2; }
+.wa-titel { flex: 1; min-width: 0; display: grid; } .wa-titel b { font-size: 1rem; }
+.wa-dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 0; font-size: .9rem; }
+.wa-dl dt { color: var(--muted); } .wa-dl dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.wa-voet { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 8px; }
+.wa-laat { color: var(--bad); font-weight: 600; }
+@media (max-width: 600px) { .wa-kop { flex-wrap: wrap; } .wa-lijst { grid-template-columns: 1fr; } }`;
+  document.head.appendChild(st);
+})();
+/* ---------- einde aanvragen via de website ---------- */
+
 boot();
 })();
 </script>
