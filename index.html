@@ -8832,6 +8832,153 @@ after.klant = function () {
   const c = S.custOpen && S.customers.get(S.custOpen);
   if (c) cxEnhanceCard(c); else cxEnhanceList();
 };
+/* ---------- Automatische e-mails (zoals Restau) ---------- */
+/* Plakken in horeca-agenda.html binnen de IIFE, vóór de regel `boot();` (na de e-mailmodule, de afsprakenmodule en de aanvraagmodule).
+   Zie mailautomaat-integratie.md. Werkt samen met de edge function mail-automaat:
+   - de agenda zet mails die bij een handeling horen klaar (zoals nu), de functie zet de mails op datum klaar;
+   - per mail kies je "automatisch" of "eerst nakijken"; automatische mails verstuurt de functie elk kwartier
+     tussen 07:00 en 21:00, ook als de agenda dicht is; nakijken-mails blijven in de outbox;
+   - in de outbox kun je een mail meteen echt versturen (knop "Nu versturen") zodra de mailkoppeling aan staat;
+   - per feest kun je de automatische mails uitzetten (tab E-mails in het eventdossier). */
+const MA_SERVER_KEYS = ["optie_bijna", "optie_verlopen", "bijna_zover", "nog_dagen", "after_sales", "offerte_herinnering",
+  "herinnering_betaling", "herinnering_betaling_2", "herinnering_betaling_laatst", "betaalverzoek_2e", "afspraak_herinnering"];
+const MA_AUTO = { aanvraag_ontvangen: 1, optie_gezet: 1, optie_bijna: 1, optie_verlopen: 1, bevestiging: 1, betaalverzoek_2e: 1, nog_dagen: 1, bijna_zover: 1, after_sales: 1,
+  betaling_ontvangen: 1, herinnering_betaling: 1, herinnering_betaling_2: 1, offerte_herinnering: 1, afspraak_bevestiging: 1, afspraak_afwijzing: 1, afspraak_herinnering: 1 };
+
+/* Nieuwe mails (naar de lijst van Restau; de afspraakmails zitten al in de afsprakenmodule) en tijdstippen zoals de mailautomaat ze aanhoudt */
+MAIL_DEFS.push(
+  { key: "betaalverzoek_2e", phase: "Bevestigd", name: "Betaalverzoek 2e termijn", when: "twee weken voor de uiterste betaaldatum van de 2e betaling (standaard 6 weken voor het feest)", on: true,
+    subject: "Tweede betalingsverzoek voor uw feest op {datum}",
+    body: "{aanhef}\n\nOver een paar weken is het zover! Volgens onze afspraak vragen wij u nu de tweede betaling van {betaalbedrag} ({termijn}) voor uw feest op {datum}. Wilt u dit bedrag uiterlijk {vervaldatum} overmaken op {iban}, onder vermelding van uw naam en de datum van het feest?\n\n{handtekening}" },
+  { key: "nog_dagen", phase: "Bevestigd", name: "Nog xx dagen tot uw feest", when: "ongeveer een maand voor het feest", on: false, subject: "Nog {dagen_tot} dagen tot uw feest bij {locatie}",
+    body: "{aanhef}\n\nNog {dagen_tot} dagen tot uw feest op {datum}! Heeft u al nagedacht over het definitieve aantal gasten, dieetwensen of andere wensen? Laat het ons gerust weten, dan nemen wij alles met u door.\n\n{handtekening}" },
+  { key: "herinnering_betaling_2", phase: "Algemeen", name: "2e betalingsherinnering", when: "14 dagen na de vervaldatum van een open factuur", on: true, subject: "Tweede herinnering: factuur {factuurnummer}",
+    body: "{aanhef}\n\nOndanks onze eerdere herinnering staat factuur {factuurnummer} van {factuurbedrag} nog open. De vervaldatum was {vervaldatum}. Wilt u het bedrag binnen 7 dagen overmaken op {iban}? Heeft u inmiddels betaald, dan kunt u deze herinnering vergeten.\n\n{handtekening}" },
+  { key: "herinnering_betaling_laatst", phase: "Algemeen", name: "Laatste betalingsherinnering", when: "28 dagen na de vervaldatum van een open factuur", on: true, subject: "Laatste herinnering: factuur {factuurnummer}",
+    body: "{aanhef}\n\nFactuur {factuurnummer} van {factuurbedrag} staat nog steeds open, ondanks twee herinneringen. Wij verzoeken u het bedrag binnen 7 dagen over te maken op {iban}. Neem bij vragen gerust contact met ons op.\n\n{handtekening}" },
+);
+MAIL_FIELDS.push(["dagen_tot", "dagen tot het feest"]);
+{ const w = { bijna_zover: "8 dagen voor het feest", herinnering_betaling: "3 dagen na de vervaldatum van een open factuur", optie_bijna: "3 dagen voordat een optie verloopt" };
+  for (const d of MAIL_DEFS) { if (w[d.key]) d.when = w[d.key]; d.auto = !!MA_AUTO[d.key]; } }
+
+const maAuto = key => { const a = ((S.mail || {}).auto || {})[key]; return a != null ? !!a : !!MA_AUTO[key]; };
+const maAan = () => !!(S.mail && S.mail.autoAan);
+
+/* Verbinding met de mailautomaat (alleen in de webversie: window.HCT_SB) */
+S.mailKop = null; // { actief, afzender, venster } of { fout }
+async function maCall(body) {
+  if (!window.HCT_SB || !window.HCT_SB.functions) throw new Error("Alleen in de webversie van de agenda");
+  const { data, error } = await window.HCT_SB.functions.invoke("mail-automaat", { body });
+  if (error) { let msg = ""; try { msg = (await error.context.json()).fout; } catch (e) {} throw new Error(msg || "De mailautomaat is niet bereikbaar"); }
+  if (data && data.fout) throw new Error(data.fout);
+  return data;
+}
+let maStatusBezig = false;
+async function maStatus(force) {
+  if (maStatusBezig || (S.mailKop && !force)) return;
+  maStatusBezig = true;
+  try { S.mailKop = await maCall({ actie: "status" }); } catch (e) { S.mailKop = { actief: false, fout: e.message }; }
+  maStatusBezig = false; scheduleRender();
+}
+
+/* De agenda zet de mails op datum niet meer zelf klaar: dat doet de mailautomaat, ook als de agenda dicht is.
+   (De afspraakmails bevestiging/afwijzing komen uit de afsprakenmodule, de herinnering de dag ervoor uit de mailautomaat.) */
+const _maWanted = mailWanted;
+mailWanted = function () { return _maWanted().filter(x => !MA_SERVER_KEYS.includes(x.body.key)); };
+
+/* Standaardteksten delen met de mailautomaat: settings/mail.defs (alleen bij schrijfrechten, alleen als ze veranderd zijn) */
+let maDefsBezig = false;
+setInterval(async () => {
+  if (maDefsBezig || S.readOnly || !S.db || !S.mail || !S.mail.since) return;
+  const defs = MAIL_DEFS.map(({ key, phase, name, on, subject, body, auto }) => ({ key, phase, name, on, subject, body, auto: !!auto }));
+  if (JSON.stringify(S.mail.defs || []) === JSON.stringify(defs)) return;
+  maDefsBezig = true;
+  try { await S.db.doc("settings/mail").update({ defs }); S.mail = { ...S.mail, defs }; } catch (e) {}
+  maDefsBezig = false;
+}, 5000);
+async function maMailSet(velden) {
+  if (S.readOnly) { toast("Je hebt alleen leesrechten op deze agenda"); return false; }
+  if (!S.db) { S.mail = { ...(S.mail || {}), ...velden }; return true; }
+  try { await S.db.doc("settings/mail").update(velden); S.mail = { ...(S.mail || {}), ...velden }; return true; } catch (e) { toast("Opslaan mislukt, probeer het opnieuw"); return false; }
+}
+
+/* Instellingen › Automatische e-mails */
+VIEWS.mailauto = () => {
+  maStatus();
+  const k = S.mailKop, ro = S.readOnly ? "disabled" : "", aan = maAan();
+  const kop = !k ? `<span class="chip c0">bezig met controleren…</span>`
+    : k.actief ? `<span class="chip c1">gekoppeld</span> <span class="small">Mails gaan uit vanaf <b>${esc(k.afzender)}</b>, tussen ${esc(k.venster || "07:00 en 21:00")}.</span>`
+    : `<span class="chip c2">nog niet gekoppeld</span> <span class="small">${esc(k.fout && !/webversie/.test(k.fout) ? k.fout : k.fout || "Er is nog geen afzenderadres ingesteld.")} Tot die tijd blijven alle mails in de outbox staan en verstuur je ze zelf.</span>`;
+  const rij = d => { const tp = mailTpl(d.key, ""), au = maAuto(d.key);
+    return `<tr><td><b>${esc(d.name)}</b><br><span class="muted small">${esc(d.when || "")}${MA_SERVER_KEYS.includes(d.key) ? " · op datum" : ""}</span></td>
+      <td style="width:90px"><label class="check small"><input type="checkbox" data-maon="${esc(d.key)}" ${tp.on ? "checked" : ""} ${ro}> aan</label></td>
+      <td style="width:230px"><select data-maauto="${esc(d.key)}" aria-label="Versturen" ${ro} ${tp.on ? "" : "disabled"}><option value="1" ${au ? "selected" : ""}>Automatisch versturen</option><option value="0" ${au ? "" : "selected"}>Eerst nakijken (outbox)</option></select></td></tr>`; };
+  return `<section class="stack">
+    <div class="row spread"><h2>Automatische e-mails</h2><div class="row"><button class="btn" data-v="mailteksten">E-mailteksten</button><button class="btn" data-v="outbox">Outbox</button></div></div>
+    <div class="panel stack">
+      <div class="row wrap" style="gap:6px 10px;align-items:center"><b>Mailkoppeling</b> ${kop}</div>
+      <label class="check"><input type="checkbox" id="ma-aan" ${aan ? "checked" : ""} ${ro}> Mails op "automatisch" vanzelf versturen</label>
+      <p class="small muted" style="margin:0">${aan ? `Aan sinds ${S.mail.autoSince ? esc(longDate(S.mail.autoSince.slice(0, 10))) : "nu"}. Alleen mails die daarna klaargezet zijn gaan automatisch; oudere blijven in de outbox.` : "Uit: alle mails blijven in de outbox staan, zoals nu."} Mails die bij een feest horen kun je per feest uitzetten in het eventdossier (tab E-mails).</p>
+      ${k && k.actief && !S.readOnly ? `<div class="row"><input id="ma-testto" type="email" placeholder="jouw e-mailadres" style="max-width:260px"><button class="btn" id="ma-test">Testmail sturen</button></div>` : ""}
+    </div>
+    ${MAIL_PHASES.map(ph => { const ds = MAIL_DEFS.filter(d => d.phase === ph); return ds.length ? `<div class="panel stack"><h3 style="margin:0">${esc(ph)}</h3><div class="tbl-wrap"><table><tbody>${ds.map(rij).join("")}</tbody></table></div></div>` : ""; }).join("")}
+    <p class="small muted" style="margin:0">Mails met een factuur of offerte als bijlage staan standaard op "eerst nakijken": die verstuur je vanuit de outbox met de bijlage erbij.</p>
+  </section>`;
+};
+after.mailauto = () => {
+  document.querySelectorAll("#app [data-v]").forEach(b => b.onclick = () => setView(b.dataset.v));
+  const a = $("#ma-aan"); if (a) a.onchange = async () => { const v = a.checked; if (await maMailSet(v ? { autoAan: true, autoSince: new Date().toISOString() } : { autoAan: false })) { toast(v ? "Automatisch versturen staat aan" : "Automatisch versturen staat uit"); render(); } else a.checked = !v; };
+  document.querySelectorAll("[data-maauto]").forEach(s => s.onchange = async () => { const auto = { ...((S.mail || {}).auto || {}), [s.dataset.maauto]: s.value === "1" }; if (await maMailSet({ auto })) toast("Opgeslagen"); });
+  document.querySelectorAll("[data-maon]").forEach(c => c.onchange = async () => { const key = c.dataset.maon, texts = structuredClone((S.mail || {}).texts || {}); texts[key] = { ...(texts[key] || {}), on: c.checked }; if (await maMailSet({ texts })) { mailDraft = null; toast(c.checked ? "Mail staat aan" : "Mail staat uit"); render(); } });
+  const t = $("#ma-test"); if (t) t.onclick = async () => { t.disabled = true; try { await maCall({ actie: "test", to: $("#ma-testto").value.trim() || undefined }); toast("Testmail verstuurd"); } catch (e) { toast(e.message); } t.disabled = false; };
+};
+(() => {
+  const inst = MENU.find(m => m.id === "inst"), desc = inst && Object.getOwnPropertyDescriptor(inst, "items"), item = { l: "Automatische e-mails", v: "mailauto" };
+  const plaats = its => { const i = its.findIndex(it => it.v === "mailteksten"); its.splice(i < 0 ? its.length : i + 1, 0, item); return its; };
+  if (desc && desc.get) Object.defineProperty(inst, "items", { configurable: true, get: () => plaats(desc.get()) });
+  else if (inst) plaats(inst.items);
+})();
+
+/* Outbox: uitleg, "automatisch" bij verstuurde mails en knop "Nu versturen" */
+{ const f = VIEWS.outbox; VIEWS.outbox = () => {
+  maStatus();
+  const k = S.mailKop, uitleg = k && k.actief
+    ? (maAan() ? "Mails op automatisch gaan elk kwartier vanzelf weg (tussen 07:00 en 21:00). Hier staan de mails die je eerst wilt nakijken, of die niet automatisch konden. Kijk ze na en klik Nu versturen." : "De mailkoppeling werkt, maar automatisch versturen staat uit (Instellingen › Automatische e-mails). Kijk de mails na en klik Nu versturen.")
+    : "De agenda zet hier mails klaar als een offerte verstuurd wordt, een optie afloopt, een factuur gemaakt is of een feest voorbij is. Zolang de mailkoppeling niet aan staat, verstuur je ze via je eigen mailprogramma.";
+  return f().replace(/(<p class="small muted" style="margin:0">)De agenda zet hier mails klaar[^<]*(<\/p>)/, `$1${esc(uitleg)} <a href="#" data-v="mailauto">Automatische e-mails</a>$2`)
+    .replace(/(<tr class="click" data-ob="([^"]+)">)/g, (m0, tr, id) => { const m = S.outbox.get(id.replace(/&amp;/g, "&")); return m && m.fout && (m.status || "klaar") === "klaar" ? tr.replace('class="click"', 'class="click" title="' + esc(m.fout) + '" style="box-shadow:inset 3px 0 0 var(--bad)"') : tr; });
+}; }
+{ const f = after.outbox; after.outbox = () => { if (f) f(); document.querySelectorAll('#app a[data-v="mailauto"]').forEach(a => a.onclick = e => { e.preventDefault(); setView("mailauto"); }); }; }
+const _maObOpen = obOpen;
+obOpen = function (id) {
+  _maObOpen(id);
+  const m = S.outbox.get(id), sd = $("#ob-send"), k = S.mailKop; if (!m || !$("#ob-form")) return;
+  const info = [];
+  if (m.door) info.push(m.door === "automaat" ? "automatisch verstuurd" : "verstuurd door " + m.door);
+  if (m.fout && (m.status || "klaar") === "klaar") info.push(`<span style="color:var(--bad)">${esc(m.fout)}</span>`);
+  if ((m.status || "klaar") === "klaar" && maAan() && maAuto(m.key) && !m.manual && k && k.actief) info.push("gaat automatisch weg bij de volgende ronde (elk kwartier)");
+  if (info.length) $("#ob-form .row.small.muted")?.insertAdjacentHTML("beforeend", " · " + info.join(" · "));
+  if (!sd || S.readOnly || !(k && k.actief)) return;
+  sd.textContent = "Via mailprogramma"; sd.classList.remove("primary");
+  sd.insertAdjacentHTML("afterend", `<button type="button" class="btn primary" id="ob-now">Nu versturen</button>`);
+  $("#ob-now").onclick = async () => {
+    const b = $("#ob-now"), c = { to: $("#ob-to").value.trim(), subject: $("#ob-subject").value, body: $("#ob-body").value };
+    if (!c.to) { toast("Vul eerst een e-mailadres in"); return; }
+    b.disabled = true; b.textContent = "Versturen…";
+    try { await maCall({ actie: "verstuur", id, ...c }); closeModal(); render(); toast("E-mail verstuurd"); }
+    catch (e) { b.disabled = false; b.textContent = "Nu versturen"; toast(e.message); }
+  };
+};
+
+/* Eventdossier › E-mails: automatische mails voor dit feest aan/uit */
+(() => {
+  if (typeof DOSSIER_TABS !== "object" || !DOSSIER_TABS.emails) return;
+  const t = DOSSIER_TABS.emails, h = t.html, a = t.after;
+  t.html = r => `<label class="check small" style="margin-bottom:8px"><input type="checkbox" id="ma-res" ${r.autoMail === false ? "" : "checked"} ${S.readOnly ? "disabled" : ""}> Deze klant ontvangt de automatische e-mails${maAan() ? "" : ' <span class="muted">(automatisch versturen staat nog uit)</span>'}</label>` + h(r);
+  t.after = r => { if (a) a(r); const c = $("#ma-res"); if (c) c.onchange = async () => { if (await write("reservations/" + r.id, { autoMail: c.checked }, "update")) toast(c.checked ? "Automatische e-mails staan aan voor dit feest" : "Automatische e-mails staan uit voor dit feest"); else c.checked = !c.checked; }; };
+})();
+/* ---------- einde automatische e-mails ---------- */
+
 boot();
 })();
 </script>
