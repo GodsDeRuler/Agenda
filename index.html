@@ -180,12 +180,13 @@ td.r, th.r { text-align: right; font-variant-numeric: tabular-nums; }
 .catbar button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 12px; cursor: pointer; font-size: .88rem; }
 .catbar button[aria-pressed="true"] { background: var(--pitch); border-color: var(--pitch); color: var(--surface); }
 .catbar button .muted { color: inherit; opacity: .7; }
-.pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+.pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; max-height: 360px; overflow: auto; padding-right: 2px; }
 .pbtn { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: var(--r); padding: 8px 10px; display: grid; gap: 2px; cursor: pointer; min-width: 0; }
 .pbtn:hover { border-color: var(--pitch); }
 .pbtn b { font-weight: 600; }
 .pbtn span { font-size: .84rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .pcat-h { margin: 6px 0 0; }
+.psub { grid-column: 1 / -1; margin: 4px 0 -2px; }
 @media (prefers-reduced-motion: no-preference) { .day, .btn { transition: border-color .12s; } }
 /* Statistiek */
 .stat-chart { position: relative; padding-top: 22px; }
@@ -949,6 +950,7 @@ function openRes(r0) {
   const isNew = !r.id;
   let prog = structuredClone(r.program || []);
   let tasks = structuredClone(r.tasks || (isNew ? defaultTasks(r) : []));
+  if (isNew && !r.tasks) tasks.forEach((t, i) => { t._auto = i; t._autoDue = t.due; });
   const rooms = S.settings.rooms, arrs = S.settings.arrangementen;
   if (!r.roomId && rooms[0]) r.roomId = rooms[0].id;
   $("#modal-root").innerHTML = `
@@ -1023,7 +1025,7 @@ function openRes(r0) {
     document.querySelectorAll("#rf-prog [data-pi]").forEach(row => { const it = prog[+row.dataset.pi]; it.time = row.querySelector("[data-k=time]").value; it.text = row.querySelector("[data-k=text]").value; });
     document.querySelectorAll("#rf-tasks [data-ti]").forEach(row => { const it = tasks[+row.dataset.ti]; it.done = row.querySelector("[data-k=done]").checked; it.text = row.querySelector("[data-k=text]").value; it.due = row.querySelector("[data-k=due]").value; });
     prog = prog.filter(x => x.time || x.text || x._new); tasks = tasks.filter(x => x.text || x._new);
-    return { prog: prog.map(({ _new, ...x }) => x).filter(x => x.time || x.text), tasks: tasks.map(({ _new, ...x }) => x).filter(x => x.text) };
+    return { prog: prog.map(({ _new, ...x }) => x).filter(x => x.time || x.text), tasks: tasks.map(({ _new, _auto, _autoDue, ...x }) => x).filter(x => x.text) };
   }
   function drawLists() {
     prog.sort((a, b) => (a.time || "99").localeCompare(b.time || "99"));
@@ -1033,6 +1035,15 @@ function openRes(r0) {
     document.querySelectorAll("[data-tdel]").forEach(b => b.onclick = () => { syncLists(); tasks.splice(+b.dataset.tdel, 1); drawLists(); });
   }
   $("#rf-prog-add").onclick = () => { syncLists(); prog.push({ time: "", text: "", _new: true }); drawLists(); const ins = $("#rf-prog").querySelectorAll("[data-k=text]"); ins[ins.length - 1]?.focus(); };
+  // Standaardtaken van een nieuwe reservering volgen de gekozen datum, zolang de gebruiker de vervaldatum niet zelf aanpaste.
+  const redue = () => {
+    if (!tasks.some(t => t._auto != null)) return;
+    syncLists();
+    const fresh = defaultTasks({ date: $("#rf-date").value, optieTot: $("#rf-optieTot").value });
+    tasks.forEach(t => { if (t._auto != null && t.due === t._autoDue && fresh[t._auto]) t.due = t._autoDue = fresh[t._auto].due; });
+    drawLists();
+  };
+  ["rf-date", "rf-optieTot"].forEach(id => $("#" + id)?.addEventListener("change", redue));
   $("#rf-task-add").onclick = () => { syncLists(); tasks.push({ text: "", due: "", done: false, _new: true }); drawLists(); };
   drawLists();
   const dagRead = dagResWire(r, check);
@@ -1074,15 +1085,15 @@ function openRes(r0) {
 }
 
 /* Productcatalogus */
-const UNITS = { persoon: "per persoon", stuk: "per stuk", uur: "per uur", vast: "vast bedrag" };
+const UNITS = { persoon: "per persoon", ppu: "p.p. per uur", stuk: "per stuk", uur: "per uur", vast: "vast bedrag" };
 const product = id => id ? (S.settings.products || []).find(p => p.id === id) : null;
 function eventHours(q) {
   const m = /(\d{1,2}[:.]\d{2})\D+(\d{1,2}[:.]\d{2})/.exec(q.eventTime || ""); if (!m) return 1;
   const a = toMin(m[1]); let b = toMin(m[2]); if (b <= a) b += 1440;
   return Math.max(0.5, Math.round((b - a) / 30) / 2);
 }
-const qtyFor = (unit, q) => unit === "persoon" ? (+q.persons || 1) : unit === "uur" ? eventHours(q) : 1;
-const productLine = (p, q) => ({ desc: p.name, qty: qtyFor(p.unit, q), price: +p.price || 0, btw: +p.btw || 0, productId: p.id, unit: p.unit || "stuk", category: p.category || "" });
+const qtyFor = (unit, q) => unit === "persoon" ? (+q.persons || 1) : unit === "uur" ? eventHours(q) : unit === "ppu" ? (+q.persons || 1) * eventHours(q) : 1;
+const productLine = (p, q) => ({ desc: p.name + (p.unit === "ppu" ? ` (${String(eventHours(q)).replace(".", ",")} uur)` : ""), qty: qtyFor(p.unit, q), price: +p.price || 0, btw: +p.btw || 0, productId: p.id, unit: p.unit || "stuk", category: p.category || "" });
 function arrangementLines(a, q) {
   if (a.items && a.items.length) return a.items.map(product).filter(Boolean).map(p => productLine(p, q));
   return [{ desc: a.name + (a.description ? " – " + a.description : ""), qty: +q.persons || 1, price: +a.price || 0, btw: +a.btw || 9 }];
@@ -1235,9 +1246,14 @@ function prodPicker() {
   if (prods.some(p => !cats.includes(p.category))) cats.push("Overig");
   const inCat = c => prods.filter(p => c === "Overig" ? !(S.settings.productCategories || []).includes(p.category) || !p.category : p.category === c);
   const cur = cats.includes(S.pcat) ? S.pcat : cats[0];
+  const zoek = (S.psearch || "").trim().toLowerCase();
+  const shown = zoek ? prods.filter(p => (p.name + " " + (p.sub || "") + " " + (p.category || "")).toLowerCase().includes(zoek)) : inCat(cur);
+  const subs = [...new Set(shown.map(p => p.sub || ""))];
+  const btn = p => `<button type="button" class="pbtn" data-padd="${esc(p.id)}" title="${esc(p.description || "")}"><b>+ ${esc(p.name)}</b><span>${eur(p.price)} ${esc(UNITS[p.unit] || "")} · btw ${esc(p.btw)}%${zoek ? " · " + esc(p.category) : ""}</span></button>`;
   return `<div class="stack" style="gap:8px;border:1px solid var(--line);border-radius:var(--r);padding:10px;background:var(--bg)">
-    <div class="catbar" role="group" aria-label="Productcategorieën">${cats.map(c => `<button type="button" data-pcat="${esc(c)}" aria-pressed="${c === cur}">${esc(c)} <span class="muted">${inCat(c).length}</span></button>`).join("")}</div>
-    <div class="pgrid">${inCat(cur).map(p => `<button type="button" class="pbtn" data-padd="${esc(p.id)}" title="${esc(p.description || "")}"><b>+ ${esc(p.name)}</b><span>${eur(p.price)} ${esc(UNITS[p.unit] || "")} · btw ${esc(p.btw)}%</span></button>`).join("")}</div>
+    <input id="q-psearch" type="search" placeholder="Zoek een product…" value="${esc(S.psearch || "")}" aria-label="Zoek een product" style="max-width:320px">
+    ${zoek ? "" : `<div class="catbar" role="group" aria-label="Productcategorieën">${cats.map(c => `<button type="button" data-pcat="${esc(c)}" aria-pressed="${c === cur}">${esc(c)} <span class="muted">${inCat(c).length}</span></button>`).join("")}</div>`}
+    <div class="pgrid">${shown.length ? (subs.length > 1 ? subs.map(sb => `<span class="eyebrow psub">${esc(sb || "Overig")}</span>` + shown.filter(p => (p.sub || "") === sb).map(btn).join("")).join("") : shown.map(btn).join("")) : `<p class="small muted" style="margin:0">Geen product gevonden.</p>`}</div>
   </div>`;
 }
 function totHtml(t, q) {
@@ -1278,9 +1294,10 @@ after.off = () => {
   $("#q-addline").onclick = () => { sync(); q.lines.push({ desc: "", qty: 1, price: 0, btw: 9 }); rerender(); };
   $("#q-addarr").onchange = e => { const a = arr(e.target.value); if (!a) return; sync(); q.lines = q.lines.filter(l => l.desc || +l.price); q.lines.push(...arrangementLines(a, q)); rerender(); };
   document.querySelectorAll("[data-pcat]").forEach(b => b.onclick = () => { sync(); S.pcat = b.dataset.pcat; rerender(); });
+  const ps = $("#q-psearch"); if (ps) ps.oninput = e => { S.psearch = e.target.value; clearTimeout(ps._t); ps._t = setTimeout(() => { rerender(); const n = $("#q-psearch"); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } }, 250); };
   document.querySelectorAll("[data-padd]").forEach(b => b.onclick = () => { const p = product(b.dataset.padd); if (!p) return; sync(); q.lines = q.lines.filter(l => l.desc || +l.price); q.lines.push(productLine(p, q)); rerender(); toast(`${p.name} toegevoegd`); });
   const sc = $("#q-sortcat"); if (sc) sc.onclick = () => { sync(); q.lines = q.lines.map((l, i) => ({ l, i })).sort((a, b) => catOrder(a.l.category || product(a.l.productId)?.category) - catOrder(b.l.category || product(b.l.productId)?.category) || a.i - b.i).map(x => x.l); rerender(); };
-  const rq2 = $("#q-requantity"); if (rq2) rq2.onclick = () => { sync(); q.lines.forEach(l => { if (l.productId && (l.unit === "persoon" || l.unit === "uur")) l.qty = qtyFor(l.unit, q); }); rerender(); };
+  const rq2 = $("#q-requantity"); if (rq2) rq2.onclick = () => { sync(); q.lines.forEach(l => { if (l.productId && (l.unit === "persoon" || l.unit === "uur" || l.unit === "ppu")) l.qty = qtyFor(l.unit, q); }); rerender(); };
   document.querySelectorAll("[data-del]").forEach(b => b.onclick = () => { sync(); q.lines.splice(+b.dataset.del, 1); rerender(); });
   $("#q-save").onclick = async () => { sync(); const before = S.quotes.get(q.id)?.status; q.customerId = await ensureCustomer(q); const body = { ...q, updatedAt: new Date().toISOString() }; delete body.id; if (await write("quotes/" + q.id, body)) { await logQuoteStatus(q, before); toast("Offerte opgeslagen"); await syncProductTasks(q); } };
   const rl = $("#q-res"); if (rl) rl.onclick = e => { e.preventDefault(); openRes(S.reservations.get(q.reservationId)); };
@@ -1638,6 +1655,7 @@ after.inst = () => {
   $("#s-reset").onclick = () => { setDraft = null; render(); };
   const ap = $("#s-addprod"); if (ap) ap.onclick = () => { sync(); openProduct(s, null); };
   document.querySelectorAll("[data-prod]").forEach(el => el.onclick = () => { sync(); openProduct(s, +el.dataset.prod); });
+  const si = $("#s-showinactive"); if (si) si.onchange = e => { sync(); S.showInactive = e.target.checked; render(); };
   document.querySelectorAll("[data-arritems]").forEach(b => b.onclick = () => { sync(); openArrItems(s, +b.dataset.arritems); });
   $("#s-save").onclick = async () => {
     sync();
@@ -1647,13 +1665,16 @@ after.inst = () => {
 };
 function prodInstHtml(s, ro) {
   const cats = s.productCategories || [];
-  const groups = [...cats, ""].map(c => ({ c, items: s.products.map((p, i) => ({ p, i })).filter(x => c ? x.p.category === c : !cats.includes(x.p.category)) })).filter(g => g.items.length);
+  const nInactive = s.products.filter(p => p.active === false).length;
+  const vis = s.products.map((p, i) => ({ p, i })).filter(x => S.showInactive || x.p.active !== false);
+  const groups = [...cats, ""].map(c => ({ c, items: vis.filter(x => c ? x.p.category === c : !cats.includes(x.p.category)).sort((a, b) => (a.p.sub || "").localeCompare(b.p.sub || "", "nl")) })).filter(g => g.items.length);
   return `<div class="panel stack">
     <div class="row spread"><h3>Producten</h3><button class="btn" id="s-addprod" ${ro}>+ Product</button></div>
     <label class="f"><span>Categorieën, in deze volgorde (met komma's)</span><input id="s-pcats" value="${esc(cats.join(", "))}" ${ro}></label>
+    ${nInactive ? `<label class="check small"><input type="checkbox" id="s-showinactive" ${S.showInactive ? "checked" : ""}> Toon ook de ${nInactive} niet-actieve producten</label>` : ""}
     ${groups.length ? groups.map(g => `<h4 class="eyebrow pcat-h">${esc(g.c || "Zonder categorie")} · ${g.items.length}</h4>
-      <div class="tbl-wrap"><table><thead><tr><th>Product</th><th class="r">Prijs incl. btw</th><th>Eenheid</th><th class="r">Btw</th><th>To-do</th><th></th></tr></thead><tbody>
-      ${g.items.map(({ p, i }) => `<tr class="click" data-prod="${i}"><td><b>${esc(p.name)}</b>${p.description ? `<br><span class="muted small">${esc(p.description)}</span>` : ""}</td><td class="r">${eur(p.price)}</td><td>${esc(UNITS[p.unit] || "")}</td><td class="r">${esc(p.btw)}%</td><td class="small">${p.todoText ? esc(p.todoText) + (p.todoDays !== "" && p.todoDays != null ? ` (${esc(p.todoDays)} dagen vooraf)` : "") : ""}</td><td>${p.active === false ? `<span class="chip c0">niet actief</span>` : ""}</td></tr>`).join("")}
+      <div class="tbl-wrap"><table><thead><tr><th>Product</th><th>Subcategorie</th><th class="r">Prijs incl. btw</th><th>Eenheid</th><th class="r">Btw</th><th>To-do</th><th></th></tr></thead><tbody>
+      ${g.items.map(({ p, i }) => `<tr class="click" data-prod="${i}"><td><b>${esc(p.name)}</b>${p.description ? `<br><span class="muted small">${esc(p.description.length > 140 ? p.description.slice(0, 140) + "…" : p.description)}</span>` : ""}</td><td class="small">${esc(p.sub || "")}</td><td class="r">${eur(p.price)}${p.priceChild != null && p.priceChild !== "" ? `<br><span class="muted small">kind ${eur(p.priceChild)}</span>` : ""}</td><td>${esc(UNITS[p.unit] || "")}</td><td class="r">${esc(p.btw)}%</td><td class="small">${p.todoText ? esc(p.todoText) + (p.todoDays !== "" && p.todoDays != null ? ` (${esc(p.todoDays)} dagen vooraf)` : "") : ""}</td><td>${p.active === false ? `<span class="chip c0">niet actief</span>` : ""}</td></tr>`).join("")}
       </tbody></table></div>`).join("") : `<p class="empty">Nog geen producten. Voeg ze toe met <b>+ Product</b>, bijvoorbeeld "Bittergarnituur, 2 stuks p.p." in Hapjes.</p>`}
   </div>`;
 }
@@ -1665,11 +1686,13 @@ function openProduct(s, idx) {
     <div class="fields">
       <label class="f"><span>Naam</span><input id="pf-name" required value="${esc(p.name)}" placeholder="bijv. Bittergarnituur (2 stuks)"></label>
       <label class="f"><span>Categorie</span><select id="pf-category">${s.productCategories.map(c => `<option ${c === p.category ? "selected" : ""}>${esc(c)}</option>`).join("")}</select></label>
+      <label class="f"><span>Subcategorie (optioneel)</span><input id="pf-sub" list="pf-subs" value="${esc(p.sub || "")}" placeholder="bijv. Warme hapjes"><datalist id="pf-subs">${[...new Set(s.products.map(x => x.sub).filter(Boolean))].sort().map(x => `<option value="${esc(x)}">`).join("")}</datalist></label>
     </div>
     <div class="fields">
       <label class="f"><span>Prijs incl. btw (€)</span><input id="pf-price" type="number" step="0.01" min="0" required value="${esc(p.price)}"></label>
       <label class="f"><span>Eenheid</span><select id="pf-unit">${Object.entries(UNITS).map(([v, l]) => `<option value="${v}" ${v === p.unit ? "selected" : ""}>${l}</option>`).join("")}</select></label>
       <label class="f"><span>Btw</span><select id="pf-btw">${[9, 21, 0].map(b => `<option value="${b}" ${+p.btw === b ? "selected" : ""}>${b}%</option>`).join("")}</select></label>
+      <label class="f"><span>Kinderprijs (optioneel)</span><input id="pf-priceChild" type="number" step="0.01" min="0" value="${esc(p.priceChild ?? "")}"></label>
     </div>
     <label class="f"><span>Omschrijving voor de klant (staat op de offerte)</span><textarea id="pf-description">${esc(p.description)}</textarea></label>
     <label class="f"><span>Notitie voor keuken en bar (staat op de partysheet)</span><textarea id="pf-kitchenNote" placeholder="bijv. 1 bitterbal + 1 kaasstengel p.p., warm uitserveren">${esc(p.kitchenNote)}</textarea></label>
@@ -1688,7 +1711,7 @@ function openProduct(s, idx) {
   $("#scrim").addEventListener("mousedown", e => { if (e.target.id === "scrim") closeModal(); });
   $("#prod-form").onsubmit = e => {
     e.preventDefault();
-    const np = { ...p, name: $("#pf-name").value.trim(), category: $("#pf-category").value, price: +$("#pf-price").value || 0, unit: $("#pf-unit").value, btw: +$("#pf-btw").value, description: $("#pf-description").value.trim(), kitchenNote: $("#pf-kitchenNote").value.trim(), todoText: $("#pf-todoText").value.trim(), todoDays: $("#pf-todoDays").value === "" ? "" : +$("#pf-todoDays").value, active: $("#pf-active").checked };
+    const np = { ...p, name: $("#pf-name").value.trim(), category: $("#pf-category").value, price: +$("#pf-price").value || 0, unit: $("#pf-unit").value, btw: +$("#pf-btw").value, sub: $("#pf-sub").value.trim(), priceChild: $("#pf-priceChild").value === "" ? null : +$("#pf-priceChild").value, description: $("#pf-description").value.trim(), kitchenNote: $("#pf-kitchenNote").value.trim(), todoText: $("#pf-todoText").value.trim(), todoDays: $("#pf-todoDays").value === "" ? "" : +$("#pf-todoDays").value, active: $("#pf-active").checked };
     if (!np.name) { toast("Geef het product een naam"); return; }
     if (isNew) s.products.push(np); else s.products[idx] = np;
     S.pcat = np.category; persist();
@@ -1702,13 +1725,13 @@ function openArrItems(s, idx) {
   const cats = [...s.productCategories, ""].map(c => ({ c, items: s.products.filter(p => c ? p.category === c : !s.productCategories.includes(p.category)) })).filter(g => g.items.length);
   $("#modal-root").innerHTML = `<div class="scrim" id="scrim"><form class="modal" id="ai-form" aria-label="Inhoud arrangement">
     <div class="row spread"><h2>Inhoud van ${esc(a.name || "arrangement")}</h2><button type="button" class="btn ghost" id="ai-x" aria-label="Sluiten">✕</button></div>
-    ${cats.length ? cats.map(g => `<div class="stack" style="gap:4px"><span class="eyebrow">${esc(g.c || "Zonder categorie")}</span>${g.items.map(p => `<label class="check"><input type="checkbox" value="${esc(p.id)}" ${sel.has(p.id) ? "checked" : ""}> ${esc(p.name)} <span class="muted small">${eur(p.price)} ${esc(UNITS[p.unit] || "")}</span></label>`).join("")}</div>`).join("") : `<p class="empty">Voeg eerst producten toe onder Producten.</p>`}
+    ${cats.length ? cats.map(g => `<div class="stack" style="gap:4px"><span class="eyebrow">${esc(g.c || "Zonder categorie")}</span>${g.items.map(p => `<label class="check"><input type="checkbox" value="${esc(p.id)}" ${sel.has(p.id) ? "checked" : ""}> ${esc(p.name)} <span class="muted small">${eur(p.price)} ${esc(UNITS[p.unit] || "")}${(a.items || []).filter(x => x === p.id).length > 1 ? " · " + (a.items || []).filter(x => x === p.id).length + "×" : ""}${p.active === false ? " · niet actief" : ""}</span></label>`).join("")}</div>`).join("") : `<p class="empty">Voeg eerst producten toe onder Producten.</p>`}
     <p class="small muted" style="margin:0">Zonder aangevinkte producten blijft het arrangement één regel met een vaste prijs per persoon.</p>
     <div class="row spread"><span></span><button type="submit" class="btn primary" ${S.readOnly ? "disabled" : ""}>Opslaan</button></div>
   </form></div>`;
   $("#ai-x").onclick = closeModal;
   $("#scrim").addEventListener("mousedown", e => { if (e.target.id === "scrim") closeModal(); });
-  $("#ai-form").onsubmit = e => { e.preventDefault(); a.items = [...document.querySelectorAll("#ai-form input[type=checkbox]:checked")].map(i => i.value); closeModal(); render(); $("#s-save")?.click(); };
+  $("#ai-form").onsubmit = e => { e.preventDefault(); const keep = new Set([...document.querySelectorAll("#ai-form input[type=checkbox]:checked")].map(i => i.value)); a.items = [...(a.items || []).filter(id => keep.has(id)), ...[...keep].filter(id => !sel.has(id))]; closeModal(); render(); $("#s-save")?.click(); };
 }
 const _setView = setView;
 setView = function (v) { if (v !== "inst") setDraft = null; if (v !== "off") { S.quoteOpen = null; draft = null; } if (v !== "klant") S.custOpen = null; _setView(v); };
