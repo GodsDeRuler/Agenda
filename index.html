@@ -6359,6 +6359,7 @@ function rqEnsure(d) {
     d.program.sort((a, b) => ix(a.name) - ix(b.name));
   }
   for (const it of d.items) if (!it.id) it.id = uid();
+  if (!d._root && Array.isArray(d.days)) for (let i = 0; i < d.days.length; i++) { const x = d.days[i]; if (!x.id) x.id = uid(); x.program = x.program || []; x.items = x.items || []; x.drinks = x.drinks || {}; rqEnsure(rqDayObj(d, i + 1)); }
   return d;
 }
 // Andere soort feest gekozen: gelegenheden die uit staan en niet bij de nieuwe soort horen gaan weg.
@@ -6397,8 +6398,23 @@ function rqDrinkRows(d) {
   }
   return out;
 }
-// Platte offerteregels (q.lines) uit programma, opties, drankafkoop en kortingen.
-function rqLines(d) {
+// Meerdaagse events (Restau: datumtabs met +): dag 1 staat in de offerte zelf, dag 2 en verder in q.days.
+// rqDayObj geeft een object dat voor programma, opties en drankafkoop naar die dag wijst en voor de rest naar de offerte.
+const RQ_DAYKEYS = new Set(["program", "items", "drinks"]);
+function rqDayObj(q, i) {
+  if (!i || !(q.days || [])[i - 1]) return q;
+  const day = q.days[i - 1];
+  return new Proxy(day, {
+    get: (t, k) => k === "_root" ? q : k === "_dayNr" ? i + 1 : k === "eventDate" ? t.date : RQ_DAYKEYS.has(k) ? t[k] : q[k],
+    set: (t, k, v) => { if (k === "eventDate") t.date = v; else (RQ_DAYKEYS.has(k) ? t : q)[k] = v; return true; },
+    has: (t, k) => k in t || k in q,
+  });
+}
+const rqRoot = d => d._root || d;
+const rqDays = q => [q, ...(q.days || []).map((x, i) => rqDayObj(q, i + 1))];
+const rqAllDrinks = d => { const q = rqRoot(d); return (q.days && q.days.length ? rqDays(q) : [q]).flatMap(x => rqDrinkRows(x)); };
+// Regels van één dag: opties en drankafkoop.
+function rqDayLines(d) {
   const L = [];
   for (const it of d.items || []) {
     const pr = product(it.productId), name = it.desc || pr?.name || "", bx = rqItemBx(it);
@@ -6416,6 +6432,16 @@ function rqLines(d) {
     L.push({ desc: `Drankafkoop ${x.lab.toLowerCase()}: ${x.desc} (${x.part} ${x.p.start}–${x.p.end}, ${fmtH(x.h)} uur)`, rqDesc: x.desc, qty: x.n, price: x.h * x.price, ...rqBx(x.hi), unit: "ppu", category: "Drankafkoop",
       rqCat: "Drankjes", part: x.part, time: x.p.start, who: x.pk === "kids" ? "kids" : "adults", unitPrice: x.price, gross: x.amt, drink: x.pk, hours: x.h });
   }
+  return { L, drinks };
+}
+// Platte offerteregels (q.lines) uit programma, opties, drankafkoop en kortingen, voor alle dagen samen.
+function rqLines(d0) {
+  const d = rqRoot(d0), L = [], drinks = [], days = d.days && d.days.length ? rqDays(d) : [d];
+  days.forEach((dd, i) => {
+    const r = rqDayLines(dd);
+    if (days.length > 1) for (const l of r.L) { l.dayNr = i + 1; l.day = dd.eventDate || ""; }
+    L.push(...r.L); drinks.push(...r.drinks);
+  });
   const dsum = drinks.reduce((t, x) => t + x.amt, 0), dd = Math.min(rqNum(d.drinkDisc), dsum);
   if (dd > 0) L.push({ desc: "Korting op drankjes afkoop", qty: 1, price: -dd, ...rqBx(drinks.reduce((t, x) => t + x.amt * x.hi, 0) / dsum), category: "Drankafkoop", rqCat: "Drankjes", part: "", time: "", gross: 0, disc: true });
   const base = L.filter(l => !l.optional && l.rqCat !== "Leveranciers"), sub = base.reduce((t, l) => t + l.qty * l.price, 0);
@@ -6461,7 +6487,10 @@ function rqResPatch(q) {
   const s = rqSpan(q); if (!s) return null;
   const dag = [];
   for (const p of s.on) { const rs = (p.rooms || []).filter(Boolean); for (const rid of rs.length ? rs : [""]) dag.push({ name: p.name, start: p.start, end: p.end, adults: p.adults ?? "", kids: p.kids ?? "", roomId: rid, opstelling: p.opstelling || "" }); }
-  return { eventType: q.eventType || "", dagindeling: dag, start: s.start, end: s.end, ...(s.persons ? { persons: s.persons } : {}), ...(s.room ? { roomId: s.room } : {}), arrangementId: q.arrangementId || "" };
+  const extraDays = (q.days || []).map((x, i) => { const dd = rqDayObj(q, i + 1), sp = rqSpan(dd); if (!x.date) return null;
+    const dg = sp ? sp.on.flatMap(p => { const rs = (p.rooms || []).filter(Boolean); return (rs.length ? rs : [""]).map(rid => ({ name: p.name, start: p.start, end: p.end, adults: p.adults ?? "", kids: p.kids ?? "", roomId: rid, opstelling: p.opstelling || "" })); }) : [];
+    return { date: x.date, start: sp?.start || "", end: sp?.end || "", persons: sp?.persons || "", roomId: sp?.room || "", dagindeling: dg }; }).filter(Boolean);
+  return { eventType: q.eventType || "", dagindeling: dag, start: s.start, end: s.end, ...(s.persons ? { persons: s.persons } : {}), ...(s.room ? { roomId: s.room } : {}), arrangementId: q.arrangementId || "", extraDays };
 }
 function rqProgFromRes(r) {
   const out = [];
@@ -6605,6 +6634,8 @@ function rqItemHtml(d, it, i, ro) {
     : `<select data-ik="productId" aria-label="Product" ${ro}><option value="">Kies een product…</option>${opts}</select>`;
   const part = `<select data-ik="part" aria-label="Gelegenheid" ${ro}><option value="">Algemeen</option>${on.map(p => `<option ${p.name === it.part ? "selected" : ""}>${esc(p.name)}</option>`).join("")}${it.part && !on.some(p => p.name === it.part) ? `<option selected>${esc(it.part)}</option>` : ""}</select>`;
   const extra = free ? `<span class="rq-free">${btwSelect(it, `data-ik="btw" aria-label="Btw" ${ro}`)}<select data-ik="ptype" aria-label="Prijstype" ${ro}>${Object.entries(RQ_PTYPES).map(([k, l]) => `<option value="${k}" ${k === it.ptype ? "selected" : ""}>${l}</option>`).join("")}</select></span>` : "";
+  if (it.wens) return `<div class="rq-it wish" data-ii="${i}"><div class="rq-itl"><span class="rq-wname"><b>${esc(it.desc || "Speciale wens")}</b>${it.wens.omschrijving ? `<br><span class="small muted">${esc(it.wens.omschrijving)}</span>` : ""}<br><span class="small tealc">${[RQ_WPT[rqWishPt(it)], (it.wens.voor || []).map(v => "voor " + v).join(" en "), it.wens.leverancier ? "leverancier: " + it.wens.leverancier : "", it.wens.todo ? "op to-do lijst" : ""].filter(Boolean).map(esc).join(" · ")}</span></span>${part}<input type="time" class="rq-tm" data-ik="time" value="${esc(it.time || "")}" aria-label="Tijd" ${ro}><button type="button" class="btn small" data-iwish="${i}" ${ro}>Wijzigen</button></div>
+    ${rqWishPt(it) === "none" ? "" : `<div class="rq-amts">${rows.map((r, k) => rqAmtRow(it, r, k, ro, bx)).join("")}</div>`}<button type="button" class="rq-x red" data-idel="${i}" title="Regel verwijderen" aria-label="Regel verwijderen" ${ro}>✕</button></div>`;
   return `<div class="rq-it${it.optional ? " opt" : ""}" data-ii="${i}"><div class="rq-itl">${prod}${part}<input type="time" class="rq-tm" data-ik="time" value="${esc(it.time || "")}" aria-label="Tijd" ${ro}>${extra}${it.optional ? `<span class="chip c0">optioneel</span>` : ""}</div>
     <div class="rq-amts">${rows.map((r, k) => rqAmtRow(it, r, k, ro, bx)).join("")}</div><button type="button" class="rq-x red" data-idel="${i}" title="Regel verwijderen" aria-label="Regel verwijderen" ${ro}>✕</button></div>`;
 }
@@ -6626,11 +6657,11 @@ function rqDrinkHtml(d, ro) {
     h += `</div>`;
   }
   if (!any) return `<p class="small muted">Bij deze gelegenheden is geen drankafkoop ingesteld (zie Instellingen › Drankjes › afkoop).</p>`;
-  const sub = rqDrinkRows(d).reduce((t, x) => t + x.amt, 0);
+  const sub = rqAllDrinks(d).reduce((t, x) => t + x.amt, 0);
   return h + `<div class="rq-ddisc"><b>Korting op drankjes afkoop</b><span class="rq-eq">=</span><b class="tealc" data-dsub>${fmtN(sub)} €</b><span class="c-dt">- €<input type="number" step="0.01" min="0" id="rq-ddisc" value="${rqVal(d.drinkDisc || "")}" aria-label="Korting op drankjes afkoop" ${ro}></span><span class="rq-eq">=</span><b data-dnet>${fmtN(sub - Math.min(rqNum(d.drinkDisc), sub))} €</b></div>`;
 }
 function rqOptHtml(d, ro) {
-  const cats = [...(d.items.some(it => it.cat === "Zalen") ? ["Zalen"] : []), ...RQ_CATS, "Speciale wensen"];
+  const cats = ["Zalen", ...RQ_CATS, "Speciale wensen"];
   const dinerKids = rqOnParts(d).filter(p => p.diner || /diner/i.test(p.name)).reduce((t, p) => t + rqNum(p.kids), 0);
   const block = c => {
     const its = d.items.map((it, i) => ({ it, i })).filter(x => (x.it.cat || "Speciale wensen") === c);
@@ -6638,7 +6669,7 @@ function rqOptHtml(d, ro) {
       ${c === "Drankjes" ? rqDrinkHtml(d, ro) : ""}
       ${its.map(x => rqItemHtml(d, x.it, x.i, ro)).join("")}
       ${c === "Diner" ? `<div class="small rq-kidseat">Kinderen die mee-eten met volwassenen: <input type="number" min="0" max="${dinerKids}" id="rq-kidseat" value="${rqVal(d.kidsEat)}" aria-label="Kinderen die mee-eten met volwassenen" ${ro}> <span class="muted">(max <span class="tealc">${dinerKids}</span>)</span></div>` : ""}
-      <div class="rq-add"><span class="rq-hook">↳</span><button type="button" class="btn small rq-addbtn" data-rqadd="${esc(c)}" ${ro}><b>+</b> Toevoegen</button></div></div>`;
+      <div class="rq-add"><span class="rq-hook">↳</span><button type="button" class="btn small rq-addbtn" data-rqadd="${esc(c)}" ${ro}><b>+</b> ${c === "Zalen" ? "Vaste dagprijs" : c === "Speciale wensen" ? "Speciale wens" : "Toevoegen"}</button></div></div>`;
   };
   return `<div class="rq-opts"><div class="rq-oh"><h3>Opties</h3><span class="c-part">Gelegenheid</span><span class="c-time">Tijd</span><span class="c-n">Aantal</span><span class="c-pr">Stukprijs</span><span class="c-dp or">Stukskorting</span><span class="c-dt or">Totaalkorting</span><span class="c-tot">Totaalprijs</span><span class="c-ex">(ex.vat)</span></div>
     <div class="panel rq-optp">${cats.map(block).join("")}</div></div>`;
@@ -6702,7 +6733,7 @@ function rqWire(d, root, ctx) {
         set("[data-dn]", n); set("[data-dt]", `${fmtN(amt)} €`); set("[data-dx]", `${fmtN(rqEx(amt, rqBx(x.hi ?? c.btwHigh)))} €`);
       });
     });
-    const sub = rqDrinkRows(d).reduce((t, x) => t + x.amt, 0);
+    const sub = rqAllDrinks(d).reduce((t, x) => t + x.amt, 0);
     const ds = root.querySelector("[data-dsub]"); if (ds) ds.textContent = `${fmtN(sub)} €`;
     const dn = root.querySelector("[data-dnet]"); if (dn) dn.textContent = `${fmtN(sub - Math.min(rqNum(d.drinkDisc), sub))} €`;
     root.querySelectorAll(".rq-pr[data-pi]").forEach(el => {
@@ -6778,6 +6809,13 @@ function rqWire(d, root, ctx) {
       rerender();
     }
     else if (b.id === "rq-std") rqStdTimes(d, rerender);
+    else if (b.dataset.rqadd === "Speciale wensen") rqWishForm(d, -1, rerender);
+    else if (b.dataset.iwish != null) rqWishForm(d, +b.dataset.iwish, rerender);
+    else if (b.dataset.rqadd === "Zalen") {
+      const p0 = rqOnParts(d)[0], rs = [...new Set(rqOnParts(d).flatMap(p => p.rooms || []).filter(Boolean))].map(roomName);
+      d.items.unshift({ id: uid(), cat: "Zalen", productId: "", desc: "Vaste dagprijs" + (rs.length ? " " + rs.join(", ") : ""), part: "", time: p0?.start || "", ptype: "free", follow: true, qty: 1, price: "", btw: 21 });
+      rerender();
+    }
     else if (b.dataset.rqadd) {
       const c = b.dataset.rqadd, on0 = rqOnParts(d), p0 = on0.find(x => x.name.toLowerCase() === c.toLowerCase() || (c === "Diner" && x.diner)) || on0[0];
       d.items.push({ id: uid(), cat: c, productId: "", desc: "", part: p0 && c !== "Leveranciers" ? p0.name : "", time: p0 && c !== "Leveranciers" ? p0.start : "", ptype: c === "Speciale wensen" || c === "Zalen" || c === "Leveranciers" ? "piece" : "adults", follow: true, qty: 1, price: "", btw: c === "Drankjes" || c === "Muziek" || c === "Extra mogelijkheden" || c === "Leveranciers" ? 21 : 9 });
@@ -6787,13 +6825,59 @@ function rqWire(d, root, ctx) {
   });
 }
 
+// Speciale wens als formulier (Restau): naam, omschrijving, leverancier, prijsbepaling, grootboek, gelegenheid, voor wie, to-do.
+const RQ_WPT = { none: "geen kosten", adultskids: "per volwassene en kind", adults: "per volwassene", kids: "per kind", piece: "per stuk", hour: "per uur" };
+const rqWishPt = it => it.wens && it.wens.geenKosten ? "none" : it.ptype;
+function rqWishForm(d, idx, done) {
+  const it0 = idx >= 0 ? d.items[idx] : null, w = it0?.wens || { voor: [], todo: false, todoDagen: 7 }, pt = it0 ? rqWishPt(it0) : "none";
+  const on = rqOnParts(d), p0 = it0 ? null : on[0], gb = [...new Set((S.settings.products || []).map(p => p.grootboek).concat((d.items || []).map(x => x.wens?.grootboek)).filter(Boolean))];
+  $("#modal-root").innerHTML = `<div class="scrim" id="scrim"><form class="modal stack" id="wf-form" aria-label="Speciale wens" style="max-width:620px">
+    <div class="row spread"><h2>Speciale wens</h2><button type="button" class="btn ghost" id="wf-x" aria-label="Sluiten">✕</button></div>
+    <label class="f"><span>Naam</span><input id="wf-name" required value="${esc(it0?.desc || "")}" placeholder="bijv. Taart van eigen bakker"></label>
+    <label class="f"><span>Omschrijving</span><textarea id="wf-oms" rows="3">${esc(w.omschrijving || "")}</textarea></label>
+    <label class="f"><span>Contactgegevens leverancier</span><textarea id="wf-lev" rows="2" placeholder="Naam, telefoon, e-mail">${esc(w.leverancier || "")}</textarea></label>
+    <div class="fields">
+      <label class="f"><span>Prijsbepaling</span><select id="wf-pt">${Object.entries(RQ_WPT).map(([k, l]) => `<option value="${k}" ${k === pt ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+      <label class="f" id="wf-pa"><span>Prijs</span><input type="number" step="0.01" id="wf-price" value="${rqVal(it0?.price)}"></label>
+      <label class="f" id="wf-pk"><span>Prijs kind</span><input type="number" step="0.01" id="wf-pricek" value="${rqVal(it0?.priceKid)}"></label>
+      <label class="f" id="wf-bw"><span>Btw</span>${btwSelect(it0 || { btw: 21 }, 'id="wf-btw"')}</label>
+    </div>
+    <div class="fields">
+      <label class="f"><span>Grootboek</span><input id="wf-gb" list="wf-gbl" value="${esc(w.grootboek || "")}"><datalist id="wf-gbl">${gb.map(x => `<option value="${esc(x)}">`).join("")}</datalist></label>
+      <label class="f"><span>Gelegenheid</span><select id="wf-part"><option value="">Algemeen</option>${on.map(p => `<option ${p.name === (it0 ? it0.part : p0?.name) ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></label>
+      <label class="f"><span>Tijd</span><input type="time" id="wf-time" value="${esc(it0 ? it0.time || "" : p0?.start || "")}"></label>
+    </div>
+    <div class="row"><span>Voor wie:</span>${["bediening", "keuken"].map(v => `<label class="check"><input type="checkbox" data-wvoor="${v}" ${(w.voor || []).includes(v) ? "checked" : ""}> ${v[0].toUpperCase() + v.slice(1)}</label>`).join("")}</div>
+    <div class="row"><label class="check"><input type="checkbox" id="wf-todo" ${w.todo ? "checked" : ""}> Ja, voeg toe aan mijn to-do lijst</label><label class="row small">Dagen vooraf <input type="number" min="0" id="wf-days" value="${esc(w.todoDagen ?? 7)}" style="width:70px"></label></div>
+    <div class="row spread"><button type="button" class="btn" id="wf-no">Annuleren</button><button type="submit" class="btn primary">${it0 ? "Opslaan" : "Toevoegen"}</button></div></form></div>`;
+  document.body.style.overflow = "hidden";
+  const sync = () => { const v = $("#wf-pt").value; $("#wf-pa").hidden = v === "none"; $("#wf-pk").hidden = !(v === "adultskids" || v === "kids"); $("#wf-bw").hidden = v === "none"; $("#wf-pa span").textContent = v === "kids" ? "Prijs" : v === "adultskids" ? "Prijs volwassene" : "Prijs"; };
+  $("#wf-pt").onchange = sync; sync();
+  $("#wf-x").onclick = $("#wf-no").onclick = closeModal;
+  $("#wf-form").onsubmit = e => {
+    e.preventDefault();
+    const v = $("#wf-pt").value, bv = $("#wf-btw").value, part = $("#wf-part").value;
+    const it = it0 || { id: uid(), cat: "Speciale wensen", productId: "", follow: true, qty: 1 };
+    Object.assign(it, { desc: $("#wf-name").value.trim(), part, time: $("#wf-time").value, ptype: v === "none" ? "piece" : v, price: v === "none" ? 0 : rqNum($("#wf-price").value), priceKid: v === "kids" ? rqNum($("#wf-price").value) : rqNum($("#wf-pricek").value) });
+    if (v === "piece" && !rqNum(it.qty)) it.qty = 1;
+    if (v === "none") { it.qty = 1; it.dt = ""; it.dp = ""; }
+    if (bv === "mix") { it.btw = 21; if (!isMix(it)) it.btwHigh = 75; } else { it.btw = +bv; delete it.btwHigh; }
+    it.wens = { geenKosten: v === "none", omschrijving: $("#wf-oms").value.trim(), leverancier: $("#wf-lev").value.trim(), grootboek: $("#wf-gb").value.trim(),
+      voor: [...document.querySelectorAll("[data-wvoor]")].filter(x => x.checked).map(x => x.dataset.wvoor), todo: $("#wf-todo").checked, todoDagen: rqNum($("#wf-days").value) };
+    if (!it.desc) { toast("Vul een naam in"); return; }
+    if (!it0) d.items.push(it);
+    closeModal(); done();
+  };
+}
+
 /* ---------- Offerte bewerken (Restau: Wijzigen) ---------- */
 const rqTypeSelect = (id, cur, ro, req) => `<span class="rq-typesel"><span class="rq-tic">${typeIcon(cur)}</span><select id="${id}" aria-label="Soort event" ${ro}>${req ? "" : `<option value="">Kies een event…</option>`}${eventTypes().map(t => `<option value="${esc(t.id)}" ${t.id === cur ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select></span>`;
 const rqArrOptions = cur => `<option value="">Op maat</option>${S.settings.arrangementen.filter(a => a.rq).map(a => `<option value="${esc(a.id)}" ${a.id === cur ? "selected" : ""}>${esc(a.name)}${a.eventType ? " · " + esc(typeName(a.eventType)) : ""}${a.intern ? " (intern)" : ""}</option>`).join("")}`;
 vQuote = function (q0) {
-  if (!draft || draft.id !== q0.id) draft = structuredClone(q0);
+  if (!draft || draft.id !== q0.id) { draft = structuredClone(q0); S.rqDay = 0; }
   const q = rqUpgrade(draft);
   q.lines = rqLines(q);
+  const di = Math.min(+S.rqDay || 0, (q.days || []).length), v = rqDayObj(q, di);
   const t = totals(q.lines), ro = S.readOnly ? "disabled" : "";
   const res = q.reservationId && S.reservations.get(q.reservationId), span = rqSpan(q), warn = rqArrWarn(q);
   return `
@@ -6831,10 +6915,12 @@ vQuote = function (q0) {
       </div>
       ${span ? "" : `<div class="fields"><label class="f"><span>Ruimte</span><select id="qf-roomId" ${ro}><option value="">–</option>${S.settings.rooms.map(x => `<option value="${esc(x.id)}" ${x.id === q.roomId ? "selected" : ""}>${esc(x.name)}</option>`).join("")}</select></label><label class="f"><span>Personen</span><input type="number" id="qf-persons" value="${esc(q.persons)}" ${ro}></label><span class="small muted" style="align-self:end">Zet in het programma een gelegenheid aan; dan volgen tijden, zaal en aantal daaruit.</span></div>`}
       ${warn.length ? `<div class="warnbox warn">${warn.map(esc).join("<br>")}</div>` : ""}
+      <div id="rq-reapbox">${rqReapproveHtml(q)}</div>
     </div>
-    ${rqProgHtml(q, ro, { std: 1, excl: arr(q.arrangementId)?.uitgeslotenZalen || [] })}
-    ${rqOptHtml(q, ro)}
-    ${rqTotHtml(q, ro)}
+    ${rqDayTabs(q, di, ro)}
+    ${rqProgHtml(v, ro, { std: 1, excl: arr(q.arrangementId)?.uitgeslotenZalen || [] })}
+    ${rqOptHtml(v, ro)}
+    ${rqTotHtml(v, ro)}
     <div class="panel stack">
       <div class="tot" id="q-tot">${totHtml(t, q)}</div>
       <div class="fields">
@@ -6869,7 +6955,8 @@ function rqConfirmArr(a, onYes, onNo) {
       HEAD.forEach(k => { const el = $("#qf-" + k); if (el) q[k] = el.value; });
       q.depositPct = +$("#qf-depositPct").value || 0; q.depositPaid = $("#qf-depositPaid").checked; q.finalPaid = $("#qf-finalPaid").checked;
     };
-    const onChange = () => { q.lines = rqLines(q); rqDerive(q); const tm = $("#rq-times"); if (tm) tm.textContent = q.eventTime || ""; $("#q-tot").innerHTML = totHtml(totals(q.lines), q); };
+    const di = Math.min(+S.rqDay || 0, (q.days || []).length), v = rqDayObj(q, di);
+    const onChange = () => { q.lines = rqLines(q); rqDerive(q); const tm = $("#rq-times"); if (tm) tm.textContent = q.eventTime || ""; $("#q-tot").innerHTML = totHtml(totals(q.lines), q); const rb = $("#rq-reapbox"), rh = rqReapproveHtml(q); if (rb && rb._h !== rh) { rb.innerHTML = rh; rb._h = rh; } rqDayTotRefresh(q); };
     const rerender = () => { syncHead(); render(); };
     HEAD.concat(["depositPct", "depositPaid", "finalPaid"]).forEach(k => { const el = $("#qf-" + k); if (el) { el.addEventListener("input", () => { syncHead(); onChange(); }); el.addEventListener("change", () => { syncHead(); onChange(); }); } });
     const qs = $("#qf-status"); if (qs) qs.addEventListener("change", rerender);
@@ -6880,17 +6967,41 @@ function rqConfirmArr(a, onYes, onNo) {
       if (!a) { q.arrangementId = ""; q.arrangementName = ""; rerender(); return; }
       rqConfirmArr(a, () => { syncHead(); const res = q.reservationId && S.reservations.get(q.reservationId); rqApplyArr(q, a, rqSpan(q)?.room || q.roomId || res?.roomId || ""); rqDerive(q); render(); const w = rqArrWarn(q); toast(w.length ? w[0] : `Arrangement ${a.name} staat in de offerte`); }, () => { ar.value = q.arrangementId || ""; });
     };
-    rqWire(q, root, { rerender, onChange, persons: () => q.persons, room: () => q.roomId });
+    rqWire(v, root, { rerender, onChange, persons: () => q.persons, room: () => q.roomId });
+    const rb0 = $("#rq-reapbox"); if (rb0) rb0._h = rqReapproveHtml(q);
+    // Dagen (meerdaags event)
+    root.querySelectorAll("[data-rqday]").forEach(b => b.onclick = () => { syncHead(); S.rqDay = +b.dataset.rqday; render(); });
+    const dadd = $("#rq-dayadd"); if (dadd) dadd.onclick = () => {
+      syncHead(); q.days = q.days || [];
+      const last = q.days.length ? q.days[q.days.length - 1].date : q.eventDate;
+      q.days.push({ id: uid(), date: last ? addDays(last, 1) : "", program: [], items: [], drinks: {} });
+      rqEnsure(q); S.rqDay = q.days.length; render(); toast(`Dag ${q.days.length + 1} toegevoegd`);
+    };
+    const ddate = $("#rq-daydate"); if (ddate) ddate.onchange = () => { q.days[di - 1].date = ddate.value; rerender(); };
+    const dcopy = $("#rq-daycopy"); if (dcopy) dcopy.onclick = () => { syncHead(); q.days[di - 1].program = structuredClone(q.program); rqEnsure(q); render(); toast("Programma van dag 1 overgenomen"); };
+    const ddel = $("#rq-daydel"); if (ddel) ddel.onclick = () => {
+      if (!ddel.dataset.sure) { ddel.dataset.sure = 1; ddel.textContent = "Zeker weten? Klik nogmaals"; return; }
+      syncHead(); q.days.splice(di - 1, 1); S.rqDay = 0; q.lines = rqLines(q); render(); toast("Dag verwijderd");
+    };
+    // Extra goedkeuring: bevestigde offerte gewijzigd
+    root.addEventListener("click", async e => {
+      if (!e.target.closest("#rq-reapp")) return;
+      syncHead(); q.reapproval = { at: new Date().toISOString(), prevTotal: q.confirmedTotal };
+      const st = $("#qf-status"); if (st) st.value = "verstuurd";
+      await $("#q-save").onclick(); render(); toast("De offerte staat weer op verstuurd en wacht op goedkeuring van de klant");
+    });
     $("#q-back").onclick = () => { S.quoteOpen = null; draft = null; render(); };
     wireCustomerPicker("qf", id => q.customerId = id);
     const qc = $("#q-cust"); if (qc) qc.onclick = e => { e.preventDefault(); S.custOpen = q.customerId; setView("klant"); };
     $("#q-save").onclick = async () => {
       syncHead(); q.lines = rqLines(q); rqDerive(q);
       const before = S.quotes.get(q.id)?.status; q.customerId = await ensureCustomer(q);
+      if (q.status === "geaccepteerd" && (before !== "geaccepteerd" || q.confirmedTotal == null)) { q.confirmedTotal = Math.round(totals(q.lines).incl * 100) / 100; q.confirmedAt = new Date().toISOString(); delete q.reapproval; }
       const body = { ...q, updatedAt: new Date().toISOString() }; delete body.id;
       if (!(await write("quotes/" + q.id, body))) return;
       const r = q.reservationId && S.reservations.get(q.reservationId), patch = r && rqResPatch(q);
       if (patch) { await write("reservations/" + r.id, { ...patch, updatedAt: new Date().toISOString() }, "update"); }
+      if (r) await rqWishTasks(q, r);
       await logQuoteStatus(q, before); toast("Offerte opgeslagen"); await syncProductTasks(q);
     };
     const rl = $("#q-res"); if (rl) rl.onclick = e => { e.preventDefault(); openRes(S.reservations.get(q.reservationId)); };
@@ -6944,7 +7055,7 @@ function rqViewHtml(q0, o = {}) {
   for (const l of lines.filter(x => !x.optional && x.rqCat !== "_tot")) {
     if (l.itemId && seen.has(l.itemId)) { const r = seen.get(l.itemId); r.total += amt(l); if (l.who === "kids") { r.nK = l.qty; r.pK = l.unitPrice; } else { r.nA = l.qty; r.pA = l.unitPrice; } continue; }
     const r = { bx: l, time: l.time || "", desc: l.rqDesc || (l.itemId ? (q.items.find(i => i.id === l.itemId)?.desc || product(l.productId)?.name || l.desc) : l.desc), part: l.part || "", cat: rqCatOfLine(l), total: amt(l), drink: !!l.drink, disc: !!l.disc, who: l.who,
-      nA: l.who === "adults" ? l.qty : null, nK: l.who === "kids" ? l.qty : null, pA: l.who === "adults" ? l.unitPrice : null, pK: l.who === "kids" ? l.unitPrice : null, n: l.who === "qty" || l.who === "hour" ? l.qty : null, p: l.unitPrice ?? l.price, hourly: l.who === "hour" };
+      dayNr: l.dayNr || 1, nA: l.who === "adults" ? l.qty : null, nK: l.who === "kids" ? l.qty : null, pA: l.who === "adults" ? l.unitPrice : null, pK: l.who === "kids" ? l.unitPrice : null, n: l.who === "qty" || l.who === "hour" ? l.qty : null, p: l.unitPrice ?? l.price, hourly: l.who === "hour" };
     if (l.itemId) seen.set(l.itemId, r);
     rows.push(r);
   }
@@ -6953,30 +7064,37 @@ function rqViewHtml(q0, o = {}) {
   const pTxt = r => r.drink || r.disc ? "" : r.pA != null || r.pK != null ? [r.pA, r.pK].filter(x => x != null).map(x => pf(r, x)).join(" | ") : r.p != null && r.n != null ? pf(r, r.p) : "";
   const line = (r, tcls = "") => `<tr><td class="rqv-t ${tcls}">${esc(r.time || "")}</td><td>${esc(r.desc)}</td><td>${esc(nTxt(r))}</td><td class="r small">${esc(pTxt(r))}</td><td class="r rqv-a">${fmtN(r.total)} euro</td></tr>`;
   const subRow = v => `<tr class="rqv-sub"><td></td><td></td><td></td><td></td><td class="r"><b>${fmtN(v)} euro</b></td></tr><tr class="rqv-gap"><td colspan="5"></td></tr>`;
-  const on = rqOnParts(q).slice().sort((a, b) => (a.start || "").localeCompare(b.start || "") || 0);
+  const days = q.days && q.days.length ? rqDays(q) : [q], multi = days.length > 1;
+  const dayOn = days.map(dd => rqOnParts(dd).slice());
   // Volgorde in de dag: een gelegenheid na middernacht hoort achteraan.
-  const s0 = on.length ? toMin(on[0].start) ?? 0 : 0, rel = t => { const m = toMin(t); return m == null ? 9999 : m < s0 - 120 ? m + 1440 : m; };
-  on.sort((a, b) => rel(a.start) - rel(b.start));
+  const on = dayOn[0], s0 = on.length ? toMin(on.slice().sort((a, b) => (a.start || "").localeCompare(b.start || ""))[0].start) ?? 0 : 0, rel = t => { const m = toMin(t); return m == null ? 9999 : m < s0 - 120 ? m + 1440 : m; };
+  dayOn.forEach(o => o.sort((a, b) => rel(a.start) - rel(b.start)));
+  const dTxt = ds => ds ? `${DAYS[parseISO(ds).getDay()].replace(/^./, c => c.toUpperCase())} ${ds.split("-").reverse().join("-")}` : "";
   let body = "";
   if (sort === "tijden") {
-    const alg = rows.filter(r => !r.part || !on.some(p => p.name === r.part));
+    const alg = rows.filter(r => !r.part || !(dayOn[r.dayNr - 1] || []).some(p => p.name === r.part));
     body += `<tr class="rqv-h"><td></td><td class="muted">Algemeen</td><td></td><td></td><td></td></tr>${alg.map(r => line(r)).join("")}${subRow(alg.reduce((t, r) => t + r.total, 0))}`;
-    for (const p of on) {
-      const rs = rows.filter(r => r.part === p.name).sort((a, b) => (b.drink - a.drink) || rel(a.time) - rel(b.time));
+    days.forEach((dd, di) => {
+    if (multi) body += `<tr class="rqv-day"><td></td><td colspan="4"><b class="g">Dag ${di + 1}: ${esc(dTxt(dd.eventDate))}</b></td></tr>`;
+    for (const p of dayOn[di]) {
+      const rs = rows.filter(r => r.dayNr === di + 1 && r.part === p.name).sort((a, b) => (b.drink - a.drink) || rel(a.time) - rel(b.time));
       body += `<tr class="rqv-p"><td class="rqv-t g">${esc(p.start || "")}</td><td>${esc(p.name)}<br><span class="muted">${esc((p.rooms || []).filter(Boolean).map(roomName).join(", "))}</span></td><td>${rqNum(p.adults)} volw. | ${rqNum(p.kids)} kind.</td><td></td><td></td></tr>
         ${rs.map(r => line(r, r.drink ? "" : "g2")).join("")}<tr><td class="rqv-t g">${esc(p.end || "")}</td><td>Einde</td><td></td><td></td><td></td></tr>${subRow(rs.reduce((t, r) => t + r.total, 0))}`;
     }
+    });
   } else {
     for (const c of [...RQ_TOTCATS, "Leveranciers"]) {
       const rs = rows.filter(r => r.cat === c); if (!rs.length) continue;
-      rs.sort((a, b) => rel(on.find(p => p.name === a.part)?.start) - rel(on.find(p => p.name === b.part)?.start) || rel(a.time) - rel(b.time));
+      const ps = r => rel((dayOn[r.dayNr - 1] || []).find(p => p.name === r.part)?.start);
+      rs.sort((a, b) => a.dayNr - b.dayNr || ps(a) - ps(b) || rel(a.time) - rel(b.time));
       body += `<tr class="rqv-p"><td class="rqv-t">${rqIcon(c)}</td><td><b>${esc(c)}</b></td><td></td><td></td><td></td></tr>${rs.map(r => line(r)).join("")}${subRow(rs.reduce((t, r) => t + r.total, 0))}`;
     }
   }
   const T = rqTotTable(lines), lev = incl ? T.c.Leveranciers.tot : T.c.Leveranciers.ex, eig = incl ? T.incl.tot : T.incl.ex, tdisc = incl ? T.c._tot.tot : T.c._tot.ex;
   const dayTxt = q.eventDate ? `${DAYS[parseISO(q.eventDate).getDay()].replace(/^./, c => c.toUpperCase())} ${q.eventDate.split("-").reverse().join("-")}` : "";
-  let foot = `${Math.abs(tdisc) > 0.004 ? `<tr><td></td><td>Korting op totaal</td><td></td><td></td><td class="r">${fmtN(tdisc)} euro</td></tr>` : ""}
-    <tr class="rqv-tot"><td></td><td><b>Totaal ${esc(nm)}</b> <span class="g">${esc(dayTxt)}</span></td><td></td><td></td><td class="r rqv-a"><b>${fmtN(eig)} euro</b></td></tr>
+  const perDay = multi ? days.map((dd, di) => `<tr><td></td><td>Dag ${di + 1} <span class="g">${esc(dTxt(dd.eventDate))}</span></td><td></td><td></td><td class="r rqv-a">${fmtN(rows.filter(r => r.dayNr === di + 1 && r.cat !== "Leveranciers").reduce((t, r) => t + r.total, 0))} euro</td></tr>`).join("") : "";
+  let foot = `${perDay}${Math.abs(tdisc) > 0.004 ? `<tr><td></td><td>Korting op totaal</td><td></td><td></td><td class="r">${fmtN(tdisc)} euro</td></tr>` : ""}
+    <tr class="rqv-tot"><td></td><td><b>Totaal ${esc(nm)}</b> <span class="g">${esc(multi ? dTxt(days[0].eventDate) + " t/m " + dTxt(days[days.length - 1].eventDate) : dayTxt)}</span></td><td></td><td></td><td class="r rqv-a"><b>${fmtN(eig)} euro</b></td></tr>
     <tr class="rqv-tot"><td></td><td><b>Totaal leveranciers</b></td><td></td><td></td><td class="r rqv-a"><b>${fmtN(lev)} euro</b></td></tr>
     <tr><td></td><td><b>Totaal ${esc(nm)}</b></td><td></td><td></td><td class="r rqv-a"><b>${fmtN(eig + lev)} euro</b></td></tr>`;
   let box = "";
@@ -6996,10 +7114,15 @@ function rqViewHtml(q0, o = {}) {
 }
 // Dagindeling met categorie-iconen (Restau: linkerkolom van het tabblad Offerte)
 function rqDagHtml(q0) {
-  const q = q0.rq ? q0 : rqUpgrade(structuredClone(q0)), on = rqOnParts(q); if (!on.length) return "";
+  const q = q0.rq ? q0 : rqUpgrade(structuredClone(q0));
+  if (q.days && q.days.length) return rqDays(q).map((dd, i) => rqDagHtml1(dd, `Dag ${i + 1}: ${dd.eventDate ? longDate(dd.eventDate) : "datum nog kiezen"}`)).join("");
+  return rqDagHtml1(q, "Dagindeling");
+}
+function rqDagHtml1(q, title) {
+  const on = rqOnParts(q); if (!on.length) return "";
   const ICS = ["Hapjes", "Diner", "Drankjes", "Extra mogelijkheden", "Decoratie pakket", "Muziek"];
   const has = (p, c) => q.items.some(it => it.part === p.name && (it.cat === c || (c === "Decoratie pakket" && it.cat === "Decoratie los"))) || (c === "Drankjes" && Object.values((q.drinks || {})[p.name] || {}).some(x => x && x.on));
-  return `<div class="rqv-dag"><b>Dagindeling</b><div class="tbl-wrap"><table>${on.map(p => `<tr><td class="num">${esc(p.start)}–${esc(p.end)}</td><td>${esc(p.name)}</td><td class="num">${rqNum(p.adults)} volw.</td><td class="num">${rqNum(p.kids)} kind.</td><td>${esc((p.rooms || []).filter(Boolean).map(roomName).join(", ") || "–")}</td><td class="rqv-ics">${ICS.map(c => `<span class="${has(p, c) ? "on" : ""}" title="${esc(c)}">${rqIcon(c)}</span>`).join("")}</td></tr>`).join("")}</table></div></div>`;
+  return `<div class="rqv-dag"><b>${esc(title)}</b><div class="tbl-wrap"><table>${on.map(p => `<tr><td class="num">${esc(p.start)}–${esc(p.end)}</td><td>${esc(p.name)}</td><td class="num">${rqNum(p.adults)} volw.</td><td class="num">${rqNum(p.kids)} kind.</td><td>${esc((p.rooms || []).filter(Boolean).map(roomName).join(", ") || "–")}</td><td class="rqv-ics">${ICS.map(c => `<span class="${has(p, c) ? "on" : ""}" title="${esc(c)}">${rqIcon(c)}</span>`).join("")}</td></tr>`).join("")}</table></div></div>`;
 }
 // Klantversie (download en e-mail): de regels als Restau, met eigen opmaak.
 const RQV_CSS = `.rqv-tbl{width:100%;border-collapse:collapse;margin:14px 0}.rqv-tbl th{color:#555;font-weight:600;text-align:left;border-bottom:1px solid #e5621c;padding:6px}.rqv-tbl td{padding:3px 6px;vertical-align:top;border:0}.rqv-tbl .r{text-align:right}.rqv-t{color:#2e9a2e;white-space:nowrap}.rqv-p td{padding-top:12px}.rqv-p .rqv-t,.rqv-t.g{font-weight:700;color:#139413}.rqv-sub td{border-top:1px solid #f0b48f;color:#1b7d88}.rqv-gap td{height:14px}.rqv-a{color:#1b7d88;white-space:nowrap}.rqv-tot td{padding-top:10px}.g{color:#139413}.small{font-size:.85em}.muted{color:#8a8a8a}.rqv-arr{display:flex;gap:10px;align-items:center}.rqv-arrbox{border:1px solid #ccc;border-radius:4px;padding:6px 14px;min-width:220px}.rqv-tbl svg{width:16px;height:16px}`;
@@ -7013,7 +7136,7 @@ DOSSIER_TABS.offerte = {
     if (i >= 0) { const j = h.indexOf("</table></div>", i); if (j > i) h = h.slice(0, i) + h.slice(j + "</table></div>".length); }
     if (!q) return h;
     const d = q.eventDate ? q.eventDate.split("-").reverse().join("-") : "";
-    return h + `<div class="evgrid rqv-grid" style="margin-top:16px"><div>${rqDagHtml(q)}</div><div>${rqViewHtml(q, { interactive: true, incl: S.rqvIncl !== false, sort: S.rqvSort, title: d ? "Offerte voor " + d : "Offerte" })}</div></div>`;
+    return h + (q.confirmedTotal != null && (q.reapproval || Math.abs(totals(q.lines).incl - q.confirmedTotal) > 0.004) ? `<div style="margin-top:12px">${rqReapproveHtml(q, true)}</div>` : "") + `<div class="evgrid rqv-grid" style="margin-top:16px"><div>${rqDagHtml(q)}</div><div>${rqViewHtml(q, { interactive: true, incl: S.rqvIncl !== false, sort: S.rqvSort, title: d ? "Offerte voor " + d : "Offerte" })}</div></div>`;
   },
   after: (r, upd) => {
     dOverviewWire(r, upd);
@@ -7021,6 +7144,35 @@ DOSSIER_TABS.offerte = {
     const inc = $("#rqv-incl"); if (inc) inc.onchange = () => { S.rqvIncl = inc.checked; render(); };
   },
 };
+
+// Datumtabs voor meerdaagse events (Restau: tabs met + in het dossier); elke dag heeft een eigen programma en totaal.
+function rqDayTot(q, i) { const L = q.lines || rqLines(q), multi = (q.days || []).length > 0; return L.filter(l => !l.optional && !l.disc && l.rqCat !== "Leveranciers" && (!multi || l.dayNr === i + 1)).reduce((t, l) => t + l.qty * l.price, 0); }
+function rqDayTabs(q, di, ro) {
+  const days = rqDays(q);
+  return `<div class="rq-days" role="tablist" aria-label="Dagen van het event">${days.map((dd, i) => `<button type="button" role="tab" data-rqday="${i}" aria-selected="${i === di}"><span>Dag ${i + 1}</span><b>${esc(dd.eventDate ? shortDate(dd.eventDate) : "datum kiezen")}</b><small data-daytot="${i}">${eur(rqDayTot(q, i))}</small></button>`).join("")}<button type="button" class="rq-dayadd" id="rq-dayadd" title="Dag toevoegen (meerdaags event)" aria-label="Dag toevoegen" ${ro}>+</button></div>
+  ${di ? `<div class="panel rq-dayp"><label class="f"><span>Datum dag ${di + 1}</span><input type="date" id="rq-daydate" value="${esc(q.days[di - 1].date || "")}" ${ro}></label><button type="button" class="btn" id="rq-daycopy" ${ro}>Programma van dag 1 overnemen</button><button type="button" class="btn danger" id="rq-daydel" ${ro}>Dag ${di + 1} verwijderen</button></div>` : ""}`;
+}
+function rqDayTotRefresh(q) { document.querySelectorAll("[data-daytot]").forEach(el => el.textContent = eur(rqDayTot(q, +el.dataset.daytot))); }
+// Extra goedkeuring (Restau): een bevestigde offerte is daarna gewijzigd.
+function rqReapproveHtml(q, noBtn) {
+  if (q.confirmedTotal == null) return "";
+  const T = Math.round(totals(q.lines || []).incl * 100) / 100, dt = q.confirmedAt ? new Date(q.confirmedAt) : null;
+  const when = dt ? `${dt.toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" })} om ${dt.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}` : "";
+  if (q.status === "geaccepteerd" && Math.abs(T - q.confirmedTotal) > 0.004)
+    return `<div class="warnbox warn rq-reapp"><span>Offerte is als laatst bevestigd op ${esc(when)} met een bedrag van <b>${eur(q.confirmedTotal)}</b>. Het bedrag is nu <b>${eur(T)}</b>.</span>${noBtn ? "" : ` <button type="button" class="btn small orange" id="rq-reapp" ${S.readOnly ? "disabled" : ""}>Opnieuw laten goedkeuren</button>`}</div>`;
+  if (q.status === "verstuurd" && q.reapproval) return `<div class="warnbox rq-reapp">Wacht op nieuwe goedkeuring van de klant. Offerte is als laatst bevestigd op ${esc(when)} met een bedrag van <b>${eur(q.confirmedTotal)}</b>.</div>`;
+  return "";
+}
+// Speciale wensen met "Ja, voeg toe aan mijn to-do lijst" komen als to-do bij het event.
+async function rqWishTasks(q, r) {
+  const tasks = structuredClone(r.tasks || []); let n = 0;
+  for (const dd of rqDays(q)) for (const it of dd.items || []) {
+    if (!it.wens || !it.wens.todo || tasks.some(t => t.wishId === it.id)) continue;
+    const ds = dd.eventDate || q.eventDate || r.date;
+    tasks.push({ text: `Speciale wens: ${it.desc}${it.wens.leverancier ? " (" + it.wens.leverancier.split("\n")[0] + ")" : ""}`, due: ds ? addDays(ds, -rqNum(it.wens.todoDagen)) : "", done: false, wishId: it.id }); n++;
+  }
+  if (n && await write("reservations/" + r.id, { tasks }, "update")) r.tasks = tasks;
+}
 
 /* ---------- Instellingen › Arrangementen (lijst en "Arrangement opmaken") ---------- */
 let arDraft = null;
@@ -7374,6 +7526,55 @@ document.head.insertAdjacentHTML("beforeend", `<style id="rq-style">
   .ar-top, .ar-alg { grid-template-columns: 1fr; } .ar-row { flex-wrap: wrap; padding: 10px; } .ar-name { flex: 1 1 100%; }
   .ad-grid { grid-template-columns: 1fr 1fr; } .rqv-grid { grid-template-columns: 1fr; } .rqv-arrbox { min-width: 0; }
 }
+</style>`);
+/* ---------- Meerdaagse events in de agenda, speciale wensen in het dossier ---------- */
+// Een event met extra dagen (reservations.extraDays, gevuld vanuit de offerte) staat op elke dag in de agenda.
+{
+  const base = resOn;
+  resOn = function (date, incCancelled = false) {
+    const out = base(date, incCancelled);
+    for (const r of S.reservations.values()) {
+      if (!Array.isArray(r.extraDays) || !r.extraDays.length || r.date === date || (!incCancelled && r.status === "geannuleerd")) continue;
+      const x = r.extraDays.find(e => e.date === date); if (!x) continue;
+      out.push({ ...r, date, start: x.start || r.start, end: x.end || r.end, persons: x.persons || r.persons, roomId: x.roomId || r.roomId, dagindeling: x.dagindeling || [], extraDay: true, mainDate: r.date });
+    }
+    return out.sort((a, b) => (a.start || "").localeCompare(b.start || ""));
+  };
+}
+const rqMultiTxt = r => (r.extraDays || []).length ? `meerdaags: ${[r.date, ...r.extraDays.map(x => x.date)].filter(Boolean).map(shortDate).join(", ")}` : "";
+{
+  const base = vEvent;
+  vEvent = function () {
+    const h = base(), r = S.reservations.get(S.eventOpen), t = r && rqMultiTxt(r);
+    if (!t) return h;
+    const i = h.indexOf('<div class="evtype">'); if (i < 0) return h;
+    const j = h.indexOf("</div>", i);
+    return h.slice(0, j) + ` <span class="chip c2">${esc(t)}</span>` + h.slice(j);
+  };
+}
+// Tabblad Speciale wensen: de wensen uit de offerte (met prijs, leverancier en voor wie) boven de vrije tekstvelden.
+DOSSIER_TABS.wensen = {
+  html: r => {
+    const q = evQuote(r), list = [];
+    if (q) { const qq = q.rq ? q : rqUpgrade(structuredClone(q)); rqDays(qq).forEach((dd, i) => (dd.items || []).filter(it => it.cat === "Speciale wensen").forEach(it => list.push({ it, dd, i, n: (qq.days || []).length }))); }
+    const L = q ? q.lines || [] : [], amt = id => L.filter(l => l.itemId === id).reduce((t, l) => t + l.qty * l.price, 0);
+    const tbl = list.length ? `<div class="tbl-wrap"><table class="evlines rq-wl"><thead><tr><th>Tijd</th><th>Wens</th><th>Voor</th><th>Leverancier</th><th>Grootboek</th><th class="r">Bedrag</th></tr></thead><tbody>${list.map(({ it, dd, i, n }) => `<tr><td class="num">${n ? `Dag ${i + 1} ` : ""}${esc(it.time || "")}${it.part ? `<br><span class="small muted">${esc(it.part)}</span>` : ""}</td><td><b>${esc(it.desc || "")}</b>${it.wens?.omschrijving ? `<br><span class="small">${esc(it.wens.omschrijving)}</span>` : ""}</td><td>${esc((it.wens?.voor || []).join(", ") || "–")}</td><td class="small">${esc(it.wens?.leverancier || "")}</td><td class="small">${esc(it.wens?.grootboek || "")}</td><td class="r">${it.wens?.geenKosten ? "geen kosten" : eur(amt(it.id))}</td></tr>`).join("")}</tbody></table></div>`
+      : `<p class="small muted">Nog geen speciale wensen in de offerte. Voeg ze toe in de offerte bij Speciale wensen; dan komen ze met prijs op de offerte en hier te staan.</p>`;
+    return `<div class="row spread"><h3>Speciale wensen in de offerte</h3>${q ? `<button class="btn" id="dw-q">Offerte bewerken ›</button>` : ""}</div>${tbl}<div style="margin-top:14px">${dWishes(r)}</div>`;
+  },
+  after: (r, upd) => { dWishesWire(r, upd); const b = $("#dw-q"); if (b) b.onclick = () => { S.quoteOpen = r.quoteId; setView("off"); }; },
+};
+document.head.insertAdjacentHTML("beforeend", `<style id="rq6-style">
+.rq-days { display: flex; gap: 6px; flex-wrap: wrap; align-items: stretch; margin: 4px 0 -4px; }
+.rq-days [data-rqday] { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 6px 14px; border: 1px solid var(--line, #ddd); border-bottom-width: 3px; border-radius: 6px 6px 0 0; background: var(--panel, #fff); color: inherit; cursor: pointer; font: inherit; min-width: 120px; }
+.rq-days [data-rqday] span { font-size: .75rem; color: #8a8a8a; } .rq-days [data-rqday] small { color: var(--teal); }
+.rq-days [data-rqday][aria-selected="true"] { border-bottom-color: var(--orange); background: #fff7f1; }
+.rq-dayadd { width: 44px; border: 1px dashed var(--teal); border-radius: 6px; background: transparent; color: var(--teal); font-size: 1.4rem; cursor: pointer; }
+.rq-dayp { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+.rq-reapp { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.rq-it.wish .rq-wname { flex: 1 1 260px; min-width: 0; }
+.rq-wl td { vertical-align: top; } .rqv-day td { padding-top: 16px; border-bottom: 1px solid #e5621c; }
+@media (max-width: 760px) { .rq-days [data-rqday] { min-width: 0; flex: 1 1 40%; } }
 </style>`);
 /* ---------- einde offerte zoals Restau ---------- */
 
