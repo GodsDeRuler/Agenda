@@ -2186,9 +2186,9 @@ ${q.notes ? `<p>${esc(q.notes).replace(/\n/g, "<br>")}</p>` : ""}
 const FIELDS = [
   ["date", "Datum", /datum|date|dag/],
   ["time", "Aanvangstijd", /aanvang|tijd|time|begin|start/],
-  ["team", "(Thuis)team", /thuis(team)?$|^team|eigen team|thuisteam|home/],
-  ["opponent", "Tegenstander / uitteam", /tegenstander|uitteam|uit$|bezoek|away|opponent/],
-  ["field", "Veld", /veld|field|locatie|baan/],
+  ["team", "(Thuis)team", /thuis(team)?$|^team|eigen team|thuis\s?team|home/],
+  ["opponent", "Tegenstander / uitteam", /tegenstander(?!\s*club)|uitteam|uit$|bezoek|away|opponent/],
+  ["field", "Veld", /veld(?!deel)|field|baan/],
   ["match", "Wedstrijd (thuis – uit in één kolom)", /^(wedstrijd|match|programma|thuis\s*-\s*uit)$/],
 ];
 function vImport() {
@@ -2276,13 +2276,13 @@ function lisaRows(L) {
 async function readLisaFiles(files) {
   if (!window.XLSX) { toast("De Excel-lezer is niet geladen. Herlaad de pagina."); return; }
   const books = [];
-  for (const f of files) books.push({ name: f.name, wb: XLSX.read(await f.arrayBuffer(), { type: "array", cellDates: true }) });
+  for (const f of files) books.push({ name: f.name, wb: /\.(csv|txt)$/i.test(f.name) ? XLSX.read((await f.text()).replace(/^\uFEFF/, ""), { type: "string", raw: true }) : XLSX.read(await f.arrayBuffer(), { type: "array", cellDates: true }) });
   readBooks(books);
 }
 function readPasted(text) {
   if (!window.XLSX) { toast("De Excel-lezer is niet geladen. Herlaad de pagina."); return; }
   if (!text.trim()) { toast("Plak eerst een tabel in het vak"); return; }
-  readBooks([{ name: "geplakte tabel", wb: XLSX.read(text, { type: "string", cellDates: true }) }]);
+  readBooks([{ name: "geplakte tabel", wb: XLSX.read(text, { type: "string", raw: true }) }]);
 }
 function readBooks(books) {
   let headers = null, raw = [];
@@ -4274,6 +4274,31 @@ after.mailteksten = () => {
   });
   $("#mt-save").onclick = async () => { sync(); if (await mailSave({ ...(S.mail || {}), ...d, since: (S.mail && S.mail.since) || d.since || new Date().toISOString() })) { mailDraft = null; toast("E-mailteksten opgeslagen"); render(); } };
 };
+/* Tabblad E-mails in het eventdossier (haakje DOSSIER_TABS van de eigenaarversie) */
+const mailOfEvent = r => [...S.outbox.values()].filter(m => m.reservationId === r.id || (r.quoteId && m.quoteId === r.quoteId) || (r.quoteId && m.invoiceId && S.invoices && S.invoices.get(m.invoiceId)?.quoteId === r.quoteId)).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+const MAIL_HAND_SKIP = /^(factuur_|herinnering_betaling|betaling_ontvangen|afspraak_)/;
+function dMails(r) {
+  const list = mailOfEvent(r), ro = S.readOnly ? "disabled" : "";
+  const defs = MAIL_DEFS.filter(d => !MAIL_HAND_SKIP.test(d.key));
+  return `<div class="stack">
+    <div class="row spread"><h3 style="margin:0">E-mails over dit event</h3>
+      <div class="row"><select id="dm-key" style="width:auto" aria-label="Soort e-mail" ${ro}>${MAIL_PHASES.map(ph => { const ds = defs.filter(d => d.phase === ph); return ds.length ? `<optgroup label="${esc(ph)}">${ds.map(d => `<option value="${esc(d.key)}">${esc(d.name)}</option>`).join("")}</optgroup>` : ""; }).join("")}</select><button class="btn" id="dm-new" ${ro}>Nieuwe e-mail</button></div></div>
+    ${r.email ? "" : `<p class="small" style="margin:0;color:var(--warn)">Bij dit event staat nog geen e-mailadres.</p>`}
+    ${list.length ? `<div class="tbl-wrap"><table><thead><tr><th>Klaargezet</th><th>Onderwerp</th><th>Soort</th><th>Status</th></tr></thead><tbody>${list.map(m => `<tr class="click" data-dmob="${esc(m.id)}"><td class="num" style="white-space:nowrap">${m.createdAt ? esc(shortDate(m.createdAt.slice(0, 10))) : ""}</td><td>${esc(m.subject || "")}<br><span class="muted small">${esc(m.to || "geen adres")}</span></td><td class="small">${esc(mailDef(m.key)?.name || m.key || "")}</td><td><span class="chip ${(m.status || "klaar") === "klaar" ? "c2" : (m.status === "verstuurd" ? "c1" : "c0")}">${esc(OB_STATUS[m.status || "klaar"] || "")}${m.sentAt ? " " + esc(shortDate(m.sentAt.slice(0, 10))) : ""}</span></td></tr>`).join("")}</tbody></table></div>`
+      : `<p class="empty">Nog geen e-mails. De agenda zet ze vanzelf klaar (bevestiging, optie, bijna zover, facturen); met "Nieuwe e-mail" zet je er zelf een klaar.</p>`}
+  </div>`;
+}
+function dMailsWire(r) {
+  document.querySelectorAll("[data-dmob]").forEach(el => el.onclick = () => obOpen(el.dataset.dmob));
+  const nb = $("#dm-new"); if (nb) nb.onclick = async () => {
+    const key = $("#dm-key").value, d = mailDef(key); if (!d) return;
+    const ctx = mailCtx({ r }), tp = mailTpl(key, r.eventType), id = ("hand__" + key + "__" + uid()).replace(/[^A-Za-z0-9_-]/g, "-");
+    const body = { key, phase: d.phase, to: ctx.to, subject: mailFill(tp.subject, ctx.v), body: mailFill(tp.body, ctx.v), customer: ctx.klant, customerId: ctx.cid, reservationId: r.id, quoteId: (ctx.q && ctx.q.id) || "", invoiceId: "", eventDate: ctx.date, status: "klaar", createdAt: new Date().toISOString(), sentAt: "", manual: true };
+    if (await obWrite(id, body)) { render(); obOpen(id); }
+  };
+}
+try { if (typeof DOSSIER_TABS === "object") DOSSIER_TABS.emails = { l: "E-mails", html: dMails, after: dMailsWire, cnt: r => mailOfEvent(r).filter(m => (m.status || "klaar") === "klaar").length, right: 1 }; } catch (e) {}
+
 const _setViewMail = setView;
 setView = function (v) { if (v !== "mailteksten") mailDraft = null; _setViewMail(v); };
 VIEWS.outbox = () => vOutbox();
@@ -5155,6 +5180,18 @@ after.omzetgarantie = () => {
     if (await vrSaveSettings({ omzetgarantie: { rules, dates: d.dates.filter(x => x.date && x.amount !== "") } }, "Omzetgarantie opgeslagen")) ogDraft = null;
   };
 };
+/* Tabblad Vragen in het eventdossier (haakje DOSSIER_TABS van de eigenaarversie) */
+function dVragen(r) {
+  if (!vrFor(r).length) return `<p class="empty">Er zijn geen vragen voor dit soort feest. Stel ze in bij Instellingen → Vragen en voorwaarden.</p>`;
+  return `<div class="stack">${vrResHtml(r)}<div class="row"><button class="btn primary" id="dv-save" ${S.readOnly ? "disabled" : ""}>Antwoorden opslaan</button><button class="btn ghost" id="dv-set">Vragen instellen ›</button></div></div>`;
+}
+function dVragenWire(r, upd) {
+  const set = $("#dv-set"); if (set) set.onclick = () => setView("vragen");
+  const sv = $("#dv-save"); if (!sv) return;
+  const get = vrResWire(r);
+  sv.onclick = () => upd(get(), "Antwoorden opgeslagen");
+}
+try { if (typeof DOSSIER_TABS === "object") DOSSIER_TABS.vragen = { l: "Vragen", html: dVragen, after: dVragenWire, cnt: r => vrOpen(r).length }; } catch (e) {}
 const _setViewVr = setView;
 setView = function (v) { if (v !== "vragen") vrDraft = null; if (v !== "omzetgarantie") ogDraft = null; _setViewVr(v); };
 VIEWS.vragen = () => vVragen();
@@ -5185,18 +5222,16 @@ function outboxPanelWire(el) {
   el.querySelectorAll("[data-obp]").forEach(b => b.onclick = () => obOpen(b.dataset.obp));
   el.querySelector("#obp-all").onclick = () => { S.sideOpen = null; setView("outbox"); };
 }
-DOSSIER_TABS.emails = {
-  l: "E-mails", right: 1,
-  cnt: r => [...S.outbox.values()].filter(m => (m.reservationId === r.id || (r.quoteId && m.quoteId === r.quoteId)) && (m.status || "klaar") === "klaar").length,
-  html: r => {
-    const ms = [...S.outbox.values()].filter(m => m.reservationId === r.id || (r.quoteId && m.quoteId === r.quoteId)).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
-    const log = [...S.contacts.values()].filter(k => k.customerId && k.customerId === r.customerId && k.kind === "gemaild").sort((a, b) => String(b.at).localeCompare(String(a.at)));
-    return `<div class="row spread"><h3>E-mails</h3>${r.email ? `<a class="btn primary" href="mailto:${esc(r.email)}?subject=${encodeURIComponent((S.settings.locatie?.naam || "HC Tilburg") + " · " + longDate(r.date))}">Verstuur een e-mail</a>` : `<span class="small muted">Geen e-mailadres bij dit event</span>`}</div>
-      <b>Automatische e-mails</b>${ms.length ? `<table class="evlines">${ms.map(m => `<tr class="click" data-obd="${esc(m.id)}"><td>${m.createdAt ? esc(shortDate(m.createdAt.slice(0, 10))) : ""}</td><td>${esc(m.subject || "")}</td><td>${esc(OB_STATUS[m.status || "klaar"] || m.status || "")}</td></tr>`).join("")}</table>` : `<p class="muted small">Nog geen mails klaargezet voor dit event.</p>`}
-      <b style="display:block;margin-top:14px">Verzonden e-mails (klantkaart)</b>${log.length ? `<table class="evlines">${log.map(k => `<tr><td>${esc(String(k.at).slice(0, 10))}</td><td>${esc(k.text || "")}</td></tr>`).join("")}</table>` : `<p class="muted small">Nog niets verstuurd.</p>`}`;
-  },
-  after: () => document.querySelectorAll("[data-obd]").forEach(el => el.onclick = () => obOpen(el.dataset.obd)),
-};
+/* E-mails: lijst en "Nieuwe e-mail" uit de mailmodule, plus wat er volgens de klantkaart al verstuurd is */
+if (typeof dMails === "function") {
+  const mailLog = r => [...S.contacts.values()].filter(k => k.customerId && k.customerId === r.customerId && k.kind === "gemaild").sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  DOSSIER_TABS.emails = {
+    l: "E-mails", right: 1,
+    cnt: r => mailOfEvent(r).filter(m => (m.status || "klaar") === "klaar").length,
+    html: r => { const log = mailLog(r); return dMails(r) + `<b style="display:block;margin-top:14px">Verzonden e-mails (klantkaart)</b>${log.length ? `<table class="evlines">${log.map(k => `<tr><td>${esc(String(k.at).slice(0, 10))}</td><td>${esc(k.text || "")}</td></tr>`).join("")}</table>` : `<p class="muted small">Nog niets verstuurd.</p>`}`; },
+    after: r => dMailsWire(r),
+  };
+}
 DOSSIER_TABS.vragen = {
   l: "Vragen", cnt: r => vrOpen(r).length,
   html: r => vrFor(r).length ? `${vrResHtml(r)}<div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn teal" id="dv-save" ${S.readOnly ? "disabled" : ""}>Antwoorden opslaan</button></div>` : `<p class="empty">Geen vragen voor dit soort feest. Zet ze bij Instellingen › Vragen en voorwaarden.</p>`,
@@ -5235,6 +5270,8 @@ conflicts = function (r) {
 // Een teamreservering opent in het korte teamformulier in plaats van het feestformulier.
 const _teamOpenResBase = openRes;
 openRes = function (r0) { return isTeamRes(r0) ? openTeamRes(r0) : _teamOpenResBase(r0); };
+// Geen klantmails (bevestiging, herinnering, nazorg) voor teamoverleg.
+if (typeof mailWanted === "function") { const _teamMailWanted = mailWanted; mailWanted = function () { return _teamMailWanted().filter(it => !isTeamRes(S.reservations.get(it.body && it.body.reservationId))); }; }
 if (typeof openResForm === "function") { const _teamOpenResForm = openResForm; openResForm = function (r0) { return isTeamRes(r0) ? openTeamRes(r0) : _teamOpenResForm(r0); }; }
 
 /* Formulier: teamoverleg reserveren of bewerken */
@@ -5413,6 +5450,366 @@ setView = function (v) { if (v !== "teams") teamDraft = null; _teamSetView(v); }
     const anchor = $("#d-block") || $("#d-new");
     if (anchor && !$("#d-team")) { anchor.insertAdjacentHTML("beforebegin", `<button class="btn" id="d-team" ${S.readOnly ? "disabled" : ""}>Teamoverleg</button>`); $("#d-team").onclick = () => openTeamRes({ date: S.day }); }
   };
+})();
+/* ---------- Super Sunday: Dames 1 en Heren 1 op dezelfde dag thuis ---------- */
+// Gemaakt door de thread "Super Sunday in de agenda" (9 okt 2026). Uitleg: supersunday/supersunday-integratie.md.
+// Een Super Sunday wordt herkend uit de geïmporteerde LISA-wedstrijden (matches/<datum>). Die dag zijn alle ruimtes
+// geblokkeerd (virtuele blokkade via blocksOn), en per dag is er een dossier met draaiboek, afspraken, taken en notities.
+// Opslag: supersundays/<YYYY-MM-DD> { date, mode: "auto"|"aan"|"uit", draaiboek[], afspraken[], taken[], notities, updatedAt }
+//         supersundays/sjabloon   { teams, draaiboek[], taken[] }  (standaard voor elk nieuw dossier)
+S.superDays = S.superDays || new Map();
+const SS_ISO = /^\d{4}-\d{2}-\d{2}$/;
+const SS_DEFAULT = {
+  teams: "Dames 1, Heren 1",
+  draaiboek: [
+    { time: "-3:00", text: "Opbouw: extra bar en statafels buiten, tent en verwarming klaarzetten", wie: "" },
+    { time: "-2:00", text: "Briefing barpersoneel en vrijwilligers", wie: "" },
+    { time: "-1:00", text: "Terras en extra bar open, muziek aan", wie: "" },
+    { time: "+0:15", text: "Feest na de laatste wedstrijd, DJ begint", wie: "" },
+    { time: "+3:00", text: "Einde feest, opruimen en kassa opmaken", wie: "" },
+  ],
+  taken: [
+    { text: "Extra barpersoneel en vrijwilligers inroosteren", dagen: -21 },
+    { text: "DJ, muziek en aankleding vastleggen", dagen: -14 },
+    { text: "Extra bestelling Bidfood en drank plaatsen", dagen: -7 },
+    { text: "Leden en sponsors informeren", dagen: -7 },
+    { text: "Draaiboek doorspreken met het team", dagen: -2 },
+    { text: "Evaluatie en omzet noteren", dagen: 1 },
+  ],
+};
+const ssTpl = () => ({ ...structuredClone(SS_DEFAULT), ...(S.superDays.get("sjabloon") || {}) });
+// "D01", "D1", "Dames 1", "HC Tilburg H1" en "Heren 01" worden allemaal "dames 1" of "heren 1".
+function ssTeamKey(name) {
+  const t = String(name || "").toLowerCase().replace(/h\.?\s?c\.?\s*tilburg|tilburg/g, " ").trim();
+  const m = /(?:^|[^a-z])(dames|heren|d|h)\s*-?\s*0*(\d{1,2})(?!\d)/.exec(t);
+  return m ? (m[1][0] === "d" ? "dames " : "heren ") + (+m[2]) : t.replace(/\s+/g, " ");
+}
+const ssTeamKeys = () => String(ssTpl().teams || SS_DEFAULT.teams).split(",").map(ssTeamKey).filter(Boolean);
+// Thuiswedstrijden van de Super Sunday-teams op een dag, en of ze er allemaal bij zijn.
+function ssAuto(date) {
+  const keys = ssTeamKeys();
+  const ms = homeMatches(date).filter(m => keys.includes(ssTeamKey(m.team)));
+  return { matches: ms, auto: keys.length > 1 && keys.every(k => ms.some(m => ssTeamKey(m.team) === k)) };
+}
+function superSundayOn(date) {
+  if (!date || !SS_ISO.test(date)) return null;
+  const doc = S.superDays.get(date) || null, mode = doc?.mode || "auto";
+  if (mode === "uit") return null;
+  const a = ssAuto(date);
+  if (!a.auto && mode !== "aan") return null;
+  return { date, mode, auto: a.auto, matches: a.matches, doc };
+}
+// Alle dagen die ooit Super Sunday zijn (of een dossier hebben), gesorteerd.
+function ssAll() {
+  const dates = new Set([...S.matchDays.keys(), ...S.superDays.keys()].filter(d => SS_ISO.test(d)));
+  return [...dates].sort().map(date => {
+    const doc = S.superDays.get(date) || null, mode = doc?.mode || "auto", a = ssAuto(date);
+    return { date, doc, mode, auto: a.auto, matches: a.matches, on: mode === "aan" || (a.auto && mode !== "uit") };
+  }).filter(x => x.on || x.auto || (x.doc && ssHasContent(x.doc)));
+}
+const ssHasContent = d => !!((d.draaiboek || []).length || (d.afspraken || []).length || (d.taken || []).length || (d.notities || "").trim());
+// Ankers voor relatieve tijden: begin van de eerste en eind van de laatste wedstrijd van de Super Sunday-teams.
+function ssAnchor(date) {
+  const dur = +S.settings.drukte?.duur || 105;
+  let st = ssAuto(date).matches.map(m => toMin(m.time)).filter(x => x != null);
+  if (!st.length) st = homeMatches(date).map(m => toMin(m.time)).filter(x => x != null);
+  return st.length ? { first: Math.min(...st), last: Math.max(...st) + dur } : null;
+}
+// "10:00" blijft 10:00; "-2:00" is 2 uur voor de eerste wedstrijd; "+0:30" is een half uur na de laatste wedstrijd.
+function ssTime(expr, A) {
+  const s = String(expr || "").trim();
+  const m = /^([+-])\s*(\d{1,2})(?:[:.](\d{2}))?$/.exec(s);
+  if (!m) { const t = toMin(s); return { abs: t == null ? "" : fromMin(t), rel: "", sort: t == null ? 9999 : t }; }
+  const off = (+m[2]) * 60 + (+(m[3] || 0)), dur = off >= 60 ? `${Math.floor(off / 60)} uur${off % 60 ? " " + (off % 60) + " min" : ""}` : `${off} min`;
+  const rel = m[1] === "-" ? `${dur} voor de eerste wedstrijd` : `${dur} na de laatste wedstrijd`;
+  if (!A) return { abs: "", rel, sort: m[1] === "-" ? -off : 5000 + off };
+  const t = Math.max(0, Math.min(1439, m[1] === "-" ? A.first - off : A.last + off));
+  return { abs: fromMin(t), rel, sort: t };
+}
+const ssResOn = date => resOn(date).filter(r => r.status !== "geannuleerd");
+const ssAppts = date => [...S.contacts.values()].filter(k => k.kind === "afspraak" && String(k.at || "").slice(0, 10) === date && k.status !== "afgewezen");
+const ssTeamLabel = m => { const k = ssTeamKey(m.team); return k.startsWith("dames ") || k.startsWith("heren ") ? k[0].toUpperCase() + k.slice(1) : m.team; };
+const ssMatchTxt = ms => ms.map(m => `${m.time || "tijd volgt"} ${ssTeamLabel(m)}${m.opponent ? " – " + m.opponent : ""}`).join(", ");
+
+/* Blokkade: op een Super Sunday zijn alle ruimtes de hele dag geblokkeerd (ook voor teamreserveringen). */
+const _blocksOnSS = blocksOn;
+blocksOn = function (date) {
+  const out = _blocksOnSS(date);
+  return superSundayOn(date) ? [{ id: "ss-" + date, roomId: "", date, start: "00:00", end: "23:59", allDay: true, reason: "Super Sunday", superSunday: true }, ...out] : out;
+};
+const _blockLinesSS = blockLines;
+blockLines = function (date) {
+  if (!superSundayOn(date)) return _blockLinesSS(date);
+  const rest = _blocksOnSS(date);
+  return [`<div class="ln ss">★ Super Sunday</div>`, ...(rest.length ? [`<div class="ln b">${rest.length === 1 ? "+1 blokkade" : "+" + rest.length + " blokkades"}</div>`] : [])];
+};
+const _dagAfterDagSS = dagAfterDag;
+dagAfterDag = function () {
+  _dagAfterDagSS();
+  document.querySelectorAll('[data-block^="ss-"]').forEach(el => el.onclick = e => { e.stopPropagation(); ssOpen(el.dataset.block.slice(3)); });
+  document.querySelectorAll("[data-ssopen]").forEach(b => b.onclick = () => ssOpen(b.dataset.ssopen));
+  document.querySelectorAll("[data-ssres]").forEach(el => el.onclick = () => openRes(S.reservations.get(el.dataset.ssres)));
+};
+// Topteams in LISA heten "H01"/"D01": tel ze mee als topteam voor de drukte.
+const _classifySS = classify;
+classify = function (team) {
+  const r = _classifySS(team); if (r === "top") return r;
+  const tops = String(S.settings.drukte?.topTeams || "").split(",").map(ssTeamKey).filter(Boolean);
+  return tops.includes(ssTeamKey(team)) ? "top" : r;
+};
+
+/* Taken van een Super Sunday staan ook in de centrale to-do-lijst. */
+const _allTasksSS = allTasks;
+allTasks = function () {
+  const out = _allTasksSS();
+  for (const d of S.superDays.values()) {
+    if (!SS_ISO.test(d.id || "") || !superSundayOn(d.id)) continue;
+    const r = { id: "ss-" + d.id, customer: "Super Sunday", date: d.id, roomId: "", manager: d.manager || "", superSunday: true };
+    (d.taken || []).forEach((t, i) => { if (t.text) out.push({ ...t, i, r }); });
+  }
+  return out.sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999") || (a.r.date || "").localeCompare(b.r.date || ""));
+};
+const _patchTaskSS = patchTask;
+patchTask = async function (key, fn, msg) {
+  if (!String(key).startsWith("ss-")) return _patchTaskSS(key, fn, msg);
+  const [id, i] = key.split(":"), date = id.slice(3), d = S.superDays.get(date); if (!d) return;
+  const taken = structuredClone(d.taken || []); if (!taken[+i]) return;
+  fn(taken[+i]);
+  if (await write("supersundays/" + date, { taken, updatedAt: new Date().toISOString() }, "update")) { d.taken = taken; if (msg) toast(msg); render(); }
+};
+// Klik op een Super Sunday-taak (to-do-lijst, dashboard) opent het dossier in plaats van een reservering.
+const ssFixResLinks = () => document.querySelectorAll('[data-res^="ss-"]').forEach(el => el.onclick = e => { e.preventDefault(); e.stopPropagation(); ssOpen(el.dataset.res.slice(3)); });
+for (const k of ["todo", "home"]) { const f = after[k]; after[k] = () => { if (f) f(); ssFixResLinks(); document.querySelectorAll("[data-ssopen]").forEach(b => b.onclick = () => ssOpen(b.dataset.ssopen)); }; }
+
+/* Opslag: nieuwe collectie supersundays. */
+const _bootSS = boot;
+boot = async function () { await _bootSS(); if (S.db) subscribe("supersundays", S.superDays); };
+const _localApplySS = localApply;
+localApply = function (path, data, mode) {
+  const [col, id] = path.split("/");
+  if (col !== "supersundays") return _localApplySS(path, data, mode);
+  if (mode === "delete") S.superDays.delete(id); else S.superDays.set(id, { ...(mode === "update" ? S.superDays.get(id) : {}), ...data, id });
+};
+
+/* Melding bovenaan de dag-agenda en het dashboard */
+function ssBand(date, home) {
+  const ss = superSundayOn(date); if (!ss) return "";
+  const d = ss.doc || {}, rs = ssResOn(date), open = (d.taken || []).filter(t => t.text && taskOpen(t)).length, ro = S.readOnly;
+  const days = Math.round((parseISO(date) - parseISO(todayISO)) / 864e5);
+  const when = home ? `<b>${esc(longDate(date))}</b>${days === 0 ? " (vandaag)" : days === 1 ? " (morgen)" : days > 1 ? ` (over ${days} dagen)` : ""}: ` : "";
+  return `<div class="ss-band">
+    <div class="ss-h"><span class="ss-star" aria-hidden="true">★</span><div><b class="ss-t">${home ? "Volgende Super Sunday" : "Super Sunday"}</b><br>
+      <span>${when}${ss.matches.length ? esc(ssMatchTxt(ss.matches)) : "handmatig als Super Sunday aangemerkt"}. Alle ruimtes zijn deze dag niet te reserveren.</span></div></div>
+    <div class="row"><span class="small">${(d.draaiboek || []).length ? `draaiboek ${d.draaiboek.length} punten` : "draaiboek nog niet gemaakt"} · ${(d.afspraken || []).length} afspraken · ${open} open taken</span>
+      <button type="button" class="btn primary" data-ssopen="${esc(date)}">${(d.draaiboek || []).length || ro ? "Draaiboek en afspraken" : "Draaiboek maken"}</button></div>
+    ${rs.length ? `<div class="warnbox bad" style="width:100%">Let op: ${rs.length === 1 ? "er staat al een reservering" : `er staan al ${rs.length} reserveringen`} op deze dag: ${rs.map(r => `<a href="#" data-ssres="${esc(r.id)}">${esc(r.customer || "reservering")} (${esc(roomName(r.roomId))})</a>`).join(", ")}. Verplaats of annuleer ${rs.length === 1 ? "die" : "ze"} in overleg.</div>` : ""}
+  </div>`;
+}
+{ const f = VIEWS.dag; VIEWS.dag = () => { const h = f(), b = ssBand(S.day); return b ? h.replace('<div class="panel stats">', b + '<div class="panel stats">') : h; }; }
+{ const f = VIEWS.home; VIEWS.home = () => { const h = f(), nxt = ssAll().find(x => x.on && x.date >= todayISO); const b = nxt ? ssBand(nxt.date, true) : ""; return b ? h.replace('<div class="tiles">', b + '<div class="tiles">') : h; }; }
+{ const f = after.home; after.home = () => { if (f) f(); document.querySelectorAll("[data-ssres]").forEach(el => el.onclick = e => { e.preventDefault(); openRes(S.reservations.get(el.dataset.ssres)); }); }; }
+
+/* Overzicht en dossier */
+function ssOpen(date) { S.ssOpen = date; ssDraft = null; setView("supersunday"); }
+let ssDraft = null;
+function ssNewDoc(date) {
+  const T = ssTpl(), due = n => { const d = addDays(date, +n || 0); return d < todayISO ? todayISO : d; };
+  return { date, mode: S.superDays.get(date)?.mode || "auto", draaiboek: structuredClone(T.draaiboek || []), afspraken: [], taken: (T.taken || []).map(t => ({ text: t.text, due: due(t.dagen), done: false })), notities: "" };
+}
+VIEWS.supersunday = () => S.ssOpen === "sjabloon" ? vSSTpl() : S.ssOpen && SS_ISO.test(S.ssOpen) ? vSSDay(S.ssOpen) : vSSList();
+after.supersunday = () => S.ssOpen === "sjabloon" ? afterSSTpl() : S.ssOpen && SS_ISO.test(S.ssOpen) ? afterSSDay(S.ssOpen) : afterSSList();
+
+function vSSList() {
+  const tab = S.ssTab || "komend", all = ssAll(), ro = S.readOnly ? "disabled" : "";
+  const inTab = x => tab === "komend" ? x.on && x.date >= todayISO : tab === "geweest" ? x.on && x.date < todayISO : !x.on;
+  const list = all.filter(inTab); if (tab === "geweest") list.reverse();
+  const TABS = [["komend", "Komend"], ["geweest", "Geweest"], ["uit", "Uitgezet"]];
+  const teams = String(ssTpl().teams || SS_DEFAULT.teams);
+  return `<section class="stack">
+    <div class="row spread"><h2>Super Sundays</h2><div class="row">
+      <button class="btn" id="ss-tpl">Standaard draaiboek en taken</button>
+      <input type="date" id="ss-add-date" style="width:auto" aria-label="Datum" ${ro}><button class="btn primary" id="ss-add" ${ro}>Zelf toevoegen</button></div></div>
+    <p class="small muted" style="margin:0">Spelen ${esc(teams.replace(/,\s*([^,]*)$/, " en $1"))} op dezelfde dag thuis, dan is het een Super Sunday. De agenda ziet dat zelf aan de wedstrijden uit LISA. Op die dag zijn alle ruimtes niet te reserveren, en elke Super Sunday krijgt een eigen draaiboek, afspraken en taken. De taken staan ook in de to-do-lijst.</p>
+    <div class="ptabs" role="group" aria-label="Welke Super Sundays">${TABS.map(([k, l]) => `<button type="button" data-sstab="${k}" aria-pressed="${k === tab}">${l}<span class="muted">${all.filter(x => k === "komend" ? x.on && x.date >= todayISO : k === "geweest" ? x.on && x.date < todayISO : !x.on).length}</span></button>`).join("")}</div>
+    ${list.length ? `<div class="panel"><div class="tbl-wrap"><table><thead><tr><th>Datum</th><th>Wedstrijden</th><th>Draaiboek</th><th>Afspraken</th><th>Taken open</th><th></th></tr></thead><tbody>
+      ${list.map(x => { const d = x.doc || {}, rs = ssResOn(x.date), openA = (d.afspraken || []).filter(a => a.status !== "rond").length, openT = (d.taken || []).filter(t => t.text && taskOpen(t)).length;
+        const chip = !x.on ? (x.mode === "uit" ? `<span class="chip c0">uitgezet</span>` : `<span class="chip c3">geen Super Sunday meer</span>`) : x.mode === "aan" && !x.auto ? `<span class="chip c4">zelf toegevoegd</span>` : "";
+        return `<tr class="click" data-ssopen="${esc(x.date)}"><td class="num"><b>${esc(shortDate(x.date))}</b><br><span class="small muted">${esc(DAYS[parseISO(x.date).getDay()])}</span></td>
+        <td>${x.matches.length ? esc(ssMatchTxt(x.matches)) : `<span class="muted">geen wedstrijden van ${esc(teams)}</span>`}${rs.length ? `<br><span class="chip c3">${rs.length} reservering${rs.length === 1 ? "" : "en"} op deze dag</span>` : ""}</td>
+        <td>${(d.draaiboek || []).length ? `${d.draaiboek.length} punten` : `<span class="muted">nog niet gemaakt</span>`}</td>
+        <td class="num">${(d.afspraken || []).length ? `${openA} open / ${d.afspraken.length}` : "–"}</td><td class="num">${openT || "–"}</td><td>${chip}</td></tr>`; }).join("")}
+    </tbody></table></div></div>` : `<p class="empty">${tab === "komend" ? "Geen Super Sundays gevonden. Importeer het wedstrijdschema uit LISA onder Importeren, of voeg zelf een dag toe." : "Niets in deze lijst."}</p>`}
+  </section>`;
+}
+function afterSSList() {
+  document.querySelectorAll("[data-sstab]").forEach(b => b.onclick = () => { S.ssTab = b.dataset.sstab; render(); });
+  document.querySelectorAll("[data-ssopen]").forEach(b => b.onclick = () => ssOpen(b.dataset.ssopen));
+  $("#ss-tpl").onclick = () => ssOpen("sjabloon");
+  $("#ss-add").onclick = async () => {
+    const d = $("#ss-add-date").value; if (!d) { toast("Kies eerst een datum"); return; }
+    if (superSundayOn(d)) { ssOpen(d); return; }
+    if (await write("supersundays/" + d, { date: d, mode: "aan", updatedAt: new Date().toISOString() }, S.superDays.has(d) ? "update" : "set")) { toast("Super Sunday toegevoegd: alle ruimtes zijn die dag geblokkeerd"); ssOpen(d); }
+  };
+}
+
+// Rij-editors voor draaiboek, afspraken en taken (zelfde stijl als het reserveringsformulier).
+const SS_ROWS = {
+  draaiboek: { add: () => ({ time: "", text: "", wie: "" }), empty: "Nog geen draaiboek." },
+  afspraken: { add: () => ({ wat: "", met: "", contact: "", status: "open" }), empty: "Nog geen afspraken genoteerd." },
+  taken: { add: () => ({ text: "", due: "", done: false }), empty: "Geen taken." },
+};
+function ssRowsHtml(kind, rows, A, ro) {
+  if (!rows.length) return `<p class="small muted" style="margin:0">${SS_ROWS[kind].empty}</p>`;
+  const del = i => `<button type="button" class="btn ghost" data-ssdel="${kind}:${i}" aria-label="Verwijderen" ${ro}>✕</button>`;
+  return rows.map((x, i) => {
+    if (kind === "draaiboek") { const t = ssTime(x.time, A); return `<div class="ss-row" data-ssk="${kind}" data-ssi="${i}"><input data-f="time" value="${esc(x.time)}" placeholder="10:00 of -2:00" style="width:110px;flex:none" aria-label="Tijd" ${ro}><span class="ss-abs small muted" title="${esc(t.rel)}">${t.rel ? (t.abs ? "= " + esc(t.abs) : esc(t.rel)) : ""}</span><input data-f="text" value="${esc(x.text)}" placeholder="bijv. Extra bar buiten open" aria-label="Wat" ${ro}><input data-f="wie" value="${esc(x.wie || "")}" placeholder="wie" style="width:130px;flex:none" aria-label="Wie" ${ro}>${del(i)}</div>`; }
+    if (kind === "afspraken") return `<div class="ss-row" data-ssk="${kind}" data-ssi="${i}"><input data-f="wat" value="${esc(x.wat)}" placeholder="bijv. DJ van 17:00 tot 21:00, € 450" aria-label="Afspraak" ${ro}><input data-f="met" value="${esc(x.met || "")}" placeholder="met wie" style="width:150px;flex:none" aria-label="Met wie" ${ro}><input data-f="contact" value="${esc(x.contact || "")}" placeholder="telefoon of e-mail" style="width:160px;flex:none" aria-label="Contact" ${ro}><select data-f="status" style="width:auto;flex:none" aria-label="Status" ${ro}>${["open", "rond"].map(s => `<option ${s === (x.status || "open") ? "selected" : ""}>${s}</option>`).join("")}</select>${del(i)}</div>`;
+    return `<div class="ss-row" data-ssk="${kind}" data-ssi="${i}"><input type="checkbox" data-f="done" ${x.done ? "checked" : ""} style="width:auto;flex:none" aria-label="Gedaan" ${ro}><input data-f="text" value="${esc(x.text)}" aria-label="Taak" ${x.done ? 'style="text-decoration:line-through;opacity:.6"' : ""} ${ro}><input type="date" data-f="due" value="${esc(x.due || "")}" style="width:150px;flex:none" aria-label="Uiterlijk" ${ro}>${del(i)}</div>`;
+  }).join("");
+}
+function ssSyncDraft(D) {
+  document.querySelectorAll(".ss-row[data-ssk]").forEach(row => {
+    const it = D[row.dataset.ssk]?.[+row.dataset.ssi]; if (!it) return;
+    row.querySelectorAll("[data-f]").forEach(el => { it[el.dataset.f] = el.type === "checkbox" ? el.checked : el.value; });
+    if (row.dataset.ssk === "taken" && it.done && it.status === "geannuleerd") it.status = "";
+  });
+  const n = $("#ss-notes"); if (n) D.notities = n.value;
+  const tm = $("#ss-teams"); if (tm) D.teams = tm.value;
+}
+const ssClean = D => ({
+  draaiboek: (D.draaiboek || []).filter(x => x.time || x.text).map(({ time, text, wie }) => ({ time: time || "", text: text || "", wie: wie || "" })),
+  afspraken: (D.afspraken || []).filter(x => x.wat || x.met).map(({ wat, met, contact, status }) => ({ wat: wat || "", met: met || "", contact: contact || "", status: status || "open" })),
+  taken: (D.taken || []).filter(x => x.text).map(x => ({ ...x, text: x.text, due: x.due || "", done: !!x.done })),
+});
+
+function vSSDay(date) {
+  const ss = superSundayOn(date), doc = S.superDays.get(date), a = ssAuto(date), ro = S.readOnly ? "disabled" : "";
+  const fresh = !doc || !ssHasContent(doc);
+  if (!ssDraft || ssDraft.date !== date) ssDraft = fresh ? ssNewDoc(date) : { ...structuredClone(doc), draaiboek: structuredClone(doc.draaiboek || []), afspraken: structuredClone(doc.afspraken || []), taken: structuredClone(doc.taken || []) };
+  const D = ssDraft, A = ssAnchor(date), all = homeMatches(date), rs = ssResOn(date), ap = ssAppts(date), keys = ssTeamKeys();
+  const status = ss ? (ss.auto ? `Automatisch herkend: ${esc(String(ssTpl().teams).replace(/,\s*([^,]*)$/, " en $1"))} spelen thuis.` : "Zelf als Super Sunday toegevoegd.") : doc?.mode === "uit" ? "Uitgezet: deze dag telt niet als Super Sunday en de ruimtes zijn gewoon te reserveren." : "Volgens de wedstrijden uit LISA is dit geen Super Sunday (meer). Is er een wedstrijd verplaatst?";
+  return `<section class="stack">
+    <div class="row spread"><div class="row"><button class="btn" id="ss-back" aria-label="Terug naar Super Sundays">‹</button><h2>${ss ? "Super Sunday · " : ""}${esc(longDate(date))}</h2></div>
+      <div class="row"><button class="btn" id="ss-day">Dag-agenda</button><button class="btn" id="ss-print">Draaiboek downloaden</button><button class="btn bar" id="ss-save" ${ro}>Opslaan</button></div></div>
+    <div class="ss-band${ss ? "" : " ss-off"}"><div class="ss-h">${ss ? `<span class="ss-star" aria-hidden="true">★</span>` : ""}<div>${status}${ss ? " Alle ruimtes zijn de hele dag geblokkeerd voor reserveringen." : ""}</div></div>
+      <div class="row">${ss && ss.auto ? `<button type="button" class="btn" id="ss-off" ${ro}>Toch geen Super Sunday</button>` : ""}${ss && !ss.auto ? `<button type="button" class="btn" id="ss-unset" ${ro}>Weer gewone dag maken</button>` : ""}${!ss ? `<button type="button" class="btn primary" id="ss-on" ${ro}>Wel als Super Sunday aanmerken</button>` : ""}</div></div>
+    ${fresh && ss ? `<div class="warnbox warn">Dit is het standaard draaiboek met standaardtaken. Pas aan wat nodig is en klik op Opslaan; dan komen de taken ook in de to-do-lijst.</div>` : ""}
+    ${rs.length ? `<div class="warnbox bad">Er ${rs.length === 1 ? "staat al een reservering" : `staan al ${rs.length} reserveringen`} op deze dag. Verplaats of annuleer ${rs.length === 1 ? "die" : "ze"} in overleg: ${rs.map(r => `<a href="#" data-ssres="${esc(r.id)}">${esc(r.start || "")} ${esc(r.customer || "reservering")}, ${esc(roomName(r.roomId))}</a>`).join("; ")}</div>` : ""}
+    <div class="grid2">
+      <div class="panel stack" style="gap:6px"><h3 style="color:var(--pitch)">Wedstrijden (${all.length})</h3>
+        ${all.length ? `<div class="list">${all.map(m => { const top = keys.includes(ssTeamKey(m.team)); return `<div class="it"><span class="t">${esc(m.time || "–")}</span><span>${top ? "<b>" : ""}${esc(m.team)}${top ? "</b>" : ""}${m.opponent ? ` <span class="muted">– ${esc(m.opponent)}</span>` : ""}${!m.time ? ` <span class="chip c2">tijd volgt</span>` : ""}</span><span class="muted small">${esc(m.field || "")}</span></div>`; }).join("")}</div>` : `<p class="empty">Geen wedstrijden geïmporteerd voor deze dag.</p>`}
+      </div>
+      <div class="panel stack" style="gap:6px"><h3>Afspraken in de agenda deze dag (${ap.length})</h3>
+        ${ap.length ? `<div class="list">${ap.map(k => `<div class="it"><span class="t">${esc(String(k.at).slice(11, 16) || "–")}</span><span>${esc(k.apptType || "afspraak")}${k.text ? ` <span class="muted">· ${esc(k.text)}</span>` : ""}</span><span class="muted small">${esc(k.manager || "")}</span></div>`).join("")}</div>` : `<p class="small muted" style="margin:0">Geen afspraken met klanten of leveranciers op deze dag. Afspraken maken kan gewoon via Agenda › Afspraken; ruimtes blijven wel geblokkeerd.</p>`}
+      </div>
+    </div>
+    <div class="panel stack" style="gap:6px">
+      <div class="row spread"><h3>Draaiboek</h3><button type="button" class="btn" data-ssadd="draaiboek" ${ro}>+ Punt</button></div>
+      <p class="small muted" style="margin:0">Tijd als 10:00, of als -2:00 (2 uur voor de eerste wedstrijd) of +0:30 (een half uur na de laatste wedstrijd). Dan schuift het draaiboek vanzelf mee als LISA de tijden aanpast.${A ? ` Eerste wedstrijd ${fromMin(A.first)}, laatste klaar rond ${fromMin(A.last)}.` : " De wedstrijdtijden zijn nog niet bekend."}</p>
+      <div class="stack" style="gap:6px">${ssRowsHtml("draaiboek", D.draaiboek, A, ro)}</div>
+    </div>
+    <div class="panel stack" style="gap:6px">
+      <div class="row spread"><h3>Afspraken</h3><button type="button" class="btn" data-ssadd="afspraken" ${ro}>+ Afspraak</button></div>
+      <p class="small muted" style="margin:0">Wat er met wie is afgesproken: DJ, leveranciers, sponsors, beveiliging, bestuur.</p>
+      <div class="stack" style="gap:6px">${ssRowsHtml("afspraken", D.afspraken, A, ro)}</div>
+    </div>
+    <div class="panel stack" style="gap:6px">
+      <div class="row spread"><h3>Taken</h3><button type="button" class="btn" data-ssadd="taken" ${ro}>+ Taak</button></div>
+      <div class="stack" style="gap:6px">${ssRowsHtml("taken", D.taken, A, ro)}</div>
+    </div>
+    <div class="panel stack" style="gap:6px"><h3>Notities</h3><textarea id="ss-notes" rows="4" placeholder="Alles wat verder van belang is voor deze dag" ${ro}>${esc(D.notities || "")}</textarea></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn bar" id="ss-save2" ${ro}>Opslaan</button></div>
+  </section>`;
+}
+function afterSSDay(date) {
+  const D = ssDraft, sync = () => ssSyncDraft(D);
+  $("#ss-back").onclick = () => { sync(); S.ssOpen = null; ssDraft = null; render(); };
+  $("#ss-day").onclick = () => { S.day = date; setView("dag"); };
+  $("#ss-print").onclick = () => { sync(); saveFile(`draaiboek-super-sunday-${date}.html`, ssSheet(date, { ...D, ...ssClean(D) }), "text/html"); };
+  document.querySelectorAll("[data-ssres]").forEach(el => el.onclick = e => { e.preventDefault(); openRes(S.reservations.get(el.dataset.ssres)); });
+  document.querySelectorAll(".ss-row input, .ss-row select, #ss-notes").forEach(el => el.addEventListener("input", sync));
+  document.querySelectorAll('.ss-row [data-f="time"]').forEach(el => el.addEventListener("change", () => { sync(); render(); }));
+  document.querySelectorAll("[data-ssadd]").forEach(b => b.onclick = () => { sync(); D[b.dataset.ssadd].push(SS_ROWS[b.dataset.ssadd].add()); render(); const rows = document.querySelectorAll(`.ss-row[data-ssk="${b.dataset.ssadd}"]`); rows[rows.length - 1]?.querySelector('input:not([type="checkbox"])')?.focus(); });
+  document.querySelectorAll("[data-ssdel]").forEach(b => b.onclick = () => { sync(); const [k, i] = b.dataset.ssdel.split(":"); D[k].splice(+i, 1); render(); });
+  const save = async () => {
+    sync();
+    const body = { date, mode: S.superDays.get(date)?.mode || "auto", ...ssClean(D), notities: D.notities || "", updatedAt: new Date().toISOString() };
+    const A = ssAnchor(date); body.draaiboek.sort((a, b) => ssTime(a.time, A).sort - ssTime(b.time, A).sort);
+    if (await write("supersundays/" + date, body, S.superDays.has(date) ? "update" : "set")) { ssDraft = null; toast("Super Sunday opgeslagen"); render(); }
+  };
+  $("#ss-save").onclick = save; $("#ss-save2").onclick = save;
+  const setMode = async (mode, msg) => { sync(); if (await write("supersundays/" + date, { date, mode, updatedAt: new Date().toISOString() }, S.superDays.has(date) ? "update" : "set")) { toast(msg); render(); } };
+  const off = $("#ss-off"); if (off) off.onclick = () => setMode("uit", "Uitgezet: de ruimtes zijn deze dag weer te reserveren");
+  const un = $("#ss-unset"); if (un) un.onclick = () => setMode("auto", "Weer een gewone dag");
+  const on = $("#ss-on"); if (on) on.onclick = () => setMode("aan", "Super Sunday: alle ruimtes zijn deze dag geblokkeerd");
+}
+
+// Standaard draaiboek en taken voor elke nieuwe Super Sunday, plus welke teams het bepalen.
+function vSSTpl() {
+  const T = ssTpl(), ro = S.readOnly ? "disabled" : "";
+  if (!ssDraft || ssDraft.date !== "sjabloon") ssDraft = { date: "sjabloon", teams: T.teams, draaiboek: structuredClone(T.draaiboek || []), taken: structuredClone(T.taken || []) };
+  const D = ssDraft;
+  const tRows = D.taken.length ? D.taken.map((x, i) => `<div class="ss-row" data-ssk="taken" data-ssi="${i}"><input data-f="text" value="${esc(x.text)}" aria-label="Taak" ${ro}><input type="number" data-f="dagen" value="${esc(x.dagen ?? "")}" style="width:90px;flex:none" aria-label="Dagen ervoor of erna" ${ro}><span class="small muted" style="flex:none">dagen</span><button type="button" class="btn ghost" data-ssdel="taken:${i}" aria-label="Verwijderen" ${ro}>✕</button></div>`).join("") : `<p class="small muted" style="margin:0">Geen standaardtaken.</p>`;
+  return `<section class="stack">
+    <div class="row spread"><div class="row"><button class="btn" id="ss-back" aria-label="Terug naar Super Sundays">‹</button><h2>Standaard voor elke Super Sunday</h2></div><button class="btn bar" id="ss-save" ${ro}>Opslaan</button></div>
+    <div class="panel stack" style="gap:6px"><h3>Welke teams</h3>
+      <label class="f"><span>Teams die allebei thuis moeten spelen (komma's)</span><input id="ss-teams" value="${esc(D.teams || "")}" ${ro}></label>
+      <p class="small muted" style="margin:0">LISA-namen als D01 en H01 worden vanzelf herkend als Dames 1 en Heren 1.</p></div>
+    <div class="panel stack" style="gap:6px"><div class="row spread"><h3>Standaard draaiboek</h3><button type="button" class="btn" data-ssadd="draaiboek" ${ro}>+ Punt</button></div>
+      <p class="small muted" style="margin:0">Gebruik -2:00 voor "2 uur voor de eerste wedstrijd" en +0:30 voor "een half uur na de laatste wedstrijd", of een vaste tijd zoals 10:00.</p>
+      <div class="stack" style="gap:6px">${ssRowsHtml("draaiboek", D.draaiboek, null, ro)}</div></div>
+    <div class="panel stack" style="gap:6px"><div class="row spread"><h3>Standaardtaken</h3><button type="button" class="btn" data-ssadd="taken" ${ro}>+ Taak</button></div>
+      <p class="small muted" style="margin:0">Aantal dagen voor (-7) of na (1) de Super Sunday dat de taak klaar moet zijn.</p>
+      <div class="stack" style="gap:6px">${tRows}</div></div>
+    <p class="small muted">Wijzigingen gelden voor Super Sundays waarvan het draaiboek nog niet is opgeslagen.</p>
+  </section>`;
+}
+function afterSSTpl() {
+  const D = ssDraft, sync = () => ssSyncDraft(D);
+  $("#ss-back").onclick = () => { S.ssOpen = null; ssDraft = null; render(); };
+  document.querySelectorAll(".ss-row input, #ss-teams").forEach(el => el.addEventListener("input", sync));
+  document.querySelectorAll("[data-ssadd]").forEach(b => b.onclick = () => { sync(); D[b.dataset.ssadd].push(b.dataset.ssadd === "taken" ? { text: "", dagen: -7 } : SS_ROWS.draaiboek.add()); render(); });
+  document.querySelectorAll("[data-ssdel]").forEach(b => b.onclick = () => { sync(); const [k, i] = b.dataset.ssdel.split(":"); D[k].splice(+i, 1); render(); });
+  $("#ss-save").onclick = async () => {
+    sync();
+    const body = { teams: (D.teams || "").trim() || SS_DEFAULT.teams, draaiboek: D.draaiboek.filter(x => x.time || x.text).map(({ time, text, wie }) => ({ time: time || "", text: text || "", wie: wie || "" })), taken: D.taken.filter(x => x.text).map(x => ({ text: x.text, dagen: x.dagen === "" || x.dagen == null ? 0 : +x.dagen })), updatedAt: new Date().toISOString() };
+    if (await write("supersundays/sjabloon", body)) { ssDraft = null; toast("Standaard opgeslagen"); S.ssOpen = null; render(); }
+  };
+}
+
+// Afdrukbaar draaiboek: wedstrijden en draaiboek samen op tijd, daarna afspraken, taken en notities.
+function ssSheet(date, D) {
+  const A = ssAnchor(date), keys = ssTeamKeys();
+  const rows = [...homeMatches(date).map(m => ({ sort: toMin(m.time) ?? 9998, t: m.time || "tijd volgt", text: `<b>Wedstrijd ${esc(m.team)}${m.opponent ? " – " + esc(m.opponent) : ""}</b>${m.field ? " (" + esc(m.field) + ")" : ""}`, wie: "", match: keys.includes(ssTeamKey(m.team)) })),
+    ...(D.draaiboek || []).map(x => { const t = ssTime(x.time, A); return { sort: t.sort, t: t.abs || (t.rel ? "tijd volgt" : ""), sub: t.rel, text: esc(x.text), wie: esc(x.wie || "") }; })]
+    .sort((a, b) => a.sort - b.sort);
+  return `<!doctype html><html lang="nl"><head><meta charset="utf-8"><title>Draaiboek Super Sunday ${esc(date)}</title>
+<style>body{font-family:"Open Sans",Arial,sans-serif;font-size:14px;color:#3b3b3b;max-width:760px;margin:32px auto;padding:0 24px;line-height:1.5}h1,h2{font-weight:600;margin:0 0 6px}h1{color:#e5621c}h2{font-size:1.1rem;margin-top:22px;color:#1b7d88;border-bottom:2px solid #1b7d88;padding-bottom:3px}table{width:100%;border-collapse:collapse}td,th{padding:6px;border-bottom:1px solid #e3e3e3;text-align:left;vertical-align:top}.k{width:90px;font-weight:600;white-space:nowrap}.s{color:#8a8a8a;font-size:12px}.box{border:2px solid #b3352b;padding:8px 12px;border-radius:6px}@media print{body{margin:0}}</style></head><body>
+<h1>Draaiboek Super Sunday</h1><p style="font-size:1.2rem;margin:0"><b>${esc(longDate(date))}</b></p>
+<p class="box">Alle ruimtes zijn deze dag geblokkeerd: geen reserveringen.</p>
+<h2>Programma</h2>${rows.length ? `<table>${rows.map(r => `<tr${r.match ? ' style="background:#d2e8e6"' : ""}><td class="k">${esc(r.t)}${r.sub ? `<br><span class="s">${esc(r.sub)}</span>` : ""}</td><td>${r.text}</td><td>${r.wie}</td></tr>`).join("")}</table>` : "<p>Nog geen programma.</p>"}
+${(D.afspraken || []).length ? `<h2>Afspraken</h2><table><tr><th>Afspraak</th><th>Met</th><th>Contact</th><th>Status</th></tr>${D.afspraken.map(a => `<tr><td>${esc(a.wat)}</td><td>${esc(a.met)}</td><td>${esc(a.contact)}</td><td>${esc(a.status)}</td></tr>`).join("")}</table>` : ""}
+${(D.taken || []).length ? `<h2>Taken</h2><table>${D.taken.map(t => `<tr><td class="k">${t.done ? "✓" : "☐"}</td><td>${esc(t.text)}</td><td>${t.due ? esc(shortDate(t.due)) : ""}</td></tr>`).join("")}</table>` : ""}
+${(D.notities || "").trim() ? `<h2>Notities</h2><p>${esc(D.notities).replace(/\n/g, "<br>")}</p>` : ""}
+<p style="color:#8a8a8a;margin-top:28px">Gemaakt ${esc(new Date().toLocaleString("nl-NL"))} · HC Tilburg Horeca</p></body></html>`;
+}
+
+/* Menu en stijl */
+(() => {
+  const ag = MENU.find(m => m.id === "agenda"); if (!ag || ag.items.some(it => it.v === "supersunday")) return;
+  const at = ag.items.findIndex(it => it.sep);
+  ag.items.splice(at < 0 ? ag.items.length : at, 0, { l: "Super Sundays", v: "supersunday", set: { ssOpen: null } });
+  document.head.insertAdjacentHTML("beforeend", `<style id="ss-style">
+.ss-band { display: flex; flex-wrap: wrap; gap: 10px 16px; justify-content: space-between; align-items: center; padding: 12px 16px; border-radius: var(--r); background: var(--orange-soft); border: 1px solid var(--orange); border-left: 6px solid var(--orange); color: var(--fg); }
+.ss-band .ss-h { display: flex; gap: 12px; align-items: flex-start; min-width: 0; flex: 1 1 320px; }
+.ss-star { font-size: 1.6rem; line-height: 1; color: var(--orange); }
+.ss-t { color: var(--orange); font-size: 1.05rem; }
+.ss-band.ss-off { background: var(--sunk); border-color: var(--line); border-left-color: var(--muted); }
+.day .ln.ss { color: var(--orange); font-weight: 700; }
+.ss-row { display: flex; gap: 8px; align-items: center; flex-wrap: nowrap; }
+.ss-row .ss-abs { flex: none; min-width: 64px; }
+@media (max-width: 640px) { .ss-row { flex-wrap: wrap; } .ss-row input[data-f="text"], .ss-row input[data-f="wat"] { flex: 1 1 100%; order: -1; } }
+</style>`);
 })();
 boot();
 })();
