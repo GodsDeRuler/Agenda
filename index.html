@@ -2604,6 +2604,7 @@ function openProduct(s, idx) {
       <label class="f"><span>To-do bij dit product (optioneel)</span><input id="pf-todoText" value="${esc(p.todoText)}" placeholder="bijv. Worstenbroodjes bestellen bij bakker"></label>
       <label class="f"><span>Dagen voor het feest</span><input id="pf-todoDays" type="number" min="0" value="${esc(p.todoDays)}" placeholder="bijv. 7"></label>
     </div>
+    ${rqProdExtraHtml(p)}
     <label class="check small"><input type="checkbox" id="pf-active" ${p.active !== false ? "checked" : ""}> Actief (kiesbaar in offertes)</label>
     <div class="row spread">
       <div class="row">${isNew ? "" : `<button type="button" class="btn danger" id="pf-del">Verwijderen</button><span id="pf-delc" hidden class="row"><span class="small">Zeker weten?</span><button type="button" class="btn danger" id="pf-del2">Ja, verwijder</button></span>`}</div>
@@ -2616,7 +2617,7 @@ function openProduct(s, idx) {
   $("#scrim").addEventListener("mousedown", e => { if (e.target.id === "scrim") closeModal(); });
   $("#prod-form").onsubmit = e => {
     e.preventDefault();
-    const np = { ...p, name: $("#pf-name").value.trim(), category: $("#pf-category").value, price: +$("#pf-price").value || 0, unit: $("#pf-unit").value, btw: $("#pf-btw").value === "mix" ? 21 : +$("#pf-btw").value, btwHigh: $("#pf-btw").value === "mix" ? Math.min(99, Math.max(1, +$("#pf-btwHigh").value || 75)) : null, sub: $("#pf-sub").value.trim(), priceChild: $("#pf-priceChild").value === "" ? null : +$("#pf-priceChild").value, inkoop: $("#pf-inkoop").value === "" ? null : +$("#pf-inkoop").value, description: $("#pf-description").value.trim(), kitchenNote: $("#pf-kitchenNote").value.trim(), todoText: $("#pf-todoText").value.trim(), todoDays: $("#pf-todoDays").value === "" ? "" : +$("#pf-todoDays").value, active: $("#pf-active").checked, ptype: $("#pf-ptype").value, rqCat: $("#pf-rqcat").value };
+    const np = { ...p, name: $("#pf-name").value.trim(), category: $("#pf-category").value, price: +$("#pf-price").value || 0, unit: $("#pf-unit").value, btw: $("#pf-btw").value === "mix" ? 21 : +$("#pf-btw").value, btwHigh: $("#pf-btw").value === "mix" ? Math.min(99, Math.max(1, +$("#pf-btwHigh").value || 75)) : null, sub: $("#pf-sub").value.trim(), priceChild: $("#pf-priceChild").value === "" ? null : +$("#pf-priceChild").value, inkoop: $("#pf-inkoop").value === "" ? null : +$("#pf-inkoop").value, description: $("#pf-description").value.trim(), kitchenNote: $("#pf-kitchenNote").value.trim(), todoText: $("#pf-todoText").value.trim(), todoDays: $("#pf-todoDays").value === "" ? "" : +$("#pf-todoDays").value, active: $("#pf-active").checked, ptype: $("#pf-ptype").value, rqCat: $("#pf-rqcat").value, ...rqProdExtra(p) };
     if (!np.name) { toast("Geef het product een naam"); return; }
     if (isNew) s.products.push(np); else s.products[idx] = np;
     S.pcat = S.pinstCat = np.category; persist();
@@ -6575,6 +6576,8 @@ function rqMigrate(s) {
 }
 { const base = normSettings; normSettings = function (d) { return rqMigrate(base(d)); }; }
 S.settings = normSettings(S.settings);
+// Opent de app direct op Instellingen, dan is het concept gemaakt vóór de echte instellingen binnen waren; bij de eerste lading opnieuw beginnen, anders zou Opslaan de standaardwaarden wegschrijven.
+{ const b2 = normSettings; normSettings = function (d) { if (d && !S._setReady) { S._setReady = true; if (typeof setDraft !== "undefined") setDraft = null; } return b2(d); }; }
 async function rqSaveSettings(patch, msg) {
   const s = JSON.parse(JSON.stringify({ ...S.settings, ...patch }));
   if (await write("settings/main", s)) { S.settings = normSettings(s); if (msg) toast(msg); return true; }
@@ -6611,8 +6614,10 @@ function rqProgHtml(d, ro, o = {}) {
       <div class="rq-add"><span class="rq-hook">↳</span><button type="button" class="btn small rq-addbtn" id="rq-npadd" ${ro}><b>+</b> Toevoegen</button></div></div>
   </div>`;
 }
-function rqProdOptions(cat, cur) {
-  const ps = (S.settings.products || []).filter(p => p.name && (p.active !== false || p.id === cur) && p.category !== "Drankafkoop" && rqCatOf(p) === cat);
+// Producten per blok; met soort feest en gelegenheid alleen die daar te kiezen zijn (productinstelling Gelegenheden per soort feest).
+const rqProdAt = (p, typeId, part) => { const g = p.gelegenheden && typeId && p.gelegenheden[typeId]; return !Array.isArray(g) || !part || g.includes(part); };
+function rqProdOptions(cat, cur, typeId, part) {
+  const ps = (S.settings.products || []).filter(p => p.name && (p.active !== false || p.id === cur) && p.category !== "Drankafkoop" && rqCatOf(p) === cat && (p.id === cur || rqProdAt(p, typeId, part)));
   const c = cur && product(cur); if (c && !ps.includes(c)) ps.push(c);
   const subs = [...new Set(ps.map(p => p.sub || ""))].sort((a, b) => a.localeCompare(b, "nl"));
   const opt = p => `<option value="${esc(p.id)}" ${p.id === cur ? "selected" : ""}>${esc(p.name)}</option>`;
@@ -6630,7 +6635,7 @@ function rqAmtRow(it, r, k, ro, bx) {
     <span class="c-tot" data-rt>= ${fmtN(r.net)} €</span><span class="c-ex" data-rx>${fmtN(rqEx(r.net, bx))} €</span></div>`;
 }
 function rqItemHtml(d, it, i, ro) {
-  const on = rqOnParts(d), rows = rqItemRows(d, it), bx = rqItemBx(it), opts = it.productId || !(it.cat === "Speciale wensen" || it.cat === "Zalen" || it.desc) ? rqProdOptions(it.cat, it.productId) : "";
+  const on = rqOnParts(d), rows = rqItemRows(d, it), bx = rqItemBx(it), opts = it.productId || !(it.cat === "Speciale wensen" || it.cat === "Zalen" || it.desc) ? rqProdOptions(it.cat, it.productId, d.eventType, it.part) : "";
   const free = !it.productId && (it.cat === "Speciale wensen" || it.cat === "Zalen" || !!it.desc || !opts);
   const prod = free ? `<input data-ik="desc" value="${esc(it.desc || "")}" placeholder="Omschrijving" aria-label="Omschrijving" ${ro}>`
     : `<select data-ik="productId" aria-label="Product" ${ro}><option value="">Kies een product…</option>${opts}</select>`;
@@ -6639,7 +6644,13 @@ function rqItemHtml(d, it, i, ro) {
   if (it.wens) return `<div class="rq-it wish" data-ii="${i}"><div class="rq-itl"><span class="rq-wname"><b>${esc(it.desc || "Speciale wens")}</b>${it.wens.omschrijving ? `<br><span class="small muted">${esc(it.wens.omschrijving)}</span>` : ""}<br><span class="small tealc">${[RQ_WPT[rqWishPt(it)], (it.wens.voor || []).map(v => "voor " + v).join(" en "), it.wens.leverancier ? "leverancier: " + it.wens.leverancier : "", it.wens.todo ? "op to-do lijst" : ""].filter(Boolean).map(esc).join(" · ")}</span></span>${part}<input type="time" class="rq-tm" data-ik="time" value="${esc(it.time || "")}" aria-label="Tijd" ${ro}><button type="button" class="btn small" data-iwish="${i}" ${ro}>Wijzigen</button></div>
     ${rqWishPt(it) === "none" ? "" : `<div class="rq-amts">${rows.map((r, k) => rqAmtRow(it, r, k, ro, bx)).join("")}</div>`}<button type="button" class="rq-x red" data-idel="${i}" title="Regel verwijderen" aria-label="Regel verwijderen" ${ro}>✕</button></div>`;
   return `<div class="rq-it${it.optional ? " opt" : ""}" data-ii="${i}"><div class="rq-itl">${prod}${part}<input type="time" class="rq-tm" data-ik="time" value="${esc(it.time || "")}" aria-label="Tijd" ${ro}>${extra}${it.optional ? `<span class="chip c0">optioneel</span>` : ""}</div>
-    <div class="rq-amts">${rows.map((r, k) => rqAmtRow(it, r, k, ro, bx)).join("")}</div><button type="button" class="rq-x red" data-idel="${i}" title="Regel verwijderen" aria-label="Regel verwijderen" ${ro}>✕</button></div>`;
+    <div class="rq-amts">${rows.map((r, k) => rqAmtRow(it, r, k, ro, bx)).join("")}</div><button type="button" class="rq-x red" data-idel="${i}" title="Regel verwijderen" aria-label="Regel verwijderen" ${ro}>✕</button>${rqUpsellHtml(d, it, i, ro)}</div>`;
+}
+// Upsell (Restau): bij een product ingestelde andere producten om voor te stellen, met één klik erbij.
+function rqUpsellHtml(d, it, i, ro) {
+  const pr = it.productId && product(it.productId); if (!pr || !Array.isArray(pr.upsell) || !pr.upsell.length) return "";
+  const has = new Set((d.items || []).map(x => x.productId)), ups = pr.upsell.map(product).filter(x => x && x.active !== false && !has.has(x.id));
+  return ups.length ? `<div class="rq-ups"><span class="small muted">Ook voorstellen:</span>${ups.map(x => `<button type="button" class="btn small" data-upsell="${esc(x.id)}" data-upfrom="${i}" ${ro}>+ ${esc(x.name)} <span class="muted">${eur(x.price)}</span></button>`).join("")}</div>` : "";
 }
 function rqDrinkHtml(d, ro) {
   const on = rqOnParts(d), cfg = daCfg(d.eventType);
@@ -6824,6 +6835,11 @@ function rqWire(d, root, ctx) {
       rerender();
     }
     else if (b.dataset.idel != null) { d.items.splice(+b.dataset.idel, 1); rerender(); }
+    else if (b.dataset.upsell) {
+      const x = product(b.dataset.upsell), from = d.items[+b.dataset.upfrom]; if (!x) return;
+      d.items.push({ id: uid(), cat: rqCatOf(x), productId: x.id, desc: x.name, part: from?.part || "", time: from?.time || "", ptype: rqPtype(x), follow: true, qty: 1, price: +x.price || 0, priceKid: x.priceChild != null && x.priceChild !== "" ? +x.priceChild : +x.price || 0, btw: +x.btw || 0, ...(isMix(x) ? { btwHigh: +x.btwHigh } : {}) });
+      rerender(); toast(`${x.name} toegevoegd`);
+    }
   });
 }
 
@@ -7795,6 +7811,89 @@ document.head.insertAdjacentHTML("beforeend", `<style id="rq7-style">
 .zm-tbl th.c, .zm-tbl td.c { text-align: center; }
 #sf, #zm { min-width: 0; }
 @media (max-width: 760px) { .sf-texts, .sf-pdesc { grid-template-columns: 1fr; } .sf-fotos { grid-template-columns: repeat(3, minmax(0, 1fr)); } .sf-tabs button { padding: 8px 9px; } }
+</style>`);
+/* ---------- Productformulier zoals Restau: informatie en menu voor keuken/bediening, inkoop per prijs, grootboek, kostenplaats, gelegenheden per soort feest, foto's, video's, upsell ---------- */
+const RQ_VOOR = [["keuken", "Keuken"], ["bediening", "Bediening"]];
+const rqVoorBoxes = (k, cur) => RQ_VOOR.map(([v, l]) => `<label class="check small"><input type="checkbox" data-pvoor="${k}" value="${v}" ${(cur || []).includes(v) ? "checked" : ""}> Zichtbaar voor ${l.toLowerCase()}</label>`).join("");
+function rqProdExtraHtml(p) {
+  const types = eventTypes(), fotos = Array.isArray(p.fotos) ? p.fotos : [], vids = Array.isArray(p.videos) ? p.videos : [], ups = new Set(p.upsell || []);
+  const others = (S.settings.products || []).filter(x => x.id !== p.id && x.name && x.category !== "Drankafkoop");
+  const cats = [...new Set(others.map(x => rqCatOf(x)))];
+  return `<details class="pf-more" open><summary><b>Restau-instellingen</b> <span class="small muted">informatie, menu, grootboek, gelegenheden, foto's en upsell</span></summary><div class="stack">
+    <div class="row">${rqVoorBoxes("info", p.infoVoor)}<span class="small muted">(geldt voor de omschrijving hierboven)</span></div>
+    <label class="f"><span>Menu</span><textarea id="pf-menu" rows="3" placeholder="bijv. Voorgerecht: … Hoofdgerecht: …">${esc(p.menu || "")}</textarea></label>
+    <div class="row">${rqVoorBoxes("menu", p.menuVoor)}</div>
+    <div class="fields">
+      <label class="f"><span>Inkoopprijs kind excl. btw</span><input id="pf-inkoopKind" type="number" step="0.01" min="0" value="${esc(p.inkoopKind ?? "")}"></label>
+      <label class="f"><span>Grootboek</span><input id="pf-grootboek" list="pf-gbl" value="${esc(p.grootboek || "")}"><datalist id="pf-gbl">${[...new Set((S.settings.products || []).map(x => x.grootboek).filter(Boolean))].map(x => `<option value="${esc(x)}">`).join("")}</datalist></label>
+      <label class="f"><span>Kostenplaats</span><input id="pf-kostenplaats" list="pf-kpl" value="${esc(p.kostenplaats || "")}"><datalist id="pf-kpl">${[...new Set((S.settings.products || []).map(x => x.kostenplaats).filter(Boolean))].map(x => `<option value="${esc(x)}">`).join("")}</datalist></label>
+    </div>
+    <div class="row">
+      <label class="check small"><input type="checkbox" id="pf-klantAantal" ${p.klantAantal ? "checked" : ""}> Aantal aanpasbaar door klant</label>
+      <label class="check small"><input type="checkbox" id="pf-alleenIntern" ${p.alleenIntern ? "checked" : ""}> Alleen intern</label>
+      <label class="check small"><input type="checkbox" id="pf-standaard" ${p.standaard ? "checked" : ""}> Standaardproduct</label>
+    </div>
+    <div class="row"><span class="small"><b>Draaiboek van:</b></span>${RQ_VOOR.map(([v, l]) => `<label class="check small"><input type="checkbox" data-pvoor="draaiboek" value="${v}" ${(p.draaiboekVoor || []).includes(v) ? "checked" : ""}> ${l}</label>`).join("")}</div>
+    <label class="f"><span>Interne notities</span><textarea id="pf-intern" rows="2">${esc(p.intern || "")}</textarea></label>
+    <div><b class="small">Gelegenheden per soort feest</b> <span class="small muted">(waar het product te kiezen is; alles aan = overal)</span>
+      <div class="tbl-wrap"><table class="lines pf-gel"><tbody>${types.map(t => { const g = p.gelegenheden && p.gelegenheden[t.id]; return `<tr><td><b>${esc(t.name)}</b></td><td>${(t.parts || []).filter(x => x.name).map(x => `<label class="check small"><input type="checkbox" data-pgel="${esc(t.id)}" value="${esc(x.name)}" ${!Array.isArray(g) || g.includes(x.name) ? "checked" : ""}> ${esc(x.name)}</label>`).join("")}</td></tr>`; }).join("")}</tbody></table></div></div>
+    <div><b class="small">Foto's (max. 12)</b><div class="pf-fotos">${Array.from({ length: 12 }, (_, i) => `<div class="pf-foto" data-pfi="${i}">${pfFotoInner(fotos[i])}</div>`).join("")}</div>
+      <label class="check small"><input type="checkbox" id="pf-collage" ${p.collage ? "checked" : ""}> Foto's in de collage op het draaiboek</label></div>
+    <div class="fields">${[0, 1, 2].map(i => `<label class="f"><span>Video ${i + 1} (link)</span><input type="url" data-pvid="${i}" value="${esc(vids[i] || "")}" placeholder="https://…"></label>`).join("")}</div>
+    <div><b class="small">Upsell: deze producten voorstellen als dit product in de offerte staat</b>
+      <details class="pf-ups"><summary class="small">${ups.size ? `${ups.size} gekozen: ${[...ups].map(id => product(id)?.name).filter(Boolean).map(esc).join(", ")}` : "Kies producten…"}</summary><div class="pf-upl">${cats.map(c => `<div><span class="eyebrow">${esc(c)}</span>${others.filter(x => rqCatOf(x) === c).map(x => `<label class="check small"><input type="checkbox" data-pups value="${esc(x.id)}" ${ups.has(x.id) ? "checked" : ""}> ${esc(x.name)}</label>`).join("")}</div>`).join("")}</div></details>
+      <label class="check small"><input type="checkbox" id="pf-upsellZicht" ${p.upsellZichtbaar !== false ? "checked" : ""}> Upsell tonen in de offerte</label></div>
+  </div></details>`;
+}
+const pfFotoInner = u => safeImg(u) ? `<img src="${esc(u)}" alt=""><button type="button" class="btn small" data-pfdel>✕</button>` : `<label class="rq-up">+<input type="file" accept="image/jpeg,image/png,image/webp" data-pfup hidden></label>`;
+let pfFotos = null;
+function rqProdExtraWire(p) {
+  pfFotos = Array.isArray(p.fotos) ? p.fotos.slice() : [];
+  const root = $("#prod-form"); if (!root) return;
+  root.querySelectorAll(".pf-foto").forEach(box => {
+    const i = +box.dataset.pfi;
+    const wire = () => {
+      const up = box.querySelector("[data-pfup]"), del = box.querySelector("[data-pfdel]");
+      if (del) del.onclick = () => { pfFotos[i] = ""; box.innerHTML = pfFotoInner(""); wire(); };
+      if (up) up.onchange = async () => {
+        const f = up.files && up.files[0]; if (!f) return;
+        if (f.size > 5 * 1024 * 1024) { toast("Deze foto is groter dan 5 MB. Verklein hem eerst."); return; }
+        try { pfFotos[i] = await rqPhotoFile(f, "product-" + p.id + "-" + i); box.innerHTML = pfFotoInner(pfFotos[i]); wire(); } catch (e) { toast("De foto lukt nu niet. Probeer een andere jpg of png."); }
+      };
+    };
+    wire();
+  });
+}
+function rqProdExtra(p) {
+  if (!$("#pf-menu")) return {};
+  const voor = k => [...document.querySelectorAll(`[data-pvoor="${k}"]`)].filter(x => x.checked).map(x => x.value);
+  const gel = {};
+  for (const t of eventTypes()) { const all = [...document.querySelectorAll(`[data-pgel="${CSS.escape(t.id)}"]`)]; if (all.length && all.some(x => !x.checked)) gel[t.id] = all.filter(x => x.checked).map(x => x.value); }
+  const num = id => $(id).value === "" ? null : +$(id).value;
+  return { infoVoor: voor("info"), menu: $("#pf-menu").value.trim(), menuVoor: voor("menu"), inkoopKind: num("#pf-inkoopKind"), grootboek: $("#pf-grootboek").value.trim(), kostenplaats: $("#pf-kostenplaats").value.trim(),
+    klantAantal: $("#pf-klantAantal").checked, alleenIntern: $("#pf-alleenIntern").checked, standaard: $("#pf-standaard").checked, draaiboekVoor: voor("draaiboek"), intern: $("#pf-intern").value.trim(),
+    gelegenheden: gel, fotos: (pfFotos || p.fotos || []).filter(Boolean), collage: $("#pf-collage").checked, videos: [...document.querySelectorAll("[data-pvid]")].map(x => x.value.trim()).filter(Boolean),
+    upsell: [...document.querySelectorAll("[data-pups]")].filter(x => x.checked).map(x => x.value), upsellZichtbaar: $("#pf-upsellZicht").checked };
+}
+{
+  const base = openProduct;
+  openProduct = function (s, idx) { base(s, idx); const p = idx == null ? {} : s.products[idx] || {}; rqProdExtraWire(p); };
+}
+{
+  const base = rqUpsellHtml;
+  rqUpsellHtml = function (d, it, i, ro) { const pr = it.productId && product(it.productId); return pr && pr.upsellZichtbaar === false ? "" : base(d, it, i, ro); };
+}
+document.head.insertAdjacentHTML("beforeend", `<style id="rq8-style">
+.pf-more { border: 1px solid var(--line, #ddd); border-radius: 6px; padding: 8px 12px; } .pf-more > summary { cursor: pointer; }
+.pf-more .stack { margin-top: 10px; }
+.pf-fotos { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; margin: 6px 0; }
+.pf-foto { position: relative; aspect-ratio: 4 / 3; border: 1px dashed var(--line, #ccc); border-radius: 4px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.pf-foto img { width: 100%; height: 100%; object-fit: cover; } .pf-foto [data-pfdel] { position: absolute; top: 2px; right: 2px; padding: 0 6px; }
+.pf-foto .rq-up { cursor: pointer; color: var(--teal); font-size: 1.4rem; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+.pf-gel td { vertical-align: top; } .pf-gel label { margin-right: 10px; display: inline-flex; }
+.pf-upl { max-height: 260px; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; padding: 6px 0; } .pf-upl label { display: flex; }
+.rq-ups { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 4px 0 0 24px; }
+@media (max-width: 760px) { .pf-fotos { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 </style>`);
 /* ---------- einde offerte zoals Restau ---------- */
 
