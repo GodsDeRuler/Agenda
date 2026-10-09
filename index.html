@@ -1744,7 +1744,7 @@ function openResForm(r0) {
       <label class="f"><span>Datum</span><input type="date" id="rf-date" required value="${esc(r.date)}"></label>
       <label class="f"><span>Van</span><input type="time" id="rf-start" required value="${esc(r.start)}"></label>
       <label class="f"><span>Tot</span><input type="time" id="rf-end" required value="${esc(r.end)}"></label>
-      <label class="f"><span>Ruimte</span><select id="rf-room">${rooms.map(x => `<option value="${esc(x.id)}" ${x.id === r.roomId ? "selected" : ""}>${esc(x.name)}${x.capacity ? " (max " + esc(x.capacity) + ")" : ""}</option>`).join("") || `<option value="">Voeg eerst ruimtes toe</option>`}</select></label>
+      <label class="f"><span>Ruimte</span><select id="rf-room">${rooms.map(x => `<option value="${esc(x.id)}" ${x.id === r.roomId ? "selected" : ""}>${esc(x.name)}${x.capacity ? " (max " + esc(x.capacity) + ")" : ""}</option>`).join("") || `<option value="">Voeg eerst ruimtes toe</option>`}</select><span class="rfoto-mini" id="rf-roomfoto">${roomThumbs(r.roomId || (rooms[0] && rooms[0].id))}</span></label>
     </div>
     <div class="fields">
       <label class="f"><span>Klant of organisatie</span><input id="rf-customer" required list="cust-dl" autocomplete="off" value="${esc(r.customer)}" placeholder="bijv. Familie Jansen"></label>
@@ -2202,6 +2202,7 @@ function quoteHtml(q) {
 <p><b>${esc(q.customer)}</b>${q.contact ? "<br>t.a.v. " + esc(q.contact) : ""}${q.email ? "<br>" + esc(q.email) : ""}${q.phone ? "<br>" + esc(q.phone) : ""}</p>
 ${q.eventDate ? `<p>Betreft: ${esc(longDate(q.eventDate))} ${esc(q.eventTime || "")}${q.roomId ? " in " + esc(roomName(q.roomId)) : ""}${q.persons ? ", " + esc(q.persons) + " personen" : ""}.</p>` : ""}
 ${(() => { const rm = room(q.roomId); if (!rm || !(rm.omschrijving || (rm.voorzieningen || []).length)) return ""; return `<p class="muted" style="font-size:.92em">${rm.omschrijving ? esc(rm.omschrijving).replace(/\n/g, "<br>") : ""}${(rm.voorzieningen || []).length ? `${rm.omschrijving ? "<br>" : ""}Voorzieningen ${esc(rm.name)}: ${esc(rm.voorzieningen.join(", "))}.` : ""}</p>`; })()}
+${photoQuoteHtml(q.roomId)}
 <table><thead><tr><th>Omschrijving</th><th class="r">Aantal</th><th class="r">Prijs</th><th class="r">Btw</th><th class="r">Bedrag</th></tr></thead><tbody>
 ${q.lines.filter(l => (l.desc || l.price) && !l.optional).map(l => `<tr><td>${esc(l.desc)}${product(l.productId)?.description ? `<br><span class="muted" style="font-size:.88em">${esc(product(l.productId).description)}</span>` : ""}</td><td class="r">${esc(l.qty)}</td><td class="r">${eur(l.price)}</td><td class="r">${esc(btwLabel(l))}</td><td class="r">${eur(l.qty * l.price)}</td></tr>`).join("")}
 </tbody></table>
@@ -2486,6 +2487,7 @@ function vInst() {
         <div class="row wrap small" style="gap:4px 14px"><b>Voorzieningen</b>${[...new Set([...VOORZIENINGEN, ...(r.voorzieningen || [])])].map(v => `<label class="check"><input type="checkbox" data-voorz="${esc(v)}" ${(r.voorzieningen || []).includes(v) ? "checked" : ""} ${ro}> ${esc(v)}</label>`).join("")}</div>
         ${s.rooms.length > 1 ? `<div class="row wrap small" style="gap:4px 14px"><b>Gekoppeld aan</b>${s.rooms.filter(x => x.id !== r.id).map(x => `<label class="check"><input type="checkbox" data-link="${esc(x.id)}" ${(r.linkedRooms || []).includes(x.id) || (x.linkedRooms || []).includes(r.id) ? "checked" : ""} ${ro}> ${esc(x.name || "Nieuwe ruimte")}</label>`).join("")}<span class="muted">bezet of geblokkeerd = de gekoppelde ruimte ook</span></div>` : ""}
         <label class="f small"><span>Omschrijving voor offertes</span><textarea data-omschr rows="2" placeholder="Wat de klant over deze ruimte leest op de offerte" ${ro}>${esc(r.omschrijving || "")}</textarea></label>
+        ${photoEditHtml(r, ro)}
       </div></td></tr>`).join("")}
       </tbody></table></div>
       ${s.rooms.length ? "" : `<p class="empty">Nog geen ruimtes. Voeg de ruimtes toe die jullie verhuren.</p>`}
@@ -2524,7 +2526,7 @@ after.inst = () => {
   const sync = () => {
     const pc = $("#s-pcats"); if (pc) s.productCategories = pc.value.split(",").map(x => x.trim()).filter(Boolean);
     document.querySelectorAll("tr[data-room]").forEach(tr => { const r = s.rooms[+tr.dataset.room]; tr.querySelectorAll("[data-k]").forEach(i => r[i.dataset.k] = i.value); });
-    document.querySelectorAll("tr[data-roomx]").forEach(tr => { const r = s.rooms[+tr.dataset.roomx]; r.voorzieningen = [...tr.querySelectorAll("[data-voorz]:checked")].map(i => i.dataset.voorz); const o = tr.querySelector("[data-omschr]"); if (o) r.omschrijving = o.value; });
+    document.querySelectorAll("tr[data-roomx]").forEach(tr => { const r = s.rooms[+tr.dataset.roomx]; r.voorzieningen = [...tr.querySelectorAll("[data-voorz]:checked")].map(i => i.dataset.voorz); const o = tr.querySelector("[data-omschr]"); if (o) r.omschrijving = o.value; tr.querySelectorAll("[data-pcap]").forEach(i => { if (r.photos && r.photos[+i.dataset.pcap]) r.photos[+i.dataset.pcap].caption = i.value; }); });
     document.querySelectorAll("tr[data-arr]").forEach(tr => { const a = s.arrangementen[+tr.dataset.arr]; tr.querySelectorAll("[data-k]").forEach(i => a[i.dataset.k] = i.dataset.k === "price" || i.dataset.k === "btw" ? +i.value : i.value); });
     ["jeugd", "senior", "top", "duur", "grens1", "grens2", "grens3"].forEach(k => s.drukte[k] = +$("#sd-" + k).value || 0);
     s.drukte.topTeams = $("#sd-topTeams").value; s.clubNaam = $("#s-clubNaam").value;
@@ -2542,6 +2544,7 @@ after.inst = () => {
   });
   document.querySelectorAll("[data-delroom]").forEach(b => b.onclick = () => { sync(); const gone = s.rooms.splice(+b.dataset.delroom, 1)[0]; s.rooms.forEach(x => { if (x.linkedRooms) x.linkedRooms = x.linkedRooms.filter(y => y !== gone?.id); }); render(); });
   document.querySelectorAll("[data-delarr]").forEach(b => b.onclick = () => { sync(); s.arrangementen.splice(+b.dataset.delarr, 1); render(); });
+  photoEditWire(s, sync);
   $("#s-reset").onclick = () => { setDraft = null; render(); };
   const ap = $("#s-addprod"); if (ap) ap.onclick = () => { sync(); openProduct(s, null); };
   document.querySelectorAll("[data-prod]").forEach(el => el.onclick = () => { sync(); openProduct(s, +el.dataset.prod); });
@@ -6030,6 +6033,60 @@ document.head.insertAdjacentHTML("beforeend", `<style id="ha-style">
   .ha-mc .ha-todo, .ha-mc .ha-more { font-size: .64rem; }
   .ha-mc .ha-dh .chip { display: none; }
 }
+</style>`);
+/* ---------- Foto's per ruimte (rooms[i].photos = [{ url, caption }], max 5) ---------- */
+// Webversie: upload naar Supabase Storage via window.hctFotoUpload(file, roomId). Op claude.ai: een link naar een foto plakken.
+const PHOTO_MAX = 5;
+const safeImg = u => /^(https:\/\/|data:image\/(png|jpe?g|webp);)/i.test(String(u || "")) ? String(u) : "";
+const roomPhotos = rm => (rm && Array.isArray(rm.photos) ? rm.photos.filter(p => p && safeImg(p.url)) : []);
+function roomThumbs(id, n = 3) { return roomPhotos(room(id)).slice(0, n).map(p => `<img src="${esc(p.url)}" alt="${esc(p.caption || "")}" loading="lazy">`).join(""); }
+document.addEventListener("change", e => { if (e.target && e.target.id === "rf-room") { const el = $("#rf-roomfoto"); if (el) el.innerHTML = roomThumbs(e.target.value); } });
+function photoEditHtml(r, ro) {
+  const ps = Array.isArray(r.photos) ? r.photos : [], up = typeof window.hctFotoUpload === "function";
+  return `<div class="rph" data-rphid="${esc(r.id)}"><b class="small">Foto's (${ps.length}/${PHOTO_MAX})</b>
+    ${ps.length ? `<div class="rph-list">${ps.map((p, j) => `<div class="rph-it">${safeImg(p.url) ? `<img src="${esc(p.url)}" alt="" loading="lazy">` : `<div class="rph-bad small">ongeldige link</div>`}
+      <input data-pcap="${j}" value="${esc(p.caption || "")}" placeholder="Bijschrift (mag leeg)" aria-label="Bijschrift foto ${j + 1}" ${ro}>
+      <div class="row" style="gap:4px"><button type="button" class="btn" data-pmove="${j}" data-dir="-1" ${ro || !j ? "disabled" : ""} aria-label="Foto naar voren">‹</button><button type="button" class="btn" data-pmove="${j}" data-dir="1" ${ro || j === ps.length - 1 ? "disabled" : ""} aria-label="Foto naar achteren">›</button><button type="button" class="btn" data-pdel="${j}" ${ro} aria-label="Foto verwijderen">Verwijder</button></div></div>`).join("")}</div>` : ""}
+    ${ps.length < PHOTO_MAX && !ro ? (up ? `<label class="btn" style="align-self:flex-start">Foto uploaden<input type="file" accept="image/jpeg,image/png,image/webp" data-pup hidden></label><span class="small muted">jpg, png of webp, max 5 MB. De eerste foto is de grote op de offerte.</span>`
+      : `<div class="row" style="gap:6px"><input data-purl placeholder="Link naar een foto (https://…)" aria-label="Link naar foto" style="flex:1 1 220px"><button type="button" class="btn" data-padd>Toevoegen</button></div><span class="small muted">Uploaden kan in de webversie. Hier plak je een link naar een foto. De eerste foto is de grote op de offerte.</span>`) : ""}
+  </div>`;
+}
+function photoEditWire(s, sync) {
+  document.querySelectorAll(".rph").forEach(box => {
+    const r = s.rooms.find(x => x.id === box.dataset.rphid); if (!r) return;
+    const list = () => (r.photos = Array.isArray(r.photos) ? r.photos : []);
+    box.querySelectorAll("[data-pmove]").forEach(b => b.onclick = () => { sync(); const a = list(), j = +b.dataset.pmove, k = j + +b.dataset.dir; if (k < 0 || k >= a.length) return; [a[j], a[k]] = [a[k], a[j]]; render(); });
+    box.querySelectorAll("[data-pdel]").forEach(b => b.onclick = () => { sync(); list().splice(+b.dataset.pdel, 1); render(); });
+    const add = box.querySelector("[data-padd]"); if (add) add.onclick = () => {
+      sync(); const u = box.querySelector("[data-purl]").value.trim();
+      if (!safeImg(u)) { toast("Plak een link die begint met https://"); return; }
+      if (list().length >= PHOTO_MAX) return; list().push({ url: u, caption: "" }); render();
+    };
+    const f = box.querySelector("[data-pup]"); if (f) f.onchange = async () => {
+      const file = f.files && f.files[0]; if (!file) return;
+      if (file.size > 5 * 1024 * 1024) { toast("Deze foto is groter dan 5 MB. Verklein hem eerst."); return; }
+      sync(); toast("Foto uploaden…");
+      try { const url = await window.hctFotoUpload(file, r.id); if (!safeImg(url)) throw new Error("geen link terug"); if (list().length < PHOTO_MAX) list().push({ url, caption: "" }); toast("Foto toegevoegd. Klik op Opslaan."); render(); }
+      catch (e) { toast(e && e.code === "invalid_argument" ? "Uploaden lukt niet: geen rechten of geen jpg/png/webp." : "Uploaden lukt nu niet. Probeer het later opnieuw."); }
+    };
+  });
+}
+function photoQuoteHtml(id) {
+  const ps = roomPhotos(room(id)); if (!ps.length) return "";
+  const [a, ...rest] = ps, cap = p => p.caption ? `<div style="font-size:.85em;color:#8a8a8a;margin-top:3px">${esc(p.caption)}</div>` : "";
+  return `<div style="margin:6px 0 16px"><figure style="margin:0"><img src="${esc(a.url)}" alt="${esc(a.caption || roomName(id))}" style="width:100%;max-height:300px;object-fit:cover;border-radius:3px;display:block">${cap(a)}</figure>
+    ${rest.length ? `<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">${rest.map(p => `<figure style="margin:0;flex:1 1 120px;max-width:24%;min-width:110px"><img src="${esc(p.url)}" alt="${esc(p.caption || "")}" style="width:100%;height:90px;object-fit:cover;border-radius:3px;display:block">${cap(p)}</figure>`).join("")}</div>` : ""}</div>`;
+}
+document.head.insertAdjacentHTML("beforeend", `<style id="rph-style">
+.rph { display: flex; flex-direction: column; gap: 6px; }
+.rph-list { display: flex; flex-wrap: wrap; gap: 10px; }
+.rph-it { display: flex; flex-direction: column; gap: 4px; width: 170px; }
+.rph-it img, .rph-bad { width: 170px; height: 110px; object-fit: cover; border-radius: var(--r); border: 1px solid var(--line); background: var(--sunk); display: grid; place-items: center; }
+.rph-it .btn { padding: 2px 8px; }
+.rfoto-mini { display: flex; gap: 4px; margin-top: 4px; }
+.rfoto-mini:empty { display: none; }
+.rfoto-mini img { width: 64px; height: 44px; object-fit: cover; border-radius: 2px; border: 1px solid var(--line); }
+@media (max-width: 760px) { .rph-it, .rph-it img, .rph-bad { width: 140px; } .rph-it img, .rph-bad { height: 90px; } }
 </style>`);
 boot();
 })();
